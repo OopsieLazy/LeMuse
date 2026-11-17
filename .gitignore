@@ -1,0 +1,30 @@
+# Rust
+/target/
+**/target/
+
+# Node / UI
+node_modules/
+dist/
+.vite/
+
+# Tauri generated
+app/src-tauri/gen/
+
+# Local data — never commit the user's library or secrets
+/library/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+Thumbs.db
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json
