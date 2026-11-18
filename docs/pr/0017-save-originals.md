@@ -14,6 +14,10 @@
 - **Safer downloads:** only from each source's own image server, checked again after redirects. Only real
   images are kept: the file's first bytes decide, not its name.
 - **Retries:** short network hiccups and server errors (5xx) are retried, for refreshes and saves.
+- **Right-click on the image:** a LeMuse menu with **Save original**, **Copy link** and **Open source page**,
+  instead of the page menu that saved HTML.
+- **Fewer repeats:** the same picture saved twice on Are.na (same source image, same size) shows once in topics
+  and All. At the end of a page the slideshow moves on to the next page instead of starting over.
 - **CLI:** `lemuse save <block-id> [--topic T | --playlist P]`.
 
 ## Why
@@ -37,7 +41,7 @@ closes findings A-37 (download host allow-list) and D-2 (retries).
 ## Checklist
 
 - [x] Secret scan clean
-- [x] 99 tests (5 new) · fmt · clippy `-D warnings` (core, CLI, app) · typecheck · W3C · layout test
+- [x] 100 tests (6 new) · fmt · clippy `-D warnings` (core, CLI, app) · typecheck · W3C 53 · layout 306 renders
 - [x] No new dependency, capability or CSP host
 - [x] Real saves from Are.na and Cleveland (on a copy of the library, then deleted)
 - [ ] Owner: press Save on a few images, then open `Pictures\LeMuse\views\`

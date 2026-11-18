@@ -23,7 +23,7 @@ v0.7.0 is on `main`. Merge order: **#16 `feat/0016-compact-layout`** (with the C
 |---|---|---|
 | 1 | Compact windows like the mini player; **smooth** bar slide and rail ease (#16) | ✅ pushed |
 | 2 | CI fix carried in #16 | ✅ pushed |
-| 3 | **Save originals** (v0.8 starts): host allow-list (A-37), magic bytes, retries (D-2), `lemuse save` (#17) | ✅ pushed |
+| 3 | **Save originals** (v0.8 starts): host allow-list (A-37), magic bytes, retries (D-2), `lemuse save`; right-click menu; re-saves shown once; next page at a page's end (#17) | ✅ pushed |
 | 4 | Next: Are.na token in Credential Manager, import followed channels, single instance, queue reads during refresh (D-74) | ⏳ next PR |
 | 5 | Owner: Dependency graph; lock `main`; Q21–Q23 | ⏳ owner |
 

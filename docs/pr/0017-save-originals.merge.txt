@@ -10,6 +10,9 @@ closes A-37 and D-2. ADR-0022.
 ✅ Type from magic bytes; non-images refused; stored once by hash
 ✅ Error::Transient + shared retry (1, 2, 4 s) for refreshes and saves
 ✅ Saves spaced 500 ms apart in the app; no new dependency or capability
+✅ Right-click on the image: Save original, Copy link, Open source page
+✅ Re-saves (same source image and size) shown once; migration 0007
+✅ End of a page moves on to the next page instead of looping
 ⬜ Stream big downloads to disk (D-1); save CAD attachments (D-94)
 
 Reviewed-by: admin pass, developer pass (docs/reviews/0017-save-originals.md)

@@ -48,6 +48,32 @@ image bytes in stream mode (ADR-0007, ADR-0009). Two findings waited on it:
    - `lemuse save <block-id> [--topic | --playlist]`;
    - the browser preview and dashboard explain that saving needs the desktop app.
 
+## Addendum (2026-11-18): right-click, re-saves, page end
+
+The owner asked for two changes before merging.
+
+1. **Right-click on the image.** Right-clicking the image used to show the WebView's page menu ("Save as"
+   saved the HTML page), and on compact windows the tap layer covered the image. Now it opens LeMuse's own
+   menu:
+   - **Save original** (desktop app): the full-size original, into the folder above;
+   - **Copy link**;
+   - **Open source page**.
+
+   The browser preview and the dashboard show **Open full-size image** instead, so the browser can save it.
+   The menu opens at the pointer, stays inside the window (CSS clamps), and closes on a click elsewhere,
+   Escape, scroll or a new image. Right-clicks on the buttons keep the normal menu.
+2. **Repeats in a page** have two causes; LeMuse doesn't load anything twice.
+   1. **Re-saves on Are.na:** the same picture saved again as a new block.
+      - Image blocks from the same **source image address** with the same **pixel size** form one group (a
+        derived table, `block_dupes`, migration 0007, rebuilt after each refresh). Topics and All show one
+        block per group.
+      - Titles alone aren't used: the owner's library has different product shots and site screenshots
+        sharing titles.
+      - Are.na's file names are unique per upload, so they can't be used either.
+      - Bare-domain sources such as `https://www.instagram.com/` don't count.
+      - Playlists show exactly what you added.
+   2. **The end of a page** looped back to its first image. The slideshow now moves on to the next page.
+
 ## Consequences
 
 - Saved files live in the library folder, outside the repo (`/library/` and `Pictures\LeMuse`). Nothing new

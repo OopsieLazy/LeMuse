@@ -10,7 +10,9 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 - Save (work item 17, ADR-0022): the Save button and `lemuse save` put an image's full-size original into
   `views/<topic or playlist>/`; downloads come only from each source's own image server and must be real
-  images; network and 5xx failures are retried.
+  images; network and 5xx failures are retried. Right-click on the image opens Save original, Copy link and
+  Open source page. The same picture saved twice on Are.na shows once, and a page's end moves on to the
+  next page.
 - Compact windows (work item 16): on tablets and windows under 1,024 px wide or 560 px tall, the image fills
   the window, topics open from ☰, and the bar shows when you tap the image.
 - Dashboard, reference sheets, mini player v2 (work item 14, ADR-0019, ADR-0021):
