@@ -11,7 +11,7 @@
 // any finding. Output names file:line and the rule, never the matched text.
 // A reviewed false positive can be allowed on its line with the comment
 // `secret-scan: allow <reason>`.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { isForbiddenFile, personalEmails, RULES } from "./secret-rules.mjs";
 
@@ -84,7 +84,15 @@ if (!["--staged", "--range", "--untracked", "--all"].includes(mode) || (mode ===
 const { files, lines } = collect(mode, arg);
 const findings = [];
 for (const f of files) {
-  if (isForbiddenFile(f)) findings.push(`${f}: forbidden file type (secrets, keys or local databases never go in git)`);
+  if (isForbiddenFile(f))
+    findings.push(`${f}: forbidden file type (secrets, keys, local data, outputs or images never go in git)`);
+}
+// A file that .gitignore covers but is tracked or staged anyway (`git add -f`,
+// or the rule came later). The repo is public (review 0015).
+if (files.length) {
+  const r = spawnSync("git", ["check-ignore", "--no-index", "--stdin"], { input: files.join("\n"), encoding: "utf8" });
+  for (const f of (r.stdout ?? "").split("\n").filter(Boolean))
+    findings.push(`${f}: matches .gitignore but is in git; remove it with \`git rm --cached\``);
 }
 for (const { file, line, text } of lines) {
   if (SELF.has(file) || ALLOW_PRAGMA.test(text)) continue;

@@ -44,6 +44,13 @@ assume.
   main...HEAD` before finishing. Never commit tokens, keys, `.env`, databases or personal emails, and never print
   them. Findings name the file and line, never the value. If a real secret ever lands, **rotate it**; deleting it
   isn't enough.
+- **The repo is public (github.com/OopsieLazy/LeMuse): watch what should be git-ignored.** Before every commit,
+  and whenever a change adds a command, script, build or export that writes files, ask "would this be fine on
+  a public page?" Keep out of git anything that holds the owner's library, topics, playlists, links exports,
+  paths (they contain the Windows user name), tokens, logs, browser captures, generated sheets or PDFs, build
+  output, or images. Add the pattern to `.gitignore` **and** to `FORBIDDEN_FILES` in
+  `scripts/secret-rules.mjs` in the same change. The scanner also fails on tracked files that match
+  `.gitignore`. Source code is fine to publish (e.g. `lemuse serve`); what it *produces* is not.
 - **Validators:** fmt, clippy `-D warnings`, tests, `npm run typecheck`, `npm run validate:w3c` (UI), and
   `node scripts/npm-audit-gate.mjs app` / `cargo audit` when dependencies change. Report failures as they are.
 - **Dependencies:** a new dependency or version must be at least 14 days old (supply-chain cooldown), and npm
