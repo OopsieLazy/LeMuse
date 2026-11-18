@@ -30,7 +30,7 @@ Facts (from `research_notes/…/arena_api.md`):
 ## Decision
 
 1. **Topics.** A topic is a named slideshow fed by sources the user picks: Are.na channels now, museum keyword
-   queries in M5. It's configured as `[[topic]]` / `[[topic.source]]` in `servensurf.toml`.
+   queries in M5. It's configured as `[[topic]]` / `[[topic.source]]` in `lemuse.toml`.
 2. **Stream by default** (`sync.files = "stream"`):
    - Refresh stores only metadata and media URLs in the catalog.
    - The slideshow displays `large` (falling back to `medium`, then `original`) directly from the CDN.

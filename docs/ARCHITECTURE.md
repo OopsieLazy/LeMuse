@@ -10,12 +10,12 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
 ```
             ┌──────────────── Windows desktop ─────────────────────────────┐
             │                                                               │
- launch ───▶│  app/ (Tauri 2)                      crates/servensurf-cli    │◀── Task Scheduler
- Refresh ──▶│   React UI ◀─IPC─▶ src-tauri          `servensurf sync`       │    (optional, M4)
+ launch ───▶│  app/ (Tauri 2)                      crates/lemuse-cli    │◀── Task Scheduler
+ Refresh ──▶│   React UI ◀─IPC─▶ src-tauri          `lemuse sync`       │    (optional, M4)
             │   slideshow │ topics/slides/refresh          │                │
             │      │      └──────────┬───────────────────────┘               │
             │      │                 ▼                                       │
-            │      │      crates/servensurf-core                             │
+            │      │      crates/lemuse-core                             │
             │      │  config [[topic]] ─▶ sync::SyncEngine ─▶ connectors::arena
             │      │          lock · throttle · retry · page budget · watermark
             │      │                 ▼                        │ HttpClient    │
@@ -26,8 +26,8 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
                    ├─ images.are.na (large/medium)  ├─ api.are.na/v3  (JSON metadata, ≤2 pages/channel/refresh)
                    └─ CloudFront (originals)        └─ originals/attachments on Save only
 
-<library root>  (default %USERPROFILE%\Pictures\ServeNSurf)
-  servensurf.toml            topics + sources
+<library root>  (default %USERPROFILE%\Pictures\LeMuse)
+  lemuse.toml            topics + sources
   catalog.db                 SQLite WAL + FTS5: blocks, block_media, collections, saves
   objects/ab/cd/<sha256>.<ext>   saved originals (content-addressed)
   views/<topic>/<title> [id].<ext>   hardlinks to saved originals, for Explorer/PureRef/CAD
@@ -44,7 +44,7 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
 | **"Paginate, don't enumerate": ≤ 2 pages per channel per refresh; load more lazily** | Are.na's own guidance for display apps; a refresh costs ~2 calls per channel | 0007 |
 | **Display `large` (1800 px) → `medium` → `original`** | Sharp on a 1080p–1440p screen, a fraction of the original's size. Originals are only fetched on Save | 0007 |
 | **Tauri 2 desktop app (approved)** | ~8.6 MiB installer vs ~244 MiB Electron; native Rust core; fast web UI iteration; no Qt licence or tooling cost | 0001 ✅ |
-| **All logic in `servensurf-core`; GUI and CLI are thin** | Launch refresh, scheduled refresh and the Refresh button behave identically | 0001, 0005 |
+| **All logic in `lemuse-core`; GUI and CLI are thin** | Launch refresh, scheduled refresh and the Refresh button behave identically | 0001, 0005 |
 | **SQLite + FTS5 catalog** | One file, transactional, fast search; slideshows start instantly from cached metadata | 0002 |
 | **Content-addressed `objects/` + hardlinked `views/` for saves** | Dedup, integrity, atomic writes; saved images are browsable outside the app with no admin rights | 0002 |
 | **`block_media` = remote state, `block_files` = local state** | A refresh replaces media URLs but can never unlink a file the user saved | 0007 (D-9) |
@@ -62,16 +62,16 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
 
 | Path | Responsibility |
 |---|---|
-| `crates/servensurf-core/src/model.rs` | `Block`, `MediaRef`, `SourceRef`, `LicenseInfo`, `StoredFile`, `Collection` |
-| `crates/servensurf-core/src/config.rs` | `servensurf.toml`: `[library]`, `[sync]` (files mode, page budget), `[[topic]]` + `[[topic.source]]` |
-| `crates/servensurf-core/src/store/catalog.rs` | SQLite, migrations, FTS, `slides()` |
-| `crates/servensurf-core/src/store/{blobs,views}.rs` | CAS for saved files; Windows-safe hardlinked views |
-| `crates/servensurf-core/migrations/` | Append-only SQL migrations (`PRAGMA user_version`); v2 = `block_media` |
-| `crates/servensurf-core/src/connectors/` | `mod.rs` trait, policy, ordering, registry; `http.rs` client trait + `FixtureClient`; `arena.rs`, `cleveland.rs`, `aic.rs` |
-| `crates/servensurf-core/assets/starter_topics.toml` | The owner's 15 topics, written by `servensurf init` |
-| `crates/servensurf-core/src/sync/` | `engine.rs` refresh loop, `throttle.rs` pacing + backoff, `lock.rs` single-run lock |
-| `crates/servensurf-core/tests/fixtures/` | Recorded or hand-built API responses |
-| `crates/servensurf-cli/` | `servensurf`: `init`, `topics`, `slides`, `sync` (stub), `status`, `search` |
+| `crates/lemuse-core/src/model.rs` | `Block`, `MediaRef`, `SourceRef`, `LicenseInfo`, `StoredFile`, `Collection` |
+| `crates/lemuse-core/src/config.rs` | `lemuse.toml`: `[library]`, `[sync]` (files mode, page budget), `[[topic]]` + `[[topic.source]]` |
+| `crates/lemuse-core/src/store/catalog.rs` | SQLite, migrations, FTS, `slides()` |
+| `crates/lemuse-core/src/store/{blobs,views}.rs` | CAS for saved files; Windows-safe hardlinked views |
+| `crates/lemuse-core/migrations/` | Append-only SQL migrations (`PRAGMA user_version`); v2 = `block_media` |
+| `crates/lemuse-core/src/connectors/` | `mod.rs` trait, policy, ordering, registry; `http.rs` client trait + `FixtureClient`; `arena.rs`, `cleveland.rs`, `aic.rs` |
+| `crates/lemuse-core/assets/starter_topics.toml` | The owner's 15 topics, written by `lemuse init` |
+| `crates/lemuse-core/src/sync/` | `engine.rs` refresh loop, `throttle.rs` pacing + backoff, `lock.rs` single-run lock |
+| `crates/lemuse-core/tests/fixtures/` | Recorded or hand-built API responses |
+| `crates/lemuse-cli/` | `lemuse`: `init`, `topics`, `slides`, `sync` (stub), `status`, `search` |
 | `app/src-tauri/` | Tauri shell: `library_status`, `topics`, `slides`, `search`, `refresh_now` (stub) |
 | `app/src/` | React UI: `SlideshowView.tsx` (pure view), `App.tsx` (state, timer, keys), `api.ts` (Tauri or preview backend) |
 | `app/scripts/` | `snapshot.tsx` (UI states for W3C), `validate-w3c.mjs`, `make-artifact.mjs` |

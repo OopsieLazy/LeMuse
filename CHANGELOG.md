@@ -8,8 +8,8 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
-- Architecture skeleton for ServeNSurf (PR #1):
-  - Rust workspace with `servensurf-core`, the `servensurf` CLI, and a Tauri 2 + React desktop shell.
+- Architecture skeleton for LeMuse (PR #1):
+  - Rust workspace with `lemuse-core`, the `lemuse` CLI, and a Tauri 2 + React desktop shell.
   - Topics: `[[topic]]` / `[[topic.source]]` config. Each topic is a slideshow fed by Are.na channels you pick.
   - Stream-first refresh:
     - metadata and image URLs go into a SQLite catalog (FTS5, migrations v1–v2);
@@ -30,7 +30,7 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 - Live preview (PR #3):
   - the slideshow UI: topic rail, full-window image, attribution, timer, ←/→/Space/S keys, shuffle, preload ≤ 2;
     images that fail to load are skipped;
-  - real refresh: production HTTP client, `servensurf sync`, refresh on app launch and with the Refresh button;
+  - real refresh: production HTTP client, `lemuse sync`, refresh on app launch and with the Refresh button;
   - previews: browser preview, a design artifact and a Windows test-build CI job;
   - W3C Nu HTML Checker gate in a pre-commit hook and in CI;
   - InPrivate WebView, so no streamed image is written to a disk cache.

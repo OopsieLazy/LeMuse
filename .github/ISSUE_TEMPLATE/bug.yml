@@ -19,7 +19,7 @@ body:
     id: repro
     attributes:
       label: Steps to reproduce
-      placeholder: "1. servensurf sync ...\n2. ..."
+      placeholder: "1. lemuse sync ...\n2. ..."
     validations:
       required: true
   - type: input

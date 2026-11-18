@@ -54,12 +54,12 @@ const styles = css.map((f) => readFileSync(join(assets, f), "utf8")).join("\n");
 const scripts = js
   .map((f) => `<script type="module">${safeScript(readFileSync(join(assets, f), "utf8"))}</script>`)
   .join("\n");
-const html = `<title>ServeNSurf Preview</title>
+const html = `<title>LeMuse Preview</title>
 <style>${styles}</style>
 <div id="root"></div>
 <script type="application/json" id="preview-data">${safeScript(JSON.stringify(data))}</script>
 ${scripts}
 `;
-const out = join(dist, "servensurf-preview.html");
+const out = join(dist, "lemuse-preview.html");
 writeFileSync(out, html);
 console.log(`wrote ${out} (${(html.length / 1024).toFixed(0)} KiB)`);

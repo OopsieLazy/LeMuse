@@ -36,7 +36,7 @@ Checklist:
 
 Checklist:
 
-- [ ] Builds: `cargo build`, `cargo build -p servensurf-app`, `npm run typecheck`
+- [ ] Builds: `cargo build`, `cargo build -p lemuse-app`, `npm run typecheck`
 - [ ] `cargo fmt --all -- --check` and `cargo clippy --all-targets -- -D warnings` are clean
 - [ ] `cargo test` passes; new logic has tests; no network in tests (fixtures only)
 - [ ] Edge cases: empty, huge, unicode and Windows-hostile names; offline; 429/5xx; partial failure

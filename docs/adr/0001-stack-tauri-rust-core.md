@@ -87,7 +87,7 @@ We would change our minds if:
 
 ## Action items
 
-1. [x] Scaffold workspace: `servensurf-core`, `servensurf-cli`, `app/src-tauri`, `app/src`.
+1. [x] Scaffold workspace: `lemuse-core`, `lemuse-cli`, `app/src-tauri`, `app/src`.
 2. [ ] M2: virtualized grid + thumbnail pipeline; benchmark on Windows.
 
 ## Review log

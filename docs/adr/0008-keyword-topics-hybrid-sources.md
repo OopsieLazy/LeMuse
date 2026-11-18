@@ -33,7 +33,7 @@ Constraints:
 
 1. **A topic = keywords + sources.** `[[topic]] keywords = [...]`. A keyword-capable source (`cleveland`, `aic`)
    with no explicit `query` runs **one search per keyword**. Are.na sources still name a `channel`.
-2. **Starter topics = the owner's list.** `servensurf init` writes all 15. Each is fed by Cleveland keyword
+2. **Starter topics = the owner's list.** `lemuse init` writes all 15. Each is fed by Cleveland keyword
    search and/or Are.na channels found by web search and verified through the public API on 2026-11-16 (13
    channels, all public).
 3. **Museum refresh is weekly, 1 page (100 results) per keyword** (`SourcePolicy.min_refresh_hours = 168`,

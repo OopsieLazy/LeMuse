@@ -20,7 +20,7 @@ channel. The UI must never wait for it, and two gather runs must never collide.
 2. **Optional, off by default:**
    - **Tray mode:** the Tauri autostart plugin writes the per-user `Run` key with `--minimized`, and the app
      keeps gathering every `sync.interval_minutes`.
-   - **Scheduled mode:** a Windows Task Scheduler entry runs `servensurf sync --trigger schedule` while the app is closed.
+   - **Scheduled mode:** a Windows Task Scheduler entry runs `lemuse sync --trigger schedule` while the app is closed.
 3. **Mutual exclusion:** `.sync.lock` in the library root (`SyncLock`, stale after 6 h). A Tauri single-instance
    plugin is added in M1.
 4. **Not a Windows Service:** a service runs under a different account and can't read the user's Credential
@@ -46,7 +46,7 @@ channel. The UI must never wait for it, and two gather runs must never collide.
 
 1. [x] `Trigger` enum, `SyncLock`, CLI `sync --trigger schedule` (stub), `on_launch` and `interval_minutes` config.
 2. [ ] M1: launch thread + progress events; "Gather now" button.
-3. [ ] M4: tray + autostart plugin; `servensurf schedule install|remove` (wraps `schtasks`).
+3. [ ] M4: tray + autostart plugin; `lemuse schedule install|remove` (wraps `schtasks`).
 
 ## Review log
 

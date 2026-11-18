@@ -1,6 +1,6 @@
 [package]
-name = "servensurf-core"
-description = "Sync engine, connectors and local library store for servensurf"
+name = "lemuse-core"
+description = "Sync engine, connectors and local library store for lemuse"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

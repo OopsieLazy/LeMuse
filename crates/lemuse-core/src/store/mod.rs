@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! <library root>/
-//!   servensurf.toml     user config + gather list
+//!   lemuse.toml     user config + gather list
 //!   catalog.db         SQLite (WAL) — the source of truth for metadata
 //!   objects/ab/cd/<sha256>.<ext>   content-addressed originals (never edit)
 //!   thumbs/<sha256>.webp           generated thumbnails (disposable cache)

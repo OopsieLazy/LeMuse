@@ -1,36 +1,36 @@
-//! `servensurf` — headless front-end over servensurf-core.
+//! `lemuse` — headless front-end over lemuse-core.
 //!
 //! Useful for setup, debugging and (optionally) Windows Task Scheduler
 //! refreshes while the GUI is closed (ADR-0005):
 //!
 //! ```text
-//! servensurf init    --library "D:\References"
-//! servensurf topics  --library "D:\References"
-//! servensurf sync    --library "D:\References" --trigger schedule
-//! servensurf slides  --library "D:\References" "Industrial design"
-//! servensurf preview-data --library "D:\References" > app/preview-data.json
-//! servensurf status  --library "D:\References"
-//! servensurf search  --library "D:\References" "gearbox"
+//! lemuse init    --library "D:\References"
+//! lemuse topics  --library "D:\References"
+//! lemuse sync    --library "D:\References" --trigger schedule
+//! lemuse slides  --library "D:\References" "Industrial design"
+//! lemuse preview-data --library "D:\References" > app/preview-data.json
+//! lemuse status  --library "D:\References"
+//! lemuse search  --library "D:\References" "gearbox"
 //! ```
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use servensurf_core::config::{ensure_library, Config};
-use servensurf_core::store::catalog::Catalog;
-use servensurf_core::store::LibraryPaths;
-use servensurf_core::sync::{refresh_library, Trigger};
+use lemuse_core::config::{ensure_library, Config};
+use lemuse_core::store::catalog::Catalog;
+use lemuse_core::store::LibraryPaths;
+use lemuse_core::sync::{refresh_library, Trigger};
 
 #[derive(Parser)]
 #[command(
-    name = "servensurf",
+    name = "lemuse",
     version,
     about = "Stream reference images by topic from Are.na channels you choose"
 )]
 struct Cli {
-    /// Library root. Defaults to $SERVENSURF_LIBRARY, then
-    /// %USERPROFILE%\Pictures\ServeNSurf.
+    /// Library root. Defaults to $LEMUSE_LIBRARY, then
+    /// %USERPROFILE%\Pictures\LeMuse.
     #[arg(long, global = true)]
     library: Option<PathBuf>,
 
@@ -40,7 +40,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Create the library folders, catalog and a starter servensurf.toml.
+    /// Create the library folders, catalog and a starter lemuse.toml.
     Init,
     /// List configured topics and their sources.
     Topics,
@@ -77,7 +77,7 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let root = cli
         .library
-        .or_else(|| std::env::var_os("SERVENSURF_LIBRARY").map(PathBuf::from))
+        .or_else(|| std::env::var_os("LEMUSE_LIBRARY").map(PathBuf::from))
         .unwrap_or_else(Config::default_root);
     let paths = LibraryPaths::new(&root);
     match run(cli.command, &paths) {
@@ -89,7 +89,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cmd: Command, paths: &LibraryPaths) -> servensurf_core::Result<()> {
+fn run(cmd: Command, paths: &LibraryPaths) -> lemuse_core::Result<()> {
     match cmd {
         Command::Init => {
             ensure_library(paths)?;
@@ -154,7 +154,7 @@ fn run(cmd: Command, paths: &LibraryPaths) -> servensurf_core::Result<()> {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({
-                    "generated_from": "servensurf preview-data",
+                    "generated_from": "lemuse preview-data",
                     "blocks": catalog.block_count()?,
                     "topics": topics,
                 }))
@@ -164,9 +164,9 @@ fn run(cmd: Command, paths: &LibraryPaths) -> servensurf_core::Result<()> {
         }
         Command::Slides { topic, limit } => {
             let cfg = Config::load(&paths.config())?;
-            let t = cfg.topic(&topic).ok_or_else(|| {
-                servensurf_core::Error::Config(format!("no topic named `{topic}`"))
-            })?;
+            let t = cfg
+                .topic(&topic)
+                .ok_or_else(|| lemuse_core::Error::Config(format!("no topic named `{topic}`")))?;
             let catalog = Catalog::open(&paths.catalog())?;
             let slides = catalog.slides(&t.collection_keys(), limit, 0)?;
             println!(

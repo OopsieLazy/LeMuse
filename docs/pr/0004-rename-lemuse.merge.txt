@@ -1,0 +1,19 @@
+refactor!: rename ServeNSurf to LeMuse (#4)
+
+What: crates, binary, config, library folder, env var, app id and
+User-Agent renamed to LeMuse; GitHub remote and CODEOWNERS set.
+Why: the owner's choice; least conflict with existing apps (ADR-0010).
+
+✅ lemuse-core / lemuse-cli / lemuse-app; binary `lemuse`
+✅ lemuse.toml, Pictures\LeMuse, LEMUSE_LIBRARY, dev.lemuse.app
+✅ User-Agent contact defaults to the public repo URL (A-8 fixed)
+✅ origin = github.com/OopsieLazy/LeMuse; CODEOWNERS @OopsieLazy
+✅ 44 tests; fmt, clippy, W3C clean
+⬜ Trademark check before a public release (A-19)
+
+BREAKING CHANGE: paths and names changed; delete Pictures\ServeNSurf and
+%LOCALAPPDATA%\dev.servensurf.app if you installed the PR #3 build.
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0004-rename-lemuse.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

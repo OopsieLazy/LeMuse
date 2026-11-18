@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**ServeNSurf** is a Windows desktop app that plays a **stream or slideshow of reference images on a topic**
-(drawing, design, CAD). Topics are subjects (the owner's 15 are in `crates/servensurf-core/assets/starter_topics.toml`)
+**LeMuse** is a Windows desktop app that plays a **stream or slideshow of reference images on a topic**
+(drawing, design, CAD). Topics are subjects (the owner's 15 are in `crates/lemuse-core/assets/starter_topics.toml`)
 fed by free museum keyword search (Cleveland; AIC built but held back) plus curated Are.na channels (ADR-0008).
 Images stream from the source CDN; the user can Save any image as a local file. Topic metadata refreshes
 automatically on launch. Owner: free Are.na tier, MIT licence. See ADR-0007 for the stream-first design.
@@ -75,36 +75,36 @@ Run from the repo root unless noted. Rust 1.89+ (MSVC toolchain), Node 20+, Java
 ```sh
 cargo build                          # core + CLI (default workspace members)
 cargo test                           # all core/CLI tests
-cargo test -p servensurf-core sync::engine::tests::stream_mode_records_media_without_downloading  # one test
-cargo test -p servensurf-core catalog # tests whose path matches "catalog"
+cargo test -p lemuse-core sync::engine::tests::stream_mode_records_media_without_downloading  # one test
+cargo test -p lemuse-core catalog # tests whose path matches "catalog"
 cargo fmt --all -- --check           # CI enforces formatting
 cargo clippy --all-targets -- -D warnings
 
-cargo run -p servensurf-cli -- --library ./library init     # scratch library (./library is gitignored)
-cargo run -p servensurf-cli -- --library ./library topics   # list [[topic]]s from servensurf.toml
-cargo run -p servensurf-cli -- --library ./library slides "Topic name"   # what the slideshow would show
-cargo run -p servensurf-cli -- --library ./library status
-cargo run -p servensurf-cli -- --library ./library sync     # real metadata refresh (no image files)
+cargo run -p lemuse-cli -- --library ./library init     # scratch library (./library is gitignored)
+cargo run -p lemuse-cli -- --library ./library topics   # list [[topic]]s from lemuse.toml
+cargo run -p lemuse-cli -- --library ./library slides "Topic name"   # what the slideshow would show
+cargo run -p lemuse-cli -- --library ./library status
+cargo run -p lemuse-cli -- --library ./library sync     # real metadata refresh (no image files)
 
 cd app && npm install                # first time only
 cd app && npm run typecheck          # UI type-check
 cd app && npm run validate:w3c       # build + render UI states + W3C Nu HTML Checker (needs Java)
-cd app && npm run preview:data       # export catalog metadata for previews ($SERVENSURF_LIBRARY or default)
+cd app && npm run preview:data       # export catalog metadata for previews ($LEMUSE_LIBRARY or default)
 cd app && npm run preview:web        # real UI in the browser at :1421, images streamed
-cd app && npm run preview:artifact   # one-file design preview → app/dist-preview/servensurf-preview.html
+cd app && npm run preview:artifact   # one-file design preview → app/dist-preview/lemuse-preview.html
 cd app && npm run tauri dev          # desktop app with hot reload (builds app/src-tauri)
 cd app && npm run tauri build        # NSIS/MSI installer
 ```
 
 `cargo build` deliberately skips `app/src-tauri` (it's not in `default-members`); build it with
-`cargo build -p servensurf-app` or via `npm run tauri`.
+`cargo build -p lemuse-app` or via `npm run tauri`.
 
 ## Architecture (big picture)
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams and the reasoning behind each choice; ADRs hold the decisions.
 
-- **One core, thin front-ends.** `crates/servensurf-core` holds everything non-UI. `crates/servensurf-cli`
-  (binary `servensurf`, run by Task Scheduler) and `app/src-tauri` (Tauri 2 shell + React UI in `app/src`)
+- **One core, thin front-ends.** `crates/lemuse-core` holds everything non-UI. `crates/lemuse-cli`
+  (binary `lemuse`, run by Task Scheduler) and `app/src-tauri` (Tauri 2 shell + React UI in `app/src`)
   only call into it. Launch refresh, scheduled refresh and the Refresh button must share `sync::SyncEngine::run`.
 - **Data flow:** `config` `[[topic]]` → `[[topic.source]]` → `connectors::Connector` (maps remote pages to
   `model::Block` with `MediaRef` URLs + `DownloadRequest`s) → `sync::engine` (lock, throttle, retry, page budget,
@@ -122,16 +122,16 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams and the reasoning
   (only ever added; a refresh must never unlink a saved file).
 - **Connectors never do I/O policy.** They declare a `SourcePolicy` (rate budget, background-sync allowed,
   attribution); the engine enforces it. All HTTP goes through `connectors::http::HttpClient` so tests replay
-  fixtures (`crates/servensurf-core/tests/fixtures/`) — never hit the network in tests.
+  fixtures (`crates/lemuse-core/tests/fixtures/`) — never hit the network in tests.
 - **Incremental refresh:** pages ordered `updated_at` desc, at most `sync.pages_per_refresh` per channel; stop at
   the collection watermark; the watermark advances only after a *complete*, error-free pass.
-- **Schema changes:** add `crates/servensurf-core/migrations/000N_*.sql` and append to `MIGRATIONS` in
+- **Schema changes:** add `crates/lemuse-core/migrations/000N_*.sql` and append to `MIGRATIONS` in
   `store/catalog.rs`. Never edit a shipped migration.
 - `objects/` is the source of truth for files; `thumbs/` and `views/` are rebuildable caches.
 
 ## Are.na constraints (ADR-0004, ADR-0007) — do not regress
 
-- API v3 (`https://api.are.na/v3`); v2 is deprecated. Send a descriptive `ServeNSurf/<ver> (+contact)` User-Agent;
+- API v3 (`https://api.are.na/v3`); v2 is deprecated. Send a descriptive `LeMuse/<ver> (+contact)` User-Agent;
   generic UAs get 403. Owner is on the **free** tier: 120 reads/min with a token, 30 as guest, **no search API**.
 - Use **only** channels the user lists as topic sources. No crawling, no following links to discover channels,
   no bulk export. "Paginate, don't enumerate": cap pages per refresh, load more lazily. Budget 80% of the tier's

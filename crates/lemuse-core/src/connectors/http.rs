@@ -74,14 +74,19 @@ impl HttpClient for FixtureClient {
 /// are small). Protects against a misbehaving server filling memory.
 const MAX_BODY_BYTES: u64 = 64 * 1024 * 1024;
 
-/// The User-Agent every request sends: `ServeNSurf/<ver> (+<contact>)`.
+/// Public project page used as the User-Agent contact when the user sets
+/// none (review 0001 A-8). Never a personal address.
+pub const PROJECT_URL: &str = "https://github.com/OopsieLazy/LeMuse";
+
+/// The User-Agent every request sends: `LeMuse/<ver> (+<contact>)`.
 /// Are.na refuses generic agents (ADR-0004). `contact` comes from
-/// `sync.contact`; without it we still identify the product.
+/// `sync.contact`; without it, the public project URL.
 pub fn user_agent(contact: Option<&str>) -> String {
-    match contact.map(str::trim).filter(|c| !c.is_empty()) {
-        Some(c) => format!("{} (+{c})", crate::USER_AGENT_PRODUCT),
-        None => format!("{} (personal reference viewer)", crate::USER_AGENT_PRODUCT),
-    }
+    let c = contact
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .unwrap_or(PROJECT_URL);
+    format!("{} (+{c})", crate::USER_AGENT_PRODUCT)
 }
 
 /// Production client: blocking `ureq` over rustls, run on a worker thread
@@ -179,7 +184,7 @@ mod tests {
                 crate::USER_AGENT_PRODUCT
             )
         );
-        assert!(user_agent(None).starts_with("ServeNSurf/"));
-        assert!(user_agent(Some("  ")).contains("personal reference viewer"));
+        assert!(user_agent(None).starts_with("LeMuse/"));
+        assert!(user_agent(Some("  ")).ends_with("(+https://github.com/OopsieLazy/LeMuse)"));
     }
 }

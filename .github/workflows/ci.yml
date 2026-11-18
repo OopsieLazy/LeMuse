@@ -63,7 +63,7 @@ jobs:
         run: npm run validate:w3c
       - name: Clippy (Tauri shell)
         working-directory: .
-        run: cargo clippy -p servensurf-app -- -D warnings
+        run: cargo clippy -p lemuse-app -- -D warnings
 
   test-build:
     # A downloadable Windows test build on every PR, so the owner can run the
@@ -87,6 +87,6 @@ jobs:
         run: npm run tauri build -- --bundles nsis
       - uses: actions/upload-artifact@v4
         with:
-          name: servensurf-test-build-${{ github.event.pull_request.number }}
+          name: lemuse-test-build-${{ github.event.pull_request.number }}
           path: target/release/bundle/nsis/*.exe
           retention-days: 14

@@ -24,7 +24,7 @@ const base: SlideshowViewProps = {
   slideSeconds: 8,
   tick: 1,
   status: {
-    root: "C:\\Users\\you\\Pictures\\ServeNSurf",
+    root: "C:\\Users\\you\\Pictures\\LeMuse",
     blocks: sample.blocks,
     schema_version: 2,
     refreshing: false,
@@ -50,7 +50,7 @@ for (const [name, props] of Object.entries(states)) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ServeNSurf (${name})</title>
+<title>LeMuse (${name})</title>
 </head>
 <body>
 <div id="root">${body}</div>

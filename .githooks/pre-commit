@@ -1,5 +1,5 @@
 #!/bin/sh
-# ServeNSurf pre-commit gate (ADR-0009). Enable once per clone:
+# LeMuse pre-commit gate (ADR-0009). Enable once per clone:
 #   git config core.hooksPath .githooks
 #
 # When a commit touches the UI (app/ markup, styles or scripts), run the W3C

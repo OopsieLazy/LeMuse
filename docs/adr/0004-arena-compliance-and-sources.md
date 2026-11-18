@@ -27,7 +27,7 @@ Research: `reports/Arena reference gatherer architecture.md` §Are.na terms and 
    not download, and caps pages per refresh.)
 2. Incremental only (ADR-0003), throttled to 80% of the tier's read limit, at least 500 ms apart, honouring
    `retry_after`.
-3. Send a descriptive User-Agent: `ServeNSurf/<version> (+<contact>)`.
+3. Send a descriptive User-Agent: `LeMuse/<version> (+<contact>)`.
 4. Store the creator and source with every block. Show attribution in the UI. The library is labelled
    *personal reference*: no export or sharing features in v1.
 5. **Before any public distribution**, register an OAuth app and send a courtesy note to help@are.na

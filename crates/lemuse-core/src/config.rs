@@ -1,4 +1,4 @@
-//! User configuration (`servensurf.toml` in the library root).
+//! User configuration (`lemuse.toml` in the library root).
 //!
 //! The app is organised around **topics**: a named slideshow fed by sources
 //! the user picks (Are.na channels now, museum keyword queries later).
@@ -15,9 +15,9 @@ use serde::{Deserialize, Serialize};
 use crate::connectors::{KEYWORD_SOURCES, KNOWN_SOURCES};
 use crate::{Error, Result};
 
-pub const CONFIG_FILE_NAME: &str = "servensurf.toml";
+pub const CONFIG_FILE_NAME: &str = "lemuse.toml";
 
-/// The owner's topic list (Q8, 2026-11-16), written by `servensurf init`.
+/// The owner's topic list (Q8, 2026-11-16), written by `lemuse init`.
 pub const STARTER_TOPICS_TOML: &str = include_str!("../assets/starter_topics.toml");
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -170,14 +170,14 @@ fn default_slide_seconds() -> u32 {
     8
 }
 
-/// Text `servensurf init` writes: the base settings plus the starter topics.
+/// Text `lemuse init` writes: the base settings plus the starter topics.
 pub fn starter_toml(root: impl Into<PathBuf>) -> Result<String> {
     Ok(Config::new(root).to_toml()? + "\n" + STARTER_TOPICS_TOML)
 }
 
 /// Make sure a library exists at `paths` and return its config: create the
 /// folders and catalog, and write the starter topics on first use. Shared by
-/// `servensurf init` and the desktop app's first launch.
+/// `lemuse init` and the desktop app's first launch.
 pub fn ensure_library(paths: &crate::store::LibraryPaths) -> Result<Config> {
     paths.ensure()?;
     crate::store::catalog::Catalog::open(&paths.catalog())?;
@@ -267,14 +267,14 @@ impl Config {
         Ok(())
     }
 
-    /// Default library root: `%USERPROFILE%\Pictures\ServeNSurf` on Windows,
-    /// `$HOME/Pictures/ServeNSurf` elsewhere.
+    /// Default library root: `%USERPROFILE%\Pictures\LeMuse` on Windows,
+    /// `$HOME/Pictures/LeMuse` elsewhere.
     pub fn default_root() -> PathBuf {
         let home = std::env::var_os("USERPROFILE")
             .or_else(|| std::env::var_os("HOME"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        home.join("Pictures").join("ServeNSurf")
+        home.join("Pictures").join("LeMuse")
     }
 }
 
@@ -287,7 +287,7 @@ mod tests {
         root = "D:/References"
 
         [sync]
-        contact = "https://example.invalid/servensurf"
+        contact = "https://example.invalid/lemuse"
 
         [[topic]]
         name = "Industrial design"

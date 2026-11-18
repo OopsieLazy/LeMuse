@@ -53,7 +53,7 @@ export function SlideshowView(p: SlideshowViewProps) {
     <div className="app">
       <nav className="rail" aria-label="Topics">
         <div className="brand">
-          <span className="brand-name">ServeNSurf</span>
+          <span className="brand-name">LeMuse</span>
           {p.mode === "preview" && <span className="brand-mode">Preview</span>}
         </div>
         <ul className="topic-list">
@@ -126,7 +126,7 @@ export function SlideshowView(p: SlideshowViewProps) {
             </div>
             <div className="caption-body">
               <div className="meta">
-                <h1 className="slide-title">{slide ? slide.title || "Untitled" : (p.active ?? "ServeNSurf")}</h1>
+                <h1 className="slide-title">{slide ? slide.title || "Untitled" : (p.active ?? "LeMuse")}</h1>
                 {slide && (
                   <p className="byline">
                     {slide.creator && <span className="creator">{slide.creator}</span>}

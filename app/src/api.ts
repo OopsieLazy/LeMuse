@@ -2,7 +2,7 @@
 //
 // - Tauri (the desktop app): commands in app/src-tauri/src/lib.rs.
 // - Preview (a plain browser, `npm run preview:web`, or the design artifact):
-//   reads exported catalog metadata (`servensurf preview-data`). Images still
+//   reads exported catalog metadata (`lemuse preview-data`). Images still
 //   stream from the source CDN; nothing is downloaded (ADR-0009).
 
 export interface LibraryStatus {

@@ -27,7 +27,7 @@ lives only in documents gets guessed. The owner needs to see the actual product 
 | View | What it is | Images | Who it's for |
 |---|---|---|---|
 | **Test build** | `npm run tauri build -- --bundles nsis` installer; CI uploads one per PR (`test-build` job) | Real, streamed from the CDN | The owner, running the real app |
-| **Browser preview** | `npm run preview:web` serves the real React UI against an exported catalog snapshot (`servensurf preview-data`) | Real, streamed from the CDN | Fast design iteration, no Rust build |
+| **Browser preview** | `npm run preview:web` serves the real React UI against an exported catalog snapshot (`lemuse preview-data`) | Real, streamed from the CDN | Fast design iteration, no Rust build |
 | **Design artifact** | `npm run preview:artifact` packs the same UI and snapshot into one HTML page, published as a private claude.ai Artifact at a stable URL that is updated in place | Drawn placeholders at each image's true size and aspect ratio | Viewing anywhere, including a phone |
 
 All three run the **same components** (`app/src/SlideshowView.tsx`), so what's reviewed is what ships. The UI

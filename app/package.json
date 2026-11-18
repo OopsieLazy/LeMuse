@@ -1,5 +1,5 @@
 {
-  "name": "servensurf-ui",
+  "name": "lemuse-ui",
   "private": true,
   "license": "MIT",
   "version": "0.1.0",
@@ -11,7 +11,7 @@
     "tauri": "tauri",
     "build:snapshot": "vite build --ssr scripts/snapshot.tsx --outDir .snapshot/ssr --emptyOutDir && node .snapshot/ssr/snapshot.js .snapshot/html",
     "validate:w3c": "npm run build && npm run build:snapshot && node scripts/validate-w3c.mjs",
-    "preview:data": "cargo run -q -p servensurf-cli -- preview-data --per-topic 40 > preview/preview-data.json",
+    "preview:data": "cargo run -q -p lemuse-cli -- preview-data --per-topic 40 > preview/preview-data.json",
     "preview:web": "vite --mode preview",
     "preview:artifact": "vite build --mode preview --outDir dist-preview --emptyOutDir && node scripts/make-artifact.mjs"
   },

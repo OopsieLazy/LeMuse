@@ -1,5 +1,5 @@
 //! Tauri shell. Deliberately thin: every command delegates to
-//! servensurf-core so GUI and CLI behaviour can never drift (ADR-0001).
+//! lemuse-core so GUI and CLI behaviour can never drift (ADR-0001).
 //!
 //! Launch flow (ADR-0005, ADR-0007): the window opens immediately from the
 //! local catalog; if `sync.on_launch` is set, a metadata refresh starts on a
@@ -12,11 +12,11 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use lemuse_core::config::Config;
+use lemuse_core::store::catalog::{Catalog, Slide};
+use lemuse_core::store::LibraryPaths;
+use lemuse_core::sync::{refresh_library, Trigger};
 use serde::Serialize;
-use servensurf_core::config::Config;
-use servensurf_core::store::catalog::{Catalog, Slide};
-use servensurf_core::store::LibraryPaths;
-use servensurf_core::sync::{refresh_library, Trigger};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Upper bound when counting a topic's slides for the rail.
@@ -59,16 +59,16 @@ enum RefreshEvent {
 #[derive(Default)]
 struct Refreshing(Arc<AtomicBool>);
 
-/// `SERVENSURF_LIBRARY` overrides the default folder (testing, portable use).
+/// `LEMUSE_LIBRARY` overrides the default folder (testing, portable use).
 fn library_paths() -> LibraryPaths {
-    let root = std::env::var_os("SERVENSURF_LIBRARY")
+    let root = std::env::var_os("LEMUSE_LIBRARY")
         .map(PathBuf::from)
         .unwrap_or_else(Config::default_root);
     LibraryPaths::new(root)
 }
 
 fn load_config(paths: &LibraryPaths) -> Result<Config, String> {
-    servensurf_core::config::ensure_library(paths).map_err(|e| e.to_string())
+    lemuse_core::config::ensure_library(paths).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -184,5 +184,5 @@ pub fn run() {
             refresh_now
         ])
         .run(tauri::generate_context!())
-        .expect("error while running ServeNSurf");
+        .expect("error while running LeMuse");
 }

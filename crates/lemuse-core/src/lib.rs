@@ -1,6 +1,6 @@
-//! servensurf-core — everything that is not UI.
+//! lemuse-core — everything that is not UI.
 //!
-//! The GUI (Tauri shell) and the CLI (`servensurf`) are thin front-ends over this
+//! The GUI (Tauri shell) and the CLI (`lemuse`) are thin front-ends over this
 //! crate, so a launch-time sync, a scheduled sync and a manual "Gather now"
 //! button all run the exact same code path. See `docs/ARCHITECTURE.md`.
 //!
@@ -23,4 +23,4 @@ pub use error::{Error, Result};
 /// Identifies this client to every remote service. Are.na's edge blocks
 /// generic browser user agents, and Wikimedia/Poly Haven require a
 /// descriptive one. Contact info is filled from config at runtime.
-pub const USER_AGENT_PRODUCT: &str = concat!("ServeNSurf/", env!("CARGO_PKG_VERSION"));
+pub const USER_AGENT_PRODUCT: &str = concat!("LeMuse/", env!("CARGO_PKG_VERSION"));
