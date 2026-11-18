@@ -12,6 +12,8 @@
 //! lemuse search  "gearbox"
 //! lemuse add-channel https://www.are.na/someone/chairs --topic "Wood objects"
 //! lemuse export-links --playlist "Chairs" --format csv > chairs.csv
+//! lemuse sheet --topic "Wood objects" --count 24 > sheet.html
+//! lemuse serve            # dashboard on http://127.0.0.1:47555
 //! ```
 //!
 //! `--json` makes every command print exactly one JSON document on stdout:
@@ -61,6 +63,10 @@ enum Command {
     Sync {
         #[arg(long, value_enum, default_value_t = TriggerArg::Cli)]
         trigger: TriggerArg,
+        /// Read every channel to its end now (up to 100,000 items each),
+        /// instead of resuming over several refreshes.
+        #[arg(long)]
+        full: bool,
     },
     /// A topic's slides (what the slideshow would show).
     Slides {
@@ -100,6 +106,30 @@ enum Command {
         #[arg(long, value_enum, default_value_t = LinkFormat::Csv)]
         format: LinkFormat,
     },
+    /// Run the read-only dashboard: the LeMuse page and a JSON API on
+    /// http://127.0.0.1 (ADR-0019). Prints the address with its token.
+    Serve {
+        #[arg(long, default_value_t = lemuse_core::serve::DEFAULT_PORT)]
+        port: u16,
+        /// Also listen on your network (wall screen, phone). Trusted Wi-Fi only.
+        #[arg(long)]
+        lan: bool,
+        /// The built page (`npm run build:dashboard` → app/dist-dashboard).
+        #[arg(long)]
+        ui: Option<PathBuf>,
+    },
+    /// A printable reference sheet of images as HTML (Print → Save as PDF).
+    /// The same seed (default: today's date) gives the same pick.
+    Sheet {
+        #[arg(long, conflicts_with = "playlist")]
+        topic: Option<String>,
+        #[arg(long)]
+        playlist: Option<String>,
+        #[arg(long, default_value_t = 24)]
+        count: usize,
+        #[arg(long)]
+        seed: Option<String>,
+    },
     /// Public Are.na channels a block is also in (1 read per page).
     Related {
         /// Are.na block id (the number in are.na/block/<id>).
@@ -123,6 +153,8 @@ impl Command {
             Command::PreviewChannel { .. } => "preview-channel",
             Command::ExportLinks { .. } => "export-links",
             Command::Related { .. } => "related",
+            Command::Serve { .. } => "serve",
+            Command::Sheet { .. } => "sheet",
         }
     }
 }
@@ -201,6 +233,39 @@ fn main() -> ExitCode {
     }
 }
 
+/// Pages a `sync --full` may read per channel (100,000 items).
+const FULL_PAGES: u32 = 1000;
+/// Pages of 500 a sheet draws from (10,000 images).
+const SHEET_PAGES: u32 = 20;
+
+/// Collections of one topic, or of every topic (All), deduplicated.
+fn scope_keys(cfg: &Config, topic: Option<&str>) -> lemuse_core::Result<Vec<(String, String)>> {
+    Ok(match topic {
+        Some(name) => cfg
+            .topic(name)
+            .ok_or_else(|| no_topic(name))?
+            .collection_keys(),
+        None => cfg
+            .topics
+            .iter()
+            .flat_map(|t| t.collection_keys())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+    })
+}
+
+/// The dashboard page next to the program (installed), else the dev build.
+fn default_ui_dir() -> Option<PathBuf> {
+    let beside = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|d| d.join("dashboard")));
+    [beside, Some(PathBuf::from("app/dist-dashboard"))]
+        .into_iter()
+        .flatten()
+        .find(|d| d.join("index.html").is_file())
+}
+
 fn no_topic(name: &str) -> lemuse_core::Error {
     lemuse_core::Error::Config(format!("no topic named `{name}`"))
 }
@@ -262,9 +327,12 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             }
             Ok(out(Value::Array(data), text))
         }
-        Command::Sync { trigger } => {
+        Command::Sync { trigger, full } => {
             // ensure_library also applies the one-time page-default upgrade.
-            let cfg = ensure_library(paths)?;
+            let mut cfg = ensure_library(paths)?;
+            if full {
+                cfg.sync.pages_per_refresh = FULL_PAGES;
+            }
             let trigger = match trigger {
                 TriggerArg::Cli => Trigger::Cli,
                 TriggerArg::Schedule => Trigger::Schedule,
@@ -287,25 +355,10 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             // fetched or written: the preview streams them (ADR-0009).
             let cfg = Config::load(&paths.config())?;
             let mut catalog = Catalog::open(&paths.catalog())?;
-            let vocabulary = lemuse_core::categories::vocabulary();
-            catalog.ensure_categories(vocabulary)?;
-            let mut topics = Vec::new();
-            for t in &cfg.topics {
-                let slides = catalog.slides(&t.collection_keys(), per_topic, 0)?;
-                topics.push(json!({
-                    "name": t.name,
-                    "slide_seconds": t.slide_seconds,
-                    "shuffle": t.shuffle,
-                    "sources": t.resolved_sources().len(),
-                    "slides": slides,
-                }));
-            }
-            Ok(pretty(json!({
-                "generated_from": "lemuse preview-data",
-                "blocks": catalog.block_count()?,
-                "topics": topics,
-                "vocabulary": lemuse_core::categories::ui_vocabulary(vocabulary),
-            })))
+            catalog.ensure_categories(lemuse_core::categories::vocabulary())?;
+            Ok(pretty(lemuse_core::serve::preview_data(
+                &cfg, &catalog, per_topic,
+            )?))
         }
         Command::Status => {
             let catalog = Catalog::open(&paths.catalog())?;
@@ -399,19 +452,7 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
                 })?;
                 catalog.links(&Scope::Playlist(id))?
             } else {
-                let keys: Vec<(String, String)> = match topic {
-                    Some(name) => cfg
-                        .topic(&name)
-                        .ok_or_else(|| no_topic(&name))?
-                        .collection_keys(),
-                    None => cfg
-                        .topics
-                        .iter()
-                        .flat_map(|t| t.collection_keys())
-                        .collect::<std::collections::BTreeSet<_>>()
-                        .into_iter()
-                        .collect(),
-                };
+                let keys = scope_keys(&cfg, topic.as_deref())?;
                 catalog.links(&Scope::collections(&keys))?
             };
             let text = match format {
@@ -423,6 +464,96 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
                 eprintln!("{} image(s)", rows.len());
             }
             Ok(out(to_value!(&rows), text))
+        }
+        Command::Serve { port, lan, ui } => {
+            use lemuse_core::serve;
+            ensure_library(paths)?;
+            let token = match std::env::var("LEMUSE_SERVE_TOKEN") {
+                Ok(t) if serve::is_valid_token(&t) => t,
+                Ok(_) => {
+                    return Err(lemuse_core::Error::Config(
+                        "LEMUSE_SERVE_TOKEN must be 32-128 letters, digits, - or _".into(),
+                    ))
+                }
+                Err(_) => serve::new_token()?,
+            };
+            let ui_dir = ui.or_else(default_ui_dir);
+            let bundle = ui_dir.as_deref().map(serve::load_ui).transpose()?;
+            let mut server = serve::Server::new(paths.clone(), token.clone(), bundle, port, lan);
+            let listener = server.bind()?;
+            let port = server.port();
+            let url = format!("http://127.0.0.1:{port}/#token={token}");
+            if json_mode {
+                let doc = json!({ "lemuse": JSON_VERSION, "command": "serve", "ok": true,
+                    "data": { "url": url, "port": port, "lan": lan, "token": token,
+                              "page": ui_dir.is_some() } });
+                println!("{}", serde_json::to_string(&doc).unwrap_or_default());
+            } else {
+                println!("LeMuse dashboard (read-only). Keep this window open; Ctrl+C stops it.");
+                println!("  open:  {url}");
+                println!("  API:   curl -H \"Authorization: Bearer {token}\" http://127.0.0.1:{port}/api/v1/status");
+                if ui_dir.is_none() {
+                    println!("  page:  not built; run `npm run build:dashboard` in app/ (the API works already)");
+                }
+                if lan {
+                    println!("  LAN:   also on http://<this PC's address>:{port}/#token=... (find it with `ipconfig`)");
+                    eprintln!("warning: LAN mode sends the token unencrypted over your network; use trusted Wi-Fi only");
+                }
+            }
+            std::sync::Arc::new(server).serve(listener);
+            // serve() only returns if the listener fails.
+            std::process::exit(1);
+        }
+        Command::Sheet {
+            topic,
+            playlist,
+            count,
+            seed,
+        } => {
+            use lemuse_core::export;
+            let cfg = Config::load(&paths.config())?;
+            let catalog = Catalog::open(&paths.catalog())?;
+            let keys;
+            let (scope, heading) = if let Some(name) = playlist {
+                let id = catalog.playlist_id(&name)?.ok_or_else(|| {
+                    lemuse_core::Error::Config(format!("no playlist named `{name}`"))
+                })?;
+                (Scope::Playlist(id), name)
+            } else {
+                keys = scope_keys(&cfg, topic.as_deref())?;
+                (
+                    Scope::collections(&keys),
+                    topic.unwrap_or_else(|| "All".into()),
+                )
+            };
+            let mut all = Vec::new();
+            for page in 0..SHEET_PAGES {
+                let got = catalog.slides_in(&scope, &Default::default(), 500, page * 500)?;
+                let last = got.len() < 500;
+                all.extend(got);
+                if last {
+                    break;
+                }
+            }
+            let seed = seed.unwrap_or_else(export::today_utc);
+            let picked = export::pick(&all, count.clamp(1, 200), &seed);
+            let html = export::to_sheet_html(
+                &format!("{heading}: reference sheet"),
+                &seed,
+                &picked,
+                lemuse_core::serve::IMAGE_HOSTS,
+            );
+            if !json_mode {
+                eprintln!(
+                    "{} of {} image(s); open the file in a browser and print to PDF",
+                    picked.len(),
+                    all.len()
+                );
+            }
+            Ok(out(
+                json!({ "heading": heading, "seed": seed, "count": picked.len(), "html": html }),
+                html,
+            ))
         }
         Command::Related { block_id, page } => {
             let cfg = ensure_library(paths)?;
