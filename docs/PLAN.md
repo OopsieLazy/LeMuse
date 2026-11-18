@@ -4,8 +4,8 @@
 drawing, design and CAD practice. Topics are fed by Are.na channels you choose and free museum collections.
 Images stream from the source; only Save writes files.
 
-**Where we are:** **v0.6.0** is released (2026-11-17): PRs #1–#9 are on `main`. The next PR is the roadmap's
-**v0.7**.
+**Where we are:** **v0.7.0** is released (2026-11-18): mini player, whole channels, auto refresh, JSON,
+dashboard, reference sheets. Next: compact windows (PR below), then v0.8 Save and sign in.
 
 **How work reaches `main` (from session 8):**
 - Claude works on a branch, commits small, and pushes the branch to GitHub. That is the off-machine backup, and
@@ -14,20 +14,16 @@ Images stream from the source; only Save writes files.
   test installer) and clicks **Squash and merge**.
 - `main` is locked, so changes reach it only through a reviewed PR.
 
-## Now (session 11, owner's request of 2026-11-18)
+## Now (session 13, owner's request of 2026-11-18)
 
-Merge order on GitHub (session 12): **CI fix (`ci/0011`, new PR) → #1 roadmap → #2** (`feat/0014`, which holds work
-items 12–15). Press "Update branch" before each merge; PR titles must start with a type (`ci:`, `docs:`, `feat:`).
+v0.7.0 is on `main` (#1, #2). Next PR: **`feat/0016-compact-layout`** (title `feat: compact layout for tablets and
+small windows`), which also carries the CI fix.
 
-| # | Work | Branch | Status |
-|---|---|---|---|
-| 1 | Earlier work: CI fix, roadmap, mini player + links, whole channels + auto refresh + JSON | #11, #10, #12, #13 | ✅ pushed, awaiting review |
-| 2 | **Mini player v2:** smaller; image fills the window; tap the image for the bottom bar; ☰ menu on the left to switch All / topics / playlists | `feat/0014-dashboard-sheets-mini` | ✅ pushed |
-| 3 | **Dashboard, first build** (ADR-0019): `lemuse serve`, read-only, 127.0.0.1 + token, JSON API + the LeMuse page for OBS, Home Assistant, a wall screen | same | ✅ |
-| 4 | **Reference sheet:** `lemuse sheet`, a printable page of N images with attribution (Print → PDF); a daily pick by date | same | ✅ |
-| 5 | **Whole channel now:** `lemuse sync --full`; a just-added channel reads up to 10,000 items | same | ✅ |
-| 6 | Plans: hosted web app on a domain (ADR-0020), daily mailer and pin automation (ADR-0021); Q19 = no, Q20 = no recorded | same + this branch | ✅ |
-| 7 | Owner: Dependency graph; lock `main`; Q18 and the new Q21–Q23 | — | ⏳ owner |
+| # | Work | Status |
+|---|---|---|
+| 1 | Compact windows behave like the mini player: image fills it, ☰ drawer, tap for a slimmer bar, credit on the image | ✅ pushed |
+| 2 | CI fix (gitleaks over full history; title check on edit), carried in the same PR | ✅ pushed |
+| 3 | Owner: Dependency graph; lock `main`; Q21–Q23 | ⏳ owner |
 
 ## Roadmap
 

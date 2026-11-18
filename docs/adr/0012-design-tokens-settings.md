@@ -97,6 +97,21 @@ stays the system browser (built now), which is safer and costs nothing. Revisit 
 - Settings follow the library folder, so a moved library keeps its look.
 - Two new narrow permissions to keep in mind in future admin passes.
 
+## Amendment (2026-11-18): compact windows
+
+The owner: on a tablet or a smaller window "the image gets smaller and smaller and the peripherals larger".
+From now on, below 1,024 px wide or 560 px tall, every layout behaves like the mini player:
+
+- the image gets the window (stage padding at most `--space-2`);
+- the topic list becomes a ☰ drawer from the left, with the full rail: Find, +, Refresh, Settings;
+- the control bar hides until you tap the image, and is slimmer when shown: no specs, no category tags;
+- tap again, or tap with the drawer open to close it.
+
+The bar still never covers the image (D-33). While the bar is hidden, a small credit (creator · source) stays
+on the image, so attribution is always visible (ADR-0004); the mini player shows it too. This replaces the old
+narrow-window "rail as a horizontal strip". The layout test now includes a tablet size (768 × 1024) and fails if
+a compact window's image area is under 95% of the window.
+
 ## Review log
 
 | Stage | Date | Reviewer | Outcome | Notes / finding IDs |

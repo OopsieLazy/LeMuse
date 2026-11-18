@@ -8,6 +8,8 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Compact windows (work item 16): on tablets and windows under 1,024 px wide or 560 px tall, the image fills
+  the window, topics open from ☰, and the bar shows when you tap the image.
 - Dashboard, reference sheets, mini player v2 (work item 14, ADR-0019, ADR-0021):
   - `lemuse serve`: a read-only dashboard on `127.0.0.1` with a token, a JSON API and the LeMuse page for OBS,
     Home Assistant or a wall screen (`npm run build:dashboard`);

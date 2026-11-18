@@ -1,0 +1,15 @@
+What: tablets and small windows behave like the mini player (image fills
+the window, ☰ drawer for topics, tap the image for a slimmer bar, credit
+stays on the image); CI runs gitleaks itself over full history and the
+PR-title check re-runs on edit.
+Why: owner's request (image shrank while the side and bottom grew);
+the CI fix had no PR of its own.
+
+✅ Compact below 1,024 px wide or 560 px tall; wide windows unchanged
+✅ ☰ drawer with the full rail; tap image for the bar; credit always shown
+✅ Bar never covers the image; layout test adds 768x1024 + fill check
+✅ CI: pinned, checksum-verified gitleaks over all commits; title check
+⬜ Auto-hide the tapped-open bar after a few seconds (if wanted)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0016-compact-layout.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
