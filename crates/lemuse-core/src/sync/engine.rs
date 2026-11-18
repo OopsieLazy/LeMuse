@@ -388,7 +388,7 @@ impl<'a> SyncEngine<'a> {
 
                 let mut block = item.block;
                 if opts.mode == FileMode::Download {
-                    match self.download_all(&item.downloads, throttle) {
+                    match self.download_all(conn.id(), &item.downloads, throttle) {
                         Ok(files) => {
                             summary.files_stored += files.len() as u32;
                             block.files = files;
@@ -435,11 +435,19 @@ impl<'a> SyncEngine<'a> {
 
     fn download_all(
         &self,
+        connector: &str,
         reqs: &[DownloadRequest],
         throttle: &mut Throttle,
     ) -> Result<Vec<StoredFile>> {
         let mut out = Vec::with_capacity(reqs.len());
         for r in reqs {
+            // Only from the source's own CDN (review 0008 A-37).
+            if !crate::connectors::download_allowed(connector, &r.url) {
+                return Err(Error::Connector {
+                    connector: "download".into(),
+                    message: format!("refused a file from an unexpected host: {}", r.url),
+                });
+            }
             // File CDNs aren't the API, but we still pace to be a good citizen.
             self.pace(throttle);
             let resp = self.http.get(&r.url, &[])?;
@@ -473,29 +481,35 @@ impl<'a> SyncEngine<'a> {
         }
     }
 
-    /// Retry rate-limited calls, honouring the server's `retry_after`.
-    fn with_retry<T>(&self, mut f: impl FnMut() -> Result<T>) -> Result<T> {
-        let mut attempt = 0;
-        loop {
-            match f() {
-                Err(Error::RateLimited {
-                    retry_after_secs, ..
-                }) if attempt + 1 < MAX_ATTEMPTS => {
-                    let wait = Duration::from_secs(retry_after_secs)
-                        .max(backoff_ceiling(
-                            attempt,
-                            Duration::from_secs(1),
-                            MAX_RETRY_WAIT,
-                        ))
-                        .min(MAX_RETRY_WAIT);
-                    if self.sleep_enabled {
-                        std::thread::sleep(wait);
-                    }
-                    attempt += 1;
-                }
-                other => return other,
+    fn with_retry<T>(&self, f: impl FnMut() -> Result<T>) -> Result<T> {
+        retry(self.sleep_enabled, f)
+    }
+}
+
+/// Retry rate-limited calls (honouring `retry_after`) and temporary network
+/// or 5xx failures (backing off 1 s, 2 s, 4 s), up to [`MAX_ATTEMPTS`] tries.
+pub fn retry<T>(sleep: bool, mut f: impl FnMut() -> Result<T>) -> Result<T> {
+    let mut attempt = 0;
+    loop {
+        let wait = match f() {
+            Err(Error::RateLimited {
+                retry_after_secs, ..
+            }) if attempt + 1 < MAX_ATTEMPTS => Duration::from_secs(retry_after_secs)
+                .max(backoff_ceiling(
+                    attempt,
+                    Duration::from_secs(1),
+                    MAX_RETRY_WAIT,
+                ))
+                .min(MAX_RETRY_WAIT),
+            Err(Error::Transient { .. }) if attempt + 1 < MAX_ATTEMPTS => {
+                Duration::from_secs(1 << attempt)
             }
+            other => return other,
+        };
+        if sleep {
+            std::thread::sleep(wait);
         }
+        attempt += 1;
     }
 }
 
@@ -900,5 +914,20 @@ mod tests {
             catalog.watermark(1).unwrap().as_deref(),
             Some("2026-11-06T00:00:00Z")
         );
+    }
+
+    #[test]
+    fn transient_failures_are_retried_then_succeed() {
+        let (dir, http, cfg) = setup(FileMode::Stream);
+        http.push(&format!("{API_BASE}/channels/refs"), 503, "busy");
+        queue_channel(&http);
+        let mut catalog = Catalog::open_in_memory().unwrap();
+        let mut engine = SyncEngine::new(LibraryPaths::new(dir.path()), &mut catalog, http.clone());
+        engine.sleep_enabled = false;
+        let s = engine
+            .run(&cfg, &mut arena(&http), Trigger::Launch)
+            .unwrap();
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        assert_eq!(s.blocks_upserted, 3);
     }
 }

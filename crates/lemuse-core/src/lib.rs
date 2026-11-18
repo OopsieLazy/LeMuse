@@ -22,6 +22,7 @@ pub mod error;
 pub mod export;
 pub mod import;
 pub mod model;
+pub mod save;
 pub mod serve;
 pub mod store;
 pub mod sync;

@@ -53,6 +53,16 @@ pub struct Slide {
     pub fallback_urls: Vec<String>,
 }
 
+/// What Save needs to know about one block (ADR-0022).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveTarget {
+    pub connector: String,
+    pub title: Option<String>,
+    pub original_url: Option<String>,
+    /// `(sha256, ext)` of an original already in the store.
+    pub stored: Option<(String, String)>,
+}
+
 /// Every stored link of one image, for `lemuse export-links` (ADR-0016).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LinkRow {
@@ -923,6 +933,46 @@ impl Catalog {
             limit,
             offset,
         )
+    }
+
+    /// What Save needs for one block: connector, title, the full-size image
+    /// link, and an original already in the store (if any).
+    pub fn save_target(&self, block_id: i64) -> Result<Option<SaveTarget>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT b.connector, b.title,
+                        (SELECT url FROM block_media m WHERE m.block_id = b.id AND m.role = 'original'),
+                        (SELECT f.sha256 || '.' || f.ext FROM block_files bf JOIN files f ON f.sha256 = bf.sha256
+                         WHERE bf.block_id = b.id AND bf.role = 'original' LIMIT 1)
+                 FROM blocks b WHERE b.id = ?1",
+                params![block_id],
+                |r| {
+                    let stored: Option<String> = r.get(3)?;
+                    Ok(SaveTarget {
+                        connector: r.get(0)?,
+                        title: r.get(1)?,
+                        original_url: r.get(2)?,
+                        stored: stored.and_then(|s| {
+                            s.split_once('.').map(|(h, e)| (h.to_string(), e.to_string()))
+                        }),
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    /// Record a saved file for a block (local state; refreshes never remove it).
+    pub fn add_block_file(&self, block_id: i64, f: &crate::model::StoredFile) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO files (sha256, ext, size_bytes) VALUES (?1, ?2, ?3)",
+            params![f.sha256, f.ext, f.size_bytes as i64],
+        )?;
+        self.conn.execute(
+            "INSERT OR IGNORE INTO block_files (block_id, sha256, role) VALUES (?1, ?2, ?3)",
+            params![block_id, f.sha256, f.role],
+        )?;
+        Ok(())
     }
 
     /// The Are.na block id behind a local block, if it came from Are.na.

@@ -28,6 +28,10 @@ pub enum Error {
     #[error("{connector}: {message}")]
     Connector { connector: String, message: String },
 
+    /// A network failure or a 5xx answer: worth retrying (review 0001 D-2).
+    #[error("temporary problem reaching {connector}: {message}")]
+    Transient { connector: String, message: String },
+
     #[error("not implemented yet: {0}")]
     NotImplemented(&'static str),
 }

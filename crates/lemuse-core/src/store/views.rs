@@ -54,7 +54,17 @@ pub fn view_path(
     block_id: i64,
     ext: &str,
 ) -> PathBuf {
-    let stem = sanitize_name(title.unwrap_or("untitled"));
+    // Many Are.na titles are file names ("IMG_2041.jpg"): drop that
+    // extension so the view isn't "IMG_2041.jpg [7].jpg".
+    let raw = title.unwrap_or("untitled");
+    let lower = raw.to_ascii_lowercase();
+    let raw = [
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".avif", ".bmp",
+    ]
+    .iter()
+    .find(|e| lower.ends_with(*e) && raw.len() > e.len())
+    .map_or(raw, |e| &raw[..raw.len() - e.len()]);
+    let stem = sanitize_name(raw);
     views_dir
         .join(sanitize_name(collection))
         .join(format!("{stem} [{block_id}].{ext}"))
@@ -91,6 +101,8 @@ mod tests {
     fn view_path_is_unique_per_block() {
         let p = view_path(Path::new("views"), "Chairs", Some("Eames: side"), 42, "jpg");
         assert_eq!(p, PathBuf::from("views/Chairs/Eames_ side [42].jpg"));
+        let q = view_path(Path::new("views"), "Saved", Some("IMG_2041.JPG"), 7, "jpg");
+        assert_eq!(q, PathBuf::from("views/Saved/IMG_2041 [7].jpg"));
     }
 
     #[test]
