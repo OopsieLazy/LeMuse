@@ -5,6 +5,16 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-18 (session 12): public-repo hygiene (work item 15)
+
+**Branch:** `chore/0015-public-repo-hygiene` (pushed, stacked on #14) · **Status:** awaiting owner review
+
+- `lemuse serve` code stays public; its outputs don't. `.gitignore` and the scanner now keep out config,
+  databases, logs, sheets, PDFs, link exports, images and dashboard tokens; tracked-but-ignored files fail.
+- CLAUDE.md rule: every change that writes files updates `.gitignore` and `FORBIDDEN_FILES` together.
+
+---
+
 ## 2026-11-18 (session 11): dashboard, reference sheets, mini player v2; web app plan
 
 **Branch:** `feat/0014-dashboard-sheets-mini` (pushed, stacked on #13) · **Status:** awaiting owner review
