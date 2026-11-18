@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: https://images.are.na https://d2w9rnfcy7mm78.cloudfront.net; style-src 'self' 'unsafe-inline'",
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: https://images.are.na https://d2w9rnfcy7mm78.cloudfront.net https://www.artic.edu https://openaccess-cdn.clevelandart.org; style-src 'self' 'unsafe-inline'",
       "assetProtocol": {
         "enable": true,
         "scope": ["$PICTURE/ServeNSurf/**"]

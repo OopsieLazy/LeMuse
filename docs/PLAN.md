@@ -4,7 +4,7 @@
 topic is fed by Are.na channels you choose (later by open museum and 3D sources). Images stream from the
 source; anything you like, you can save locally with one click. Topics refresh automatically on launch.
 
-**Current milestone:** M0 (skeleton), in owner review as PR #1, round 2.
+**Current milestone:** M0 (skeleton) in owner review as PR #1 (round 2), plus PR #2 keyword topics (stacked on #1).
 
 ## Milestones
 
@@ -24,6 +24,13 @@ Each milestone is one or more PRs. Each PR goes through the review loop ([CLAUDE
   - 30 tests, all on fixtures.
 - [x] CLI: `init`, `topics`, `slides`, `status`, `search`, plus a `sync` stub
 - [x] Process: CLAUDE.md, templates, PR and issue templates, CI, progress log. Name ServeNSurf; MIT licence
+
+### PR #2: Keyword topics ✅ built, awaiting owner gate
+
+- [x] The owner's 15 topics written by `servensurf init` (ADR-0008)
+- [x] Cleveland Museum of Art keyword search (CC0; weekly refresh). AIC connector built, held back (D-18)
+- [x] 13 Are.na channels verified for Wood objects, Y2K tech, Product design, Vintage tech
+- [x] Shared per-source throttle (D-13); known channels skip lookups (D-14). 40 tests
 
 ### M1: First slideshow (the vertical slice)
 
@@ -72,8 +79,8 @@ images play full-window. Save puts the original in `views/<topic>/`.
 
 ### M5: More topic sources
 
-- [ ] Keyword topics from open museum APIs: The Met, Art Institute of Chicago, Cleveland MoA (free, CC0).
-      Pull earlier if Q8 says so
+- [x] ~~Cleveland MoA keyword search~~ (pulled into PR #2). AIC built; enable after D-18
+- [ ] The Met (investigate the empty search response; bounded N+1 object fetch)
 - [ ] Poly Haven, Smithsonian Open Access (3D), Wikimedia Commons (per-file licence)
 - [ ] Save-on-request sources (Unsplash, Pexels, Sketchfab)
 
@@ -88,8 +95,10 @@ images play full-window. Save puts the original in `views/<topic>/`.
 | Q5 | Licence | ✅ **MIT** ("basic, free") |
 | Q6 | Are.na tier | ✅ **Free.** 120 reads/min with a token, 30 as guest; no search API |
 | Q7 | Library location | ✅ **Default:** `%USERPROFILE%\Pictures\ServeNSurf` |
-| Q8 | **Open:** how should a "topic" be defined? (a) Are.na channels you pick (free, current default); (b) upgrade to Are.na Premium to search by keyword; (c) pull museum keyword search (free) forward from M5 | Default (a) until answered |
-| Q9 | **Open:** accept ADR-0002…0007 (proposed)? | Accepted on merge of PR #1 unless you object |
+| Q8 | How should a "topic" be defined? | ✅ **By subject.** Owner's list: molds, wood objects (chairs, tables, doors), wrought iron, castle, y2k tech, tech, form, product design, art, candles, chess, vintage, vintage tech, renaissance, contemporary. Built as keyword topics (ADR-0008, PR #2) |
+| Q9 | **Open:** accept ADR-0002…0008 (proposed)? | Accepted on merge of PRs #1/#2 unless you object |
+| Q10 | **Open:** upgrade to Are.na Premium (paid) for real keyword search across Are.na? Best fit for y2k tech, product design, form, molds, contemporary | No; free sources only |
+| Q11 | **Open:** any Are.na channels you already follow for the thin topics (Contemporary, Molds, Tech)? | Starter channels only |
 
 ## Deferred findings register
 
@@ -106,3 +115,6 @@ images play full-window. Save puts the original in `views/<topic>/`.
 | A-6 | Review 0001 r1 | Removed remote items are invisible to the watermark walk | M3 |
 | A-7 | Review 0001 r2 | A watermark held by the page budget means big channels re-fetch pages 1–2 each launch (cheap, bounded) | Accepted; revisit in M3 |
 | A-8 | Review 0001 r2 | Owner has no contact URL for the User-Agent yet | M1 |
+| D-15 | Review 0002 | `slides()` "newest first" is loose across sources (mixed timestamp formats) | M2 (normalize to UTC) |
+| D-18 | Review 0002 | AIC images sit behind a Cloudflare challenge for non-browser clients; unverified in WebView2 | M1 (verify; enable `aic` only if it works) |
+| A-11 | Review 0002 | Starter Are.na channels are third-party curated and may change | Owner review; M2 topic editor |

@@ -5,6 +5,41 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-16 (session 3): Q8 answered → keyword topics (PR #2)
+
+**Branch:** `feat/0002-keyword-topics` (stacked on `feat/0001-architecture-skeleton`) · **PR:** #2 (local) ·
+**Status:** awaiting owner review
+
+### Done
+
+- Q2 confirmed by the owner (view channel content as reference images); recorded on PR #1's branch.
+- Q8 answered with subjects. Built ADR-0008 keyword topics:
+  - `keywords` + expansion;
+  - Cleveland + AIC connectors (real fixtures);
+  - weekly museum refresh;
+  - the owner's 15 topics written by `init`.
+- Found 13 Are.na channels by web search and verified each via the public API (2026-11-16).
+- Probes: Cleveland images 200. **AIC image host returns a Cloudflare challenge**, so AIC is held back (D-18).
+  The Met's images are 200, but its search returned an empty response, so it's a follow-up.
+- Review 0002: fixed D-13 (throttle per target → per source), D-14 (skip known channel lookups) and D-17
+  (clippy). Deferred D-15 and D-18; A-10…A-13 noted. 40 tests pass; clippy, fmt and UI build clean.
+
+### Decisions
+
+- ADR-0008 keyword topics, hybrid sources: proposed.
+
+### Deferred / known gaps
+
+- Thin topics: Contemporary, Molds, Tech (Q10 Premium? Q11 channels?).
+- AIC in-app image check → M1. The Met → follow-up. Window still not launched; no CI yet.
+
+### Next session starts with
+
+1. The owner merges PR #1, rebases/merges PR #2 (commands in the handoff).
+2. `feat/0003-first-slideshow` → M1.
+
+---
+
 ## 2026-11-16 (session 2): Owner answers → stream-first pivot, ServeNSurf, MIT
 
 **Branch:** `feat/0001-architecture-skeleton` · **PR:** #1, round 2 (local; owner is setting up GitHub) ·

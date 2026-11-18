@@ -66,6 +66,8 @@ mod tests {
             min_interval_ms: min_ms,
             background_sync_allowed: true,
             attribution_required: false,
+            max_pages: None,
+            min_refresh_hours: 0,
         }
     }
 

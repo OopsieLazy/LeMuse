@@ -1,0 +1,158 @@
+# ── Your topics (owner's list, Q8 — 2026-11-16) ─────────────────────────────
+# Two kinds of source feed each topic (ADR-0008):
+#   • cleveland — free museum keyword search (Cleveland Museum of Art Open
+#     Access). Uses the topic's `keywords`; CC0 images only. Refreshed weekly.
+#     (`aic` — Art Institute of Chicago — is built but left out until its image
+#     host is verified inside the app window; see review 0002 D-18. To try it,
+#     add a `[[topic.source]]` with `source = "aic"` to any topic.)
+#   • arena — Are.na channels (free plan: no keyword search, so channels are
+#     picked by hand). Refreshed every launch. All channels below were checked
+#     on 2026-11-16 and are public; they're curated by other Are.na users.
+# Add your own: paste the last part of a channel URL as `channel`.
+
+[[topic]]
+name = "Molds"
+keywords = ["mold", "mould", "casting"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+# Museums only show historic molds (glass, bronze casting). For modern
+# mold-making / resin casting, add an Are.na channel here.
+
+[[topic]]
+name = "Wood objects"
+keywords = ["chair", "table", "door", "carved wood", "cabinet"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+[[topic.source]]
+source = "arena"
+channel = "furniture-1504707407"     # "Furniture" (682 blocks)
+[[topic.source]]
+source = "arena"
+channel = "furniture-jxhaqibyiaa"    # "FURNITURE" (139)
+[[topic.source]]
+source = "arena"
+channel = "nomadic-furniture"        # "nomadic furniture" (62)
+[[topic.source]]
+source = "arena"
+channel = "plywood-furniture-ideas"  # "Plywood Furniture Ideas" (20)
+
+[[topic]]
+name = "Wrought iron"
+keywords = ["wrought iron", "ironwork", "iron gate"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Castle"
+keywords = ["castle", "fortress"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Y2K tech"
+shuffle = true
+[[topic.source]]
+source = "arena"
+channel = "y2k-aotubjywykk"            # "Y2K" (1,344 blocks)
+[[topic.source]]
+source = "arena"
+channel = "y2k-aesthetic-4jx0tcbbt3s"  # "Y2K Aesthetic" (276)
+[[topic.source]]
+source = "arena"
+channel = "vectorheart-jihg-te4-ow"    # "Vectorheart" (66)
+[[topic.source]]
+source = "arena"
+channel = "y2k-vst-software-design"    # "Y2K VST/Software Design" (54)
+
+[[topic]]
+name = "Tech"
+keywords = ["machine", "scientific instrument", "clock"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+# Museums cover historic machines and instruments. Add Are.na channels for
+# modern hardware.
+
+[[topic]]
+name = "Form"
+keywords = ["sculpture", "abstract sculpture", "vessel"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Product design"
+keywords = ["industrial design"]
+shuffle = true
+[[topic.source]]
+source = "arena"
+channel = "industrial-design-is-dead"   # "INDUSTRIAL DESIGN IS DEAD" (1,652 blocks)
+[[topic.source]]
+source = "arena"
+channel = "product-design--4"           # "Product Design" (482)
+[[topic.source]]
+source = "arena"
+channel = "product-design-egarhgbsadw"  # "Product design" (235)
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Art"
+keywords = ["painting", "drawing", "print"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Candles"
+keywords = ["candlestick", "candelabrum", "candle", "chandelier"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Chess"
+keywords = ["chess", "chessmen", "chess set"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Vintage"
+keywords = ["art deco", "art nouveau", "poster", "advertisement"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Vintage tech"
+keywords = ["radio", "camera", "typewriter", "telephone"]
+shuffle = true
+[[topic.source]]
+source = "arena"
+channel = "vintage-tech-logos"   # "Vintage Tech Logos" (1,178 blocks)
+[[topic.source]]
+source = "arena"
+channel = "vintage-ui"           # "Vintage UI" (94)
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Renaissance"
+keywords = ["renaissance", "italian renaissance", "northern renaissance"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+
+[[topic]]
+name = "Contemporary"
+keywords = ["contemporary"]
+shuffle = true
+[[topic.source]]
+source = "cleveland"
+# Most contemporary work is still under copyright, so the public-domain
+# museum feeds return little here. Add Are.na channels for this topic.

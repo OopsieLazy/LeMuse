@@ -38,7 +38,9 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
 | Choice | Why (short) | ADR |
 |---|---|---|
 | **Stream images from the CDN; save on request** | The goal is a slideshow, not an archive. Display is the API's intended use, while bulk downloading is what the terms prohibit. Zero disk use by default | 0007 |
-| **Topics = channels you pick** | Are.na search is Premium-only (owner is on the free tier) and crawling is prohibited. Keyword topics come from museum APIs later | 0007, 0004 |
+| **Topics = subjects: keywords + sources** | The owner listed subjects (Q8). Free museum keyword search (Cleveland, CC0) covers historic subjects; curated Are.na channels cover modern ones, because Are.na search is Premium-only | 0008 |
+| **Museums refresh weekly, 1 page per keyword; one throttle per source per run** | Search results barely change; pacing must hold across many keywords on one API | 0008 |
+| **AIC built but held back** | Its image host serves a Cloudflare challenge to non-browser clients; verify in-app before enabling. No evasion | 0008 |
 | **"Paginate, don't enumerate": ≤ 2 pages per channel per refresh; load more lazily** | Are.na's own guidance for display apps; a refresh costs ~2 calls per channel | 0007 |
 | **Display `large` (1800 px) → `medium` → `original`** | Sharp on a 1080p–1440p screen, a fraction of the original's size. Originals are only fetched on Save | 0007 |
 | **Tauri 2 desktop app (approved)** | ~8.6 MiB installer vs ~244 MiB Electron; native Rust core; fast web UI iteration; no Qt licence or tooling cost | 0001 ✅ |
@@ -62,7 +64,8 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
 | `crates/servensurf-core/src/store/catalog.rs` | SQLite, migrations, FTS, `slides()` |
 | `crates/servensurf-core/src/store/{blobs,views}.rs` | CAS for saved files; Windows-safe hardlinked views |
 | `crates/servensurf-core/migrations/` | Append-only SQL migrations (`PRAGMA user_version`); v2 = `block_media` |
-| `crates/servensurf-core/src/connectors/` | `mod.rs` trait + policy, `http.rs` client trait + `FixtureClient`, `arena.rs` v3 mapping (incl. media) |
+| `crates/servensurf-core/src/connectors/` | `mod.rs` trait, policy, ordering, registry; `http.rs` client trait + `FixtureClient`; `arena.rs`, `cleveland.rs`, `aic.rs` |
+| `crates/servensurf-core/assets/starter_topics.toml` | The owner's 15 topics, written by `servensurf init` |
 | `crates/servensurf-core/src/sync/` | `engine.rs` refresh loop, `throttle.rs` pacing + backoff, `lock.rs` single-run lock |
 | `crates/servensurf-core/tests/fixtures/` | Recorded or hand-built API responses |
 | `crates/servensurf-cli/` | `servensurf`: `init`, `topics`, `slides`, `sync` (stub), `status`, `search` |

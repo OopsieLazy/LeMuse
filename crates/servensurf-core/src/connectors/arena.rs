@@ -73,27 +73,7 @@ impl ArenaConnector {
 
     fn get_json(&self, url: &str) -> Result<Value> {
         let resp = self.http.get(url, &[("Accept", "application/json")])?;
-        match resp.status {
-            200..=299 => serde_json::from_slice(&resp.body).map_err(|e| Error::Connector {
-                connector: ID.into(),
-                message: format!("bad JSON from {url}: {e}"),
-            }),
-            429 => {
-                let retry = serde_json::from_slice::<Value>(&resp.body)
-                    .ok()
-                    .and_then(|v| v["error"]["retry_after"].as_u64())
-                    .or_else(|| resp.header("retry-after").and_then(|s| s.parse().ok()))
-                    .unwrap_or(60);
-                Err(Error::RateLimited {
-                    connector: ID.into(),
-                    retry_after_secs: retry,
-                })
-            }
-            s => Err(Error::Connector {
-                connector: ID.into(),
-                message: format!("HTTP {s} from {url}"),
-            }),
-        }
+        super::json_or_error(ID, url, resp)
     }
 }
 
@@ -108,6 +88,8 @@ impl Connector for ArenaConnector {
             min_interval_ms: 500,
             background_sync_allowed: true,
             attribution_required: true,
+            max_pages: None,      // sync.pages_per_refresh applies
+            min_refresh_hours: 0, // channels change: refresh every launch
         }
     }
 

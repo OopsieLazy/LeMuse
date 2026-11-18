@@ -24,3 +24,6 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 - Research report, ADR-0001…0007, plan, architecture overview, templates, progress log.
 - GitHub PR and issue templates, CODEOWNERS placeholder, Windows CI workflow.
 - MIT licence.
+- Keyword topics (PR #2): the owner's 15 starter topics; Cleveland Museum of Art and Art Institute of Chicago
+  keyword-search connectors (CC0 only; weekly refresh); 13 verified Are.na channels; one shared throttle per
+  source per refresh.

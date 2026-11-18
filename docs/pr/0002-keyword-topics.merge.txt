@@ -1,0 +1,23 @@
+feat: keyword topics with the owner's starter list (#2)
+
+Topics are now subjects: keywords plus sources (ADR-0008). servensurf init
+writes the owner's 15 topics, fed by Cleveland Museum of Art keyword search
+(free, CC0, weekly) and 13 verified Are.na channels.
+
+✅ Topic keywords; one search per keyword for keyword sources
+✅ 15 starter topics: Molds, Wood objects, Wrought iron, Castle, Y2K tech,
+   Tech, Form, Product design, Art, Candles, Chess, Vintage, Vintage tech,
+   Renaissance, Contemporary
+✅ Cleveland Museum of Art connector (CC0; images verified)
+✅ Art Institute of Chicago connector (built, held back: D-18)
+✅ 13 Are.na channels verified via the public API
+✅ Weekly museum refresh, 1 page per keyword; known channels skip lookups
+✅ One throttle per source per run (review D-13 fixed)
+✅ 40 tests (fixtures are trimmed real responses)
+⬜ Verify AIC images inside the app window (-> M1)
+⬜ The Met connector (-> follow-up)
+⬜ Channels for Contemporary, Molds, Tech (-> owner, Q10/Q11)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0002-keyword-topics.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

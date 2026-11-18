@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use servensurf_core::config::{Config, STARTER_TOML_TAIL};
+use servensurf_core::config::{starter_toml, Config};
 use servensurf_core::store::catalog::Catalog;
 use servensurf_core::store::LibraryPaths;
 use servensurf_core::sync::Trigger;
@@ -85,12 +85,15 @@ fn run(cmd: Command, paths: &LibraryPaths) -> servensurf_core::Result<()> {
             Catalog::open(&paths.catalog())?;
             let cfg_path = paths.config();
             if !cfg_path.exists() {
-                let text = Config::new(paths.root()).to_toml()? + STARTER_TOML_TAIL;
+                let text = starter_toml(paths.root())?;
                 std::fs::write(&cfg_path, text)
                     .map_err(|e| servensurf_core::Error::io(&cfg_path, e))?;
             }
             println!("library ready at {}", paths.root().display());
-            println!("edit {} to add a [[topic]]", cfg_path.display());
+            println!(
+                "starter topics written to {} (edit to taste)",
+                cfg_path.display()
+            );
             Ok(())
         }
         Command::Topics => {
@@ -109,7 +112,10 @@ fn run(cmd: Command, paths: &LibraryPaths) -> servensurf_core::Result<()> {
                     if t.shuffle { ", shuffled" } else { "" }
                 );
                 for s in &t.sources {
-                    println!("  - {}: {}", s.source, s.remote_key().unwrap_or("?"));
+                    match s.remote_key() {
+                        Some(key) => println!("  - {}: {key}", s.source),
+                        None => println!("  - {}: keywords {:?}", s.source, t.keywords),
+                    }
                 }
             }
             Ok(())

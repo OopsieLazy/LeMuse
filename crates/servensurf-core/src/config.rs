@@ -12,9 +12,13 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::connectors::{KEYWORD_SOURCES, KNOWN_SOURCES};
 use crate::{Error, Result};
 
 pub const CONFIG_FILE_NAME: &str = "servensurf.toml";
+
+/// The owner's topic list (Q8, 2026-11-16), written by `servensurf init`.
+pub const STARTER_TOPICS_TOML: &str = include_str!("../assets/starter_topics.toml");
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
@@ -90,6 +94,10 @@ pub struct Topic {
     /// Shuffle instead of newest-first.
     #[serde(default)]
     pub shuffle: bool,
+    /// Search terms for keyword sources (museums). A keyword source with
+    /// no explicit `query` runs one search per keyword (ADR-0008).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
     #[serde(default, rename = "source")]
     pub sources: Vec<TopicSource>,
 }
@@ -110,11 +118,34 @@ pub struct TopicSource {
 }
 
 impl Topic {
+    /// Concrete sources after keyword expansion: a source with a `channel`
+    /// or `query` is kept as-is; a keyword source with neither becomes one
+    /// source per topic keyword.
+    pub fn resolved_sources(&self) -> Vec<TopicSource> {
+        let mut out = Vec::new();
+        for s in &self.sources {
+            if s.remote_key().is_some() {
+                out.push(s.clone());
+            } else {
+                for k in &self.keywords {
+                    out.push(TopicSource {
+                        query: Some(k.clone()),
+                        ..s.clone()
+                    });
+                }
+            }
+        }
+        out
+    }
+
     /// `(connector, remote_key)` pairs for `Catalog::slides`.
-    pub fn collection_keys(&self) -> Vec<(&str, &str)> {
-        self.sources
-            .iter()
-            .filter_map(|s| Some((s.source.as_str(), s.remote_key()?)))
+    pub fn collection_keys(&self) -> Vec<(String, String)> {
+        self.resolved_sources()
+            .into_iter()
+            .filter_map(|s| {
+                let key = s.remote_key()?.to_string();
+                Some((s.source, key))
+            })
             .collect()
     }
 }
@@ -139,20 +170,10 @@ fn default_slide_seconds() -> u32 {
     8
 }
 
-/// Written by `servensurf init`: valid TOML with a commented example topic.
-pub const STARTER_TOML_TAIL: &str = r#"
-# Add one [[topic]] per slideshow. Each topic is fed by Are.na channels you
-# choose (copy the slug from the channel URL: are.na/<user>/<channel-slug>).
-#
-# [[topic]]
-# name = "Industrial design"
-# slide_seconds = 8
-# shuffle = true
-#
-# [[topic.source]]
-# source = "arena"
-# channel = "your-channel-slug"
-"#;
+/// Text `servensurf init` writes: the base settings plus the starter topics.
+pub fn starter_toml(root: impl Into<PathBuf>) -> Result<String> {
+    Ok(Config::new(root).to_toml()? + "\n" + STARTER_TOPICS_TOML)
+}
 
 impl Config {
     pub fn new(root: impl Into<PathBuf>) -> Self {
@@ -210,11 +231,22 @@ impl Config {
                 )));
             }
             for (i, s) in t.sources.iter().enumerate() {
-                if s.remote_key().is_none() {
+                let here = format!("topic `{}` source[{i}] ({})", t.name, s.source);
+                if !KNOWN_SOURCES.contains(&s.source.as_str()) {
                     return Err(Error::Config(format!(
-                        "topic `{}` source[{i}] ({}) needs either `channel` or `query`",
-                        t.name, s.source
+                        "{here}: unknown source; expected one of {KNOWN_SOURCES:?}"
                     )));
+                }
+                let keyword_capable = KEYWORD_SOURCES.contains(&s.source.as_str());
+                let fed_by_keywords = keyword_capable && !t.keywords.is_empty();
+                if s.remote_key().is_none() && !fed_by_keywords {
+                    return Err(Error::Config(if keyword_capable {
+                        format!("{here}: needs a `query`, or the topic needs `keywords`")
+                    } else {
+                        format!(
+                            "{here}: needs a `channel` (Are.na keyword search needs a Premium plan)"
+                        )
+                    }));
                 }
             }
         }
@@ -252,7 +284,7 @@ mod tests {
         channel = "industrial-design-refs"
 
         [[topic.source]]
-        source = "met"
+        source = "aic"
         query = "technical drawing"
 
         [[topic]]
@@ -309,9 +341,84 @@ mod tests {
     }
 
     #[test]
-    fn starter_file_round_trips() {
-        let text = Config::new("D:/References").to_toml().unwrap() + STARTER_TOML_TAIL;
-        let cfg = Config::from_toml_str(&text).unwrap();
-        assert!(cfg.topics.is_empty());
+    fn starter_topics_are_the_owners_list_and_valid() {
+        let cfg = Config::from_toml_str(&starter_toml("D:/References").unwrap()).unwrap();
+        let names: Vec<_> = cfg.topics.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "Molds",
+                "Wood objects",
+                "Wrought iron",
+                "Castle",
+                "Y2K tech",
+                "Tech",
+                "Form",
+                "Product design",
+                "Art",
+                "Candles",
+                "Chess",
+                "Vintage",
+                "Vintage tech",
+                "Renaissance",
+                "Contemporary"
+            ]
+        );
+        // Every topic has at least one concrete source after expansion.
+        for t in &cfg.topics {
+            assert!(
+                !t.resolved_sources().is_empty(),
+                "{} has no sources",
+                t.name
+            );
+        }
+    }
+
+    #[test]
+    fn keywords_expand_into_one_search_per_keyword() {
+        let cfg = Config::from_toml_str(
+            r#"
+            [library]
+            root = "D:/References"
+            [[topic]]
+            name = "Chess"
+            keywords = ["chess", "chessmen"]
+            [[topic.source]]
+            source = "aic"
+            [[topic.source]]
+            source = "cleveland"
+            query = "chess set"
+            [[topic.source]]
+            source = "arena"
+            channel = "chess-refs"
+            "#,
+        )
+        .unwrap();
+        let keys = cfg.topic("Chess").unwrap().collection_keys();
+        let keys: Vec<(&str, &str)> = keys.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+        assert_eq!(
+            keys,
+            [
+                ("aic", "chess"),
+                ("aic", "chessmen"),
+                ("cleveland", "chess set"),
+                ("arena", "chess-refs")
+            ]
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_source_and_arena_without_channel() {
+        let base = "[library]\nroot = \"D:/R\"\n[[topic]]\nname = \"x\"\nkeywords = [\"a\"]\n";
+        let unknown = format!("{base}[[topic.source]]\nsource = \"pinterest\"\n");
+        assert!(Config::from_toml_str(&unknown)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown source"));
+        let arena = format!("{base}[[topic.source]]\nsource = \"arena\"\n");
+        assert!(Config::from_toml_str(&arena)
+            .unwrap_err()
+            .to_string()
+            .contains("Premium"));
     }
 }

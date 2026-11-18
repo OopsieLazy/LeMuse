@@ -17,7 +17,7 @@
 //! channel don't show up in an updated_at walk — a periodic full reconcile
 //! pass is planned for M3.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ use serde::Serialize;
 
 use crate::config::{Config, FileMode, TopicSource};
 use crate::connectors::http::HttpClient;
-use crate::connectors::{Connector, DownloadRequest};
+use crate::connectors::{Connector, DownloadRequest, PageOrdering};
 use crate::model::StoredFile;
 use crate::store::blobs::BlobStore;
 use crate::store::catalog::Catalog;
@@ -65,6 +65,8 @@ impl Trigger {
 pub struct RunSummary {
     pub targets_seen: u32,
     pub targets_skipped: u32,
+    /// Skipped because refreshed within the source's `min_refresh_hours`.
+    pub targets_recent: u32,
     pub blocks_upserted: u32,
     pub blocks_unchanged: u32,
     pub files_stored: u32,
@@ -114,13 +116,16 @@ impl<'a> SyncEngine<'a> {
             max_pages: cfg.sync.pages_per_refresh,
         };
         let mut done: HashSet<(String, String)> = HashSet::new();
+        // One throttle per source for the whole run, so consecutive targets
+        // on the same API are paced against each other (review D-13).
+        let mut throttles: HashMap<&'static str, Throttle> = HashMap::new();
         for topic in &cfg.topics {
-            for target in &topic.sources {
+            for target in topic.resolved_sources() {
                 let key = (
                     target.source.clone(),
                     target.remote_key().unwrap_or_default().to_string(),
                 );
-                if !done.insert(key) {
+                if !done.insert(key.clone()) {
                     continue; // shared by an earlier topic; already refreshed
                 }
                 summary.targets_seen += 1;
@@ -131,13 +136,30 @@ impl<'a> SyncEngine<'a> {
                     summary.targets_skipped += 1;
                     continue;
                 };
-                if trigger.is_background() && !conn.policy().background_sync_allowed {
+                let policy = conn.policy();
+                if trigger.is_background() && !policy.background_sync_allowed {
                     summary.targets_skipped += 1;
                     continue;
                 }
-                if let Err(e) =
-                    self.refresh_source(conn.as_mut(), &topic.name, target, opts, &mut summary)
+                if policy.min_refresh_hours > 0
+                    && self
+                        .catalog
+                        .synced_within(&key.0, &key.1, policy.min_refresh_hours)?
                 {
+                    summary.targets_recent += 1;
+                    continue;
+                }
+                let throttle = throttles
+                    .entry(conn.id())
+                    .or_insert_with(|| Throttle::for_policy(&policy));
+                if let Err(e) = self.refresh_source(
+                    conn.as_mut(),
+                    &topic.name,
+                    &target,
+                    opts,
+                    throttle,
+                    &mut summary,
+                ) {
                     summary.errors.push(format!("{}: {e}", target.source));
                 }
             }
@@ -159,15 +181,32 @@ impl<'a> SyncEngine<'a> {
         topic: &str,
         target: &TopicSource,
         opts: PassOptions,
+        throttle: &mut Throttle,
         summary: &mut RunSummary,
     ) -> Result<()> {
         let policy = conn.policy();
-        let mut throttle = Throttle::for_policy(&policy);
+        let ordered = conn.ordering() == PageOrdering::UpdatedDesc;
+        let max_pages = policy
+            .max_pages
+            .map_or(opts.max_pages, |p| p.min(opts.max_pages));
 
-        self.pace(&mut throttle);
-        let collection = self.with_retry(|| conn.resolve_collection(target))?;
+        // Known collections skip the remote lookup (one request saved per
+        // channel per refresh).
+        let key = target.remote_key().unwrap_or_default();
+        let collection = match self.catalog.find_collection(conn.id(), key)? {
+            Some(c) => c,
+            None => {
+                self.pace(throttle);
+                self.with_retry(|| conn.resolve_collection(target))?
+            }
+        };
         let collection_id = self.catalog.upsert_collection(&collection)?;
-        let watermark = self.catalog.watermark(collection_id)?;
+        // Watermarks only make sense for newest-first sources.
+        let watermark = if ordered {
+            self.catalog.watermark(collection_id)?
+        } else {
+            None
+        };
         let errors_before = summary.errors.len();
         let mut newest_seen: Option<String> = None;
         let mut cursor: Option<String> = None;
@@ -177,11 +216,11 @@ impl<'a> SyncEngine<'a> {
         let mut complete = true;
 
         'pages: loop {
-            if pages_fetched == opts.max_pages {
+            if pages_fetched == max_pages {
                 complete = false;
                 break;
             }
-            self.pace(&mut throttle);
+            self.pace(throttle);
             let page = self.with_retry(|| conn.fetch_page(target, cursor.as_deref()))?;
             pages_fetched += 1;
 
@@ -213,7 +252,7 @@ impl<'a> SyncEngine<'a> {
 
                 let mut block = item.block;
                 if opts.mode == FileMode::Download {
-                    match self.download_all(&item.downloads, &mut throttle) {
+                    match self.download_all(&item.downloads, throttle) {
                         Ok(files) => {
                             summary.files_stored += files.len() as u32;
                             block.files = files;
@@ -251,13 +290,18 @@ impl<'a> SyncEngine<'a> {
             }
         }
 
-        if complete && summary.errors.len() == errors_before {
+        let clean = summary.errors.len() == errors_before;
+        if ordered && complete && clean {
             let new_wm = match (newest_seen, watermark) {
                 (Some(n), Some(o)) => Some(if n > o { n } else { o }),
                 (n, o) => n.or(o),
             };
             self.catalog
                 .set_watermark(collection_id, new_wm.as_deref())?;
+        } else if !ordered && clean {
+            // Search results: the first page(s) are the point; mark the
+            // collection fresh so `min_refresh_hours` applies.
+            self.catalog.touch_synced(collection_id)?;
         }
         Ok(())
     }
@@ -370,6 +414,7 @@ mod tests {
             name: name.into(),
             slide_seconds: 8,
             shuffle: false,
+            keywords: vec![],
             sources: vec![refs_source()],
         }
     }
@@ -408,6 +453,54 @@ mod tests {
         assert!(slides[0].display_url.starts_with("https://images.are.na/"));
         assert!(slides.iter().all(|s| !s.saved));
         assert!(catalog.watermark(1).unwrap().is_some());
+    }
+
+    #[test]
+    fn museum_keywords_refresh_once_then_wait_a_week() {
+        use crate::connectors::aic::AicConnector;
+        let dir = tempfile::tempdir().unwrap();
+        let http = Arc::new(FixtureClient::default());
+        let mut cfg = Config::new(dir.path());
+        cfg.topics.push(crate::config::Topic {
+            name: "Wood objects".into(),
+            slide_seconds: 8,
+            shuffle: true,
+            keywords: vec!["wooden chair".into()],
+            sources: vec![TopicSource {
+                source: "aic".into(),
+                channel: None,
+                query: None,
+                collection: None,
+            }],
+        });
+        http.push(
+            &AicConnector::search_url("wooden chair", 1),
+            200,
+            include_str!("../../tests/fixtures/aic_search_page1.json"),
+        );
+        let mut catalog = Catalog::open_in_memory().unwrap();
+        let mut conns = crate::connectors::all(http.clone(), Tier::Guest);
+        let mut engine = SyncEngine::new(LibraryPaths::new(dir.path()), &mut catalog, http.clone());
+        engine.sleep_enabled = false;
+
+        let s1 = engine.run(&cfg, &mut conns, Trigger::Launch).unwrap();
+        assert!(s1.errors.is_empty(), "{:?}", s1.errors);
+        assert_eq!(s1.blocks_upserted, 2);
+        // AIC policy caps at 1 page even though the fixture has a page 2.
+        assert_eq!(http.requests.lock().unwrap().len(), 1);
+
+        let s2 = engine.run(&cfg, &mut conns, Trigger::Launch).unwrap();
+        assert_eq!(s2.targets_recent, 1);
+        assert_eq!(http.requests.lock().unwrap().len(), 1, "no new requests");
+        drop(engine);
+
+        let keys = cfg.topic("Wood objects").unwrap().collection_keys();
+        let slides = catalog.slides(&keys, 10, 0).unwrap();
+        assert_eq!(slides.len(), 2);
+        assert!(slides
+            .iter()
+            .all(|s| s.display_url.contains("/full/1686,/")));
+        assert!(slides[0].attribution.as_deref().unwrap().contains("CC0"));
     }
 
     #[test]
@@ -499,18 +592,14 @@ mod tests {
             .join("Bracket.step [2].step")
             .is_file());
 
-        // Second run: same page comes back; the first item is at the
-        // watermark, so the engine stops without downloading anything.
+        // Second run: the channel is already known (no lookup), the same
+        // page comes back, its first item is at the watermark, so the engine
+        // stops after one request without downloading anything.
         let before = http.requests.lock().unwrap().len();
-        http.push(
-            &format!("{API_BASE}/channels/refs"),
-            200,
-            r#"{"title":"CAD refs"}"#,
-        );
         http.push(&contents_url(1), 200, PAGE1);
         let s2 = engine.run(&cfg, &mut connectors, Trigger::Launch).unwrap();
         assert_eq!(s2.blocks_upserted, 0);
-        assert_eq!(http.requests.lock().unwrap().len() - before, 2);
+        assert_eq!(http.requests.lock().unwrap().len() - before, 1);
         drop(engine);
         assert_eq!(catalog.block_count().unwrap(), 3);
     }

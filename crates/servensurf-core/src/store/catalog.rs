@@ -82,6 +82,47 @@ impl Catalog {
         )?)
     }
 
+    /// An already-known collection, so a refresh can skip the remote lookup.
+    pub fn find_collection(&self, connector: &str, remote_key: &str) -> Result<Option<Collection>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT id, title FROM collections WHERE connector = ?1 AND remote_key = ?2",
+                params![connector, remote_key],
+                |r| {
+                    Ok(Collection {
+                        id: Some(r.get(0)?),
+                        connector: connector.to_string(),
+                        remote_key: remote_key.to_string(),
+                        title: r.get(1)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    /// Was this collection refreshed within the last `hours` hours?
+    pub fn synced_within(&self, connector: &str, remote_key: &str, hours: u32) -> Result<bool> {
+        Ok(self.conn.query_row(
+            "SELECT COUNT(*) FROM collections
+                 WHERE connector = ?1 AND remote_key = ?2 AND last_synced_at IS NOT NULL
+                   AND last_synced_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?3)",
+            params![connector, remote_key, format!("-{hours} hours")],
+            |r| r.get::<_, i64>(0),
+        )? > 0)
+    }
+
+    /// Mark a collection refreshed now without touching its watermark
+    /// (relevance-ordered sources have no watermark).
+    pub fn touch_synced(&self, collection_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE collections SET last_synced_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+             WHERE id = ?1",
+            [collection_id],
+        )?;
+        Ok(())
+    }
+
     pub fn watermark(&self, collection_id: i64) -> Result<Option<String>> {
         Ok(self
             .conn
@@ -228,9 +269,9 @@ impl Catalog {
     /// newest-updated first (the UI shuffles if the topic asks for it).
     /// `collections` are `(connector, remote_key)` pairs from the topic's
     /// sources. Display image preference: large → medium → original.
-    pub fn slides(
+    pub fn slides<S: AsRef<str>>(
         &self,
-        collections: &[(&str, &str)],
+        collections: &[(S, S)],
         limit: u32,
         offset: u32,
     ) -> Result<Vec<Slide>> {
@@ -262,10 +303,13 @@ impl Catalog {
              ORDER BY b.remote_updated_at DESC, b.id DESC
              LIMIT ?1 OFFSET ?2"
         );
+        let flat: Vec<&str> = collections
+            .iter()
+            .flat_map(|(connector, key)| [connector.as_ref(), key.as_ref()])
+            .collect();
         let mut args: Vec<&dyn rusqlite::ToSql> = vec![&limit, &offset];
-        for (connector, key) in collections {
-            args.push(connector);
-            args.push(key);
+        for s in &flat {
+            args.push(s);
         }
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
@@ -425,7 +469,7 @@ mod tests {
             3
         );
         assert_eq!(c.slides(&[("arena", "a")], 1, 1).unwrap()[0].block_id, id1);
-        assert!(c.slides(&[], 10, 0).unwrap().is_empty());
+        assert!(c.slides::<&str>(&[], 10, 0).unwrap().is_empty());
     }
 
     #[test]

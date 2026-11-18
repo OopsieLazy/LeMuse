@@ -1,14 +1,38 @@
-//! Source connectors. Each source (Are.na, The Met, Poly Haven...) is one
-//! adapter that turns remote pages into source-agnostic [`Block`]s plus a
-//! list of files to download. The sync engine owns throttling, retries,
-//! storage and dedup — connectors only describe and map. See ADR-0003.
+//! Source connectors. Each source (Are.na, Art Institute of Chicago,
+//! Cleveland Museum of Art...) is one adapter that turns remote pages into
+//! source-agnostic [`Block`]s with streamable media plus a list of files to
+//! download on Save. The sync engine owns throttling, retries, storage and
+//! dedup — connectors only describe and map. See ADR-0003 and ADR-0008.
 
+pub mod aic;
 pub mod arena;
+pub mod cleveland;
 pub mod http;
 
+use std::sync::Arc;
+
+use serde_json::Value;
+
+use self::http::{HttpClient, HttpResponse};
 use crate::config::TopicSource;
 use crate::model::{Block, Collection};
-use crate::Result;
+use crate::{Error, Result};
+
+/// Every source id the config may name. Kept in sync with [`all`].
+pub const KNOWN_SOURCES: &[&str] = &[arena::ID, aic::ID, cleveland::ID];
+
+/// Sources that can search by keyword on the owner's plan, so a topic's
+/// `keywords` can feed them. Are.na search is Premium-only (ADR-0008).
+pub const KEYWORD_SOURCES: &[&str] = &[aic::ID, cleveland::ID];
+
+/// Build one instance of every connector.
+pub fn all(http: Arc<dyn HttpClient>, arena_tier: arena::Tier) -> Vec<Box<dyn Connector>> {
+    vec![
+        Box::new(arena::ArenaConnector::new(http.clone(), arena_tier)),
+        Box::new(aic::AicConnector::new(http.clone())),
+        Box::new(cleveland::ClevelandConnector::new(http)),
+    ]
+}
 
 /// How a source wants to be treated. Encodes ToS constraints as data so the
 /// engine can enforce them uniformly (ADR-0004).
@@ -23,6 +47,21 @@ pub struct SourcePolicy {
     pub background_sync_allowed: bool,
     /// Must the UI show attribution next to each block?
     pub attribution_required: bool,
+    /// Cap on pages per refresh, below `sync.pages_per_refresh` if set.
+    pub max_pages: Option<u32>,
+    /// Skip a collection refreshed less than this many hours ago. Museum
+    /// search results barely change, so they refresh weekly, not per launch.
+    pub min_refresh_hours: u32,
+}
+
+/// How a connector orders its pages. Watermark early-stop is only valid
+/// for `UpdatedDesc`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageOrdering {
+    /// Newest `updated_at` first (Are.na channel contents).
+    UpdatedDesc,
+    /// Search relevance (museum keyword search).
+    Relevance,
 }
 
 /// A file the engine should fetch for a block.
@@ -47,7 +86,7 @@ pub struct RemoteItem {
     pub position: Option<i64>,
 }
 
-/// One page of results, newest-updated first.
+/// One page of results, in the connector's [`PageOrdering`].
 #[derive(Debug, Clone, Default)]
 pub struct Page {
     pub items: Vec<RemoteItem>,
@@ -63,10 +102,93 @@ pub trait Connector: Send {
 
     fn policy(&self) -> SourcePolicy;
 
-    /// Resolve a gather target (channel slug / query) into a collection.
+    /// Page order. Defaults to newest-updated first.
+    fn ordering(&self) -> PageOrdering {
+        PageOrdering::UpdatedDesc
+    }
+
+    /// Resolve a topic source (channel slug / query) into a collection.
     fn resolve_collection(&mut self, target: &TopicSource) -> Result<Collection>;
 
-    /// Fetch one page for a target. Pages MUST be ordered by remote
-    /// `updated_at` descending so the engine can stop at its watermark.
+    /// Fetch one page for a target, in [`Connector::ordering`] order.
     fn fetch_page(&mut self, target: &TopicSource, cursor: Option<&str>) -> Result<Page>;
+}
+
+/// Collection for a keyword search source: no network call needed.
+pub fn search_collection(id: &str, label: &str, target: &TopicSource) -> Result<Collection> {
+    let query = target.query.as_deref().ok_or_else(|| Error::Connector {
+        connector: id.into(),
+        message: "needs a `query` or topic `keywords`".into(),
+    })?;
+    Ok(Collection {
+        id: None,
+        connector: id.into(),
+        remote_key: query.to_string(),
+        title: target
+            .collection
+            .clone()
+            .unwrap_or_else(|| format!("{label}: {query}")),
+    })
+}
+
+/// Shared status handling: 2xx → JSON, 429 → `RateLimited` (honouring
+/// `Retry-After` or a body `error.retry_after`), anything else → error.
+pub fn json_or_error(connector: &str, url: &str, resp: HttpResponse) -> Result<Value> {
+    match resp.status {
+        200..=299 => serde_json::from_slice(&resp.body).map_err(|e| Error::Connector {
+            connector: connector.into(),
+            message: format!("bad JSON from {url}: {e}"),
+        }),
+        429 => {
+            let retry = serde_json::from_slice::<Value>(&resp.body)
+                .ok()
+                .and_then(|v| v["error"]["retry_after"].as_u64())
+                .or_else(|| resp.header("retry-after").and_then(|s| s.parse().ok()))
+                .unwrap_or(60);
+            Err(Error::RateLimited {
+                connector: connector.into(),
+                retry_after_secs: retry,
+            })
+        }
+        s => Err(Error::Connector {
+            connector: connector.into(),
+            message: format!("HTTP {s} from {url}"),
+        }),
+    }
+}
+
+/// Percent-encode a query-string value (RFC 3986 unreserved chars kept).
+pub fn encode_query(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encodes_query_values() {
+        assert_eq!(encode_query("wrought iron"), "wrought%20iron");
+        assert_eq!(encode_query("y2k&tech"), "y2k%26tech");
+        assert_eq!(encode_query("café"), "caf%C3%A9");
+    }
+
+    #[test]
+    fn registry_matches_known_sources() {
+        let http: Arc<dyn HttpClient> = Arc::new(http::FixtureClient::default());
+        let ids: Vec<_> = all(http, arena::Tier::Guest)
+            .iter()
+            .map(|c| c.id())
+            .collect();
+        assert_eq!(ids, KNOWN_SOURCES);
+    }
 }

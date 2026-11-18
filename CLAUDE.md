@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 **ServeNSurf** is a Windows desktop app that plays a **stream or slideshow of reference images on a topic**
-(drawing, design, CAD). A topic is fed by Are.na channels the user picks (later open museum and 3D sources).
+(drawing, design, CAD). Topics are subjects (the owner's 15 are in `crates/servensurf-core/assets/starter_topics.toml`)
+fed by free museum keyword search (Cleveland; AIC built but held back) plus curated Are.na channels (ADR-0008).
 Images stream from the source CDN; the user can Save any image as a local file. Topic metadata refreshes
 automatically on launch. Owner: free Are.na tier, MIT licence. See ADR-0007 for the stream-first design.
 
@@ -90,6 +91,13 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams and the reasoning
   watermark; downloads only in `download` mode) → `store::catalog` (SQLite+FTS5; `slides()` feeds the UI).
   Images are displayed straight from the CDN URL in `block_media`; nothing is written to disk unless the user
   saves (→ `blobs` CAS `objects/ab/cd/<sha256>.<ext>` + `views/<topic>/` hardlinks).
+- **Topics:** `[[topic]] keywords = [...]`; a keyword source (`connectors::KEYWORD_SOURCES`) without `query` runs
+  one search per keyword (`Topic::resolved_sources`). Relevance-ordered sources (`PageOrdering::Relevance`) skip
+  watermarks and honour `SourcePolicy.min_refresh_hours` (museums: weekly, 1 page).
+- **Adding a source:** new `connectors/<id>.rs` implementing `Connector` + a trimmed *real* response fixture,
+  register it in `connectors::all` and `KNOWN_SOURCES`, and add its image host to the CSP in
+  `app/src-tauri/tauri.conf.json`. Probe that its images load first: AIC's host serves a Cloudflare challenge,
+  so it's held back (review 0002 D-18). Never work around bot protection.
 - **Local vs remote state:** `block_media` is remote state (replaced on refresh). `block_files` is local state
   (only ever added; a refresh must never unlink a saved file).
 - **Connectors never do I/O policy.** They declare a `SourcePolicy` (rate budget, background-sync allowed,

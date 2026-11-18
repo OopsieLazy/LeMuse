@@ -1,0 +1,96 @@
+{
+  "info": {
+    "total": 3,
+    "parameters": {
+      "skip": 0,
+      "limit": 2,
+      "q": "wooden chair",
+      "cc0": "1",
+      "has_image": "1",
+      "select": "accession_number,accession_number_sortable,cover_accession_number,department,department,collection,classification_type,gallery",
+      "search": "wooden chair"
+    }
+  },
+  "data": [
+    {
+      "id": 110793,
+      "title": "Part of a chair",
+      "url": "https://clevelandart.org/art/1929.323",
+      "updated_at": "2026-05-29 05:52:29.687000",
+      "share_license_status": "CC0",
+      "creation_date": "1900s",
+      "type": "Furniture and woodwork",
+      "technique": "Wood",
+      "creators": [],
+      "images": {
+        "annotation": null,
+        "web": {
+          "url": "https://openaccess-cdn.clevelandart.org/1929.323/1929.323_web.jpg",
+          "width": "1019",
+          "height": "893",
+          "filesize": "379633",
+          "filename": "1929.323_web.jpg"
+        },
+        "print": {
+          "url": "https://openaccess-cdn.clevelandart.org/1929.323/1929.323_print.jpg",
+          "width": "3400",
+          "height": "2980",
+          "filesize": "4397507",
+          "filename": "1929.323_print.jpg"
+        },
+        "full": {
+          "url": "https://openaccess-cdn.clevelandart.org/1929.323/1929.323_full.tif",
+          "width": "4933",
+          "height": "4323",
+          "filesize": "64008108",
+          "filename": "1929.323_full.tif"
+        }
+      },
+      "culture": [
+        "Africa, Central Africa, Democratic Republic of Congo, Mangbetu style, unknown carver"
+      ],
+      "department": "African Art",
+      "tombstone": "Part of a chair, 1900s. Africa, Central Africa, Democratic Republic of Congo, Mangbetu style, unknown carver. Wood; overall: 49.9 x 2.6 x 4.6 cm (19 5/8 x 1 x 1 13/16 in.). The Cleveland Museum of Art, Gift of the Gilpin Players of Karamu House, 1929.323"
+    },
+    {
+      "id": 148056,
+      "title": "Chair Legs and Panel",
+      "url": "https://clevelandart.org/art/1975.103",
+      "updated_at": "2026-05-29 07:36:29.905000",
+      "share_license_status": "CC0",
+      "creation_date": "300s CE",
+      "type": "Ivory",
+      "technique": "ivory",
+      "creators": [],
+      "images": {
+        "annotation": null,
+        "web": {
+          "url": "https://openaccess-cdn.clevelandart.org/1975.103/1975.103_web.jpg",
+          "width": "899",
+          "height": "900",
+          "filesize": "172912",
+          "filename": "1975.103_web.jpg"
+        },
+        "print": {
+          "url": "https://openaccess-cdn.clevelandart.org/1975.103/1975.103_print.jpg",
+          "width": "3397",
+          "height": "3400",
+          "filesize": "1192711",
+          "filename": "1975.103_print.jpg"
+        },
+        "full": {
+          "url": "https://openaccess-cdn.clevelandart.org/1975.103/1975.103_full.tif",
+          "width": "13968",
+          "height": "13980",
+          "filesize": "585846028",
+          "filename": "1975.103_full.tif"
+        }
+      },
+      "culture": [
+        "Afghanistan, Begram (chair legs); India (panel), Kushan period (chair legs); Mughal dynasty (1526-1756) (panel)"
+      ],
+      "department": "Indian and Southeast Asian Art",
+      "tombstone": "Chair Legs and Panel, 300s CE. Afghanistan, Begram (chair legs); India (panel), Kushan period (chair legs); Mughal dynasty (1526-1756) (panel). Ivory; overall: 43.8 cm (17 1/4 in.). The Cleveland Museum of Art, Severance and Greta Millikin Purchase Fund, 1975.103"
+    }
+  ]
+}
