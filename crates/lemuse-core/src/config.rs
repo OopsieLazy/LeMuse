@@ -223,8 +223,8 @@ fn default_interval() -> Option<u32> {
 /// Pages per refresh by default (5 × 100 items), and the most allowed.
 pub const DEFAULT_PAGES: u32 = 5;
 pub const MAX_PAGES_PER_REFRESH: u32 = 100;
-/// Pages a just-added channel may read at once: up to 5,000 items in one go.
-pub const ADD_CHANNEL_PAGES: u32 = 50;
+/// Pages a just-added channel may read at once: up to 10,000 items in one go.
+pub const ADD_CHANNEL_PAGES: u32 = 100;
 fn default_slide_seconds() -> u32 {
     8
 }
