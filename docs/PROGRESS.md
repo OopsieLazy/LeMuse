@@ -5,6 +5,68 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-18 (session 12): public-repo hygiene (work item 15)
+
+**Branch:** `chore/0015-public-repo-hygiene` (pushed, stacked on #14) · **Status:** awaiting owner review
+
+- `lemuse serve` code stays public; its outputs don't. `.gitignore` and the scanner now keep out config,
+  databases, logs, sheets, PDFs, link exports, images and dashboard tokens; tracked-but-ignored files fail.
+- CLAUDE.md rule: every change that writes files updates `.gitignore` and `FORBIDDEN_FILES` together.
+
+---
+
+## 2026-11-18 (session 11): dashboard, reference sheets, mini player v2; web app plan
+
+**Branch:** `feat/0014-dashboard-sheets-mini` (pushed, stacked on #13) · **Status:** awaiting owner review
+
+- **Built:** `lemuse serve` (read-only page + JSON API, 127.0.0.1 + token; proven against attacks live),
+  `lemuse sheet` (print to PDF, daily pick), `sync --full`, mini player v2 (tap for bar, ☰ menu).
+- **Plans:** ADR-0020 LeMuse Web in stages on the friend's domain (desktop stays first); ADR-0021 mailer and pin
+  automation (Zapier template, Are.na extension).
+- **Checks:** 94 tests; W3C 47; layout 225; cargo audit 0 vulnerabilities; secret scan clean.
+- **Owner decisions:** Q19 no, Q20 no. Open: Q21 (host), Q22 (mail account), Q23 (talk to Are.na).
+
+---
+
+## 2026-11-18 (session 10): whole channels, auto refresh, JSON; sources and dashboard plans
+
+**Branch:** `feat/0013-full-channels-refresh-json` (pushed, stacked on #12) · **Status:** awaiting owner review
+
+- **Fixed the 200 cap:** channels resume across refreshes (migration 0006). On a copy of the owner's library, one
+  refresh took 4,489 → 6,450 images in 2 min 13 s with 0 errors; big channels continue each refresh.
+- **Auto refresh** every 60 min while the app runs; **`--json`** envelope on every CLI command.
+- **Plans:** ADR-0018 (sources; Pinterest only via the official API or clipping to Are.na), ADR-0019 (read-only
+  dashboard server); `docs/product/audiences.md`; caching table in ARCHITECTURE.
+- **Owner:** Q18–Q20 open; Dependency graph; lock `main`.
+
+---
+
+## 2026-11-18 (session 9): CI fix; ADR-0016; mini player and kept links
+
+**Branches:** `ci/0011-fix-security-checks`, `docs/0010-roadmap-review-flow`, `feat/0012-mini-player-links`
+(all pushed) · **Status:** awaiting owner review on GitHub (merge #11 → #10 → #12)
+
+- **CI:** the failure on `main` was gitleaks-action scanning nothing (no leak). It now runs the pinned binary
+  over the full history; the PR-title check re-runs on edit.
+- **ADR-0016:** mini player; links kept and exported; iPhone as a Home Screen web app first (APIs allow CORS;
+  native needs a Mac runner + $99/year); automation (CLI JSON, local dashboard page, webhooks); audiences.
+- **Owner:** enable Dependency graph, lock `main`, answer Q18/Q19.
+
+---
+
+## 2026-11-17 (session 8): v0.6.0 released; roadmap; GitHub review flow (work item 10)
+
+**Branch:** `docs/0010-roadmap-review-flow` (pushed) · **Status:** awaiting owner review on GitHub
+
+- **Owner merged** #1–#9 and pushed `main` + `v0.6.0`. The first CI run failed in gitleaks (A-47, open).
+- **Owner decisions (Q17):** Claude pushes branches, never `main`; the owner reviews and squash-merges on
+  github.com (no `gh`); lock `main` with a ruleset.
+- **Done:** roadmap v0.7–v1.0 + feature ideas (PLAN); CLAUDE.md and handoff template use the web flow;
+  ADR-0002…0015 accepted.
+- **Next:** resolve A-47; ruleset on `main`; then v0.7 (Save + Are.na token + load more).
+
+---
+
 ## 2026-11-17 (session 7): Pages, categories, Find channels (PR #9)
 
 **Branch:** `feat/0009-pages-categories-discover` (stacked on #8) · **Status:** awaiting owner review (app launched)

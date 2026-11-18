@@ -45,18 +45,14 @@ node scripts/scan-secrets.mjs --range main...<branch>
 cargo test
 cargo clippy --all-targets -- -D warnings
 
-# Merge on GitHub: push the branch
-git push -u origin <branch>
-# Merge on GitHub: open the PR (or use the web page GitHub prints after the push)
-gh pr create --base main --head <branch> --title "<type(scope): title>" --body-file docs/pr/<NNNN>-<slug>.md
-# Merge on GitHub: squash-merge it once CI is green
-gh pr merge <NNNN> --squash --delete-branch
+# Claude has already pushed the branch. Open the PR in the browser, paste docs/pr/<NNNN>-<slug>.md
+# https://github.com/OopsieLazy/LeMuse/compare/main...<branch>?expand=1
+# Review on GitHub: Files changed, CI checks, and the test installer under the CI run's Artifacts
+# Merge on GitHub: "Squash and merge", paste docs/pr/<NNNN>-<slug>.merge.txt as the description
 
-# Merge locally instead: squash with the checklist message
+# After the merge: bring main up to date locally
 git switch main
-git merge --squash <branch>
-git commit -F docs/pr/<NNNN>-<slug>.merge.txt
-git push origin main
+git pull
 
 # Tag (only when releasing)
 git tag -a vX.Y.Z -m "vX.Y.Z"
@@ -64,8 +60,7 @@ git push origin vX.Y.Z
 
 # Cleanup: -D is required after a squash merge
 git branch -D <branch>
-# Cleanup: delete the remote branch if it was pushed
-git push origin --delete <branch>
+# Cleanup: GitHub deletes the remote branch on merge (setting); if not, delete it there
 # Cleanup: forget deleted remote branches
 git fetch --prune
 ```

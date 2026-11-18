@@ -1,0 +1,14 @@
+What: roadmap to 1.0 with feature ideas; review flow where Claude
+pushes branches and the owner reviews and squash-merges on GitHub;
+ADR-0002..0015 accepted.
+Why: owner's session-8 request (keep work safe, review before merge,
+show the plan and what's next).
+
+✅ Roadmap: v0.7 Save + token, v0.8 Browse, v0.9 Practice, v1.0 Ambient
+✅ Feature ideas list (practice, discover, make, CAD, categories, app)
+✅ Review flow in CLAUDE.md and the handoff template; main locked
+✅ ADR-0002..0015 marked accepted (Q9)
+⬜ CI gitleaks finding on main (A-47): owner to check, then fix or rotate
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0010-roadmap-review-flow.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

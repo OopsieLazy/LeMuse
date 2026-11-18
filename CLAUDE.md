@@ -88,8 +88,16 @@ assume.
   End every commit with the `Co-Authored-By:` trailer given in the session.
 - Commits are small and logical (one concern each); the PR is squash-merged with a Conventional-Commit title.
 - PR description: fill [.github/pull_request_template.md](.github/pull_request_template.md) (What / Why / How +
-  checklist) and save a copy to `docs/pr/NNNN-<slug>.md`. Remote: `origin` = github.com/OopsieLazy/LeMuse.
-  `gh` isn't installed here, so the owner pushes and opens PRs.
+  checklist) and save a copy to `docs/pr/NNNN-<slug>.md`. Remote: `origin` = github.com/OopsieLazy/LeMuse
+  (**public**).
+- **Review flow (owner, Q17):**
+  - Claude **pushes the work branch** (`git push -u origin <branch>`) after each commit batch, once the secret
+    scan of `main...HEAD` is clean. Pushed branches are public.
+  - **Never push `main`.** `main` is locked by a ruleset: PR required, no force-push.
+  - `gh` isn't installed. The owner opens the PR from the compare link
+    `https://github.com/OopsieLazy/LeMuse/compare/main...<branch>?expand=1`, pastes `docs/pr/NNNN-<slug>.md`,
+    reviews on GitHub (Files changed, CI, the test installer artifact) and clicks **Squash and merge**.
+  - GitHub numbers PRs on its own; NNNN stays the work-item number.
 - Never force-push shared branches, never rewrite `main`, never skip hooks.
 
 ## End of every conversation (required)
@@ -97,10 +105,10 @@ assume.
 Finish with a handoff using [docs/templates/session-handoff.md](docs/templates/session-handoff.md):
 append a **short** entry to `docs/PROGRESS.md`, then give the owner **every command** they need:
 
-- review;
-- merge (squash, with the ✅-checklist merge description);
-- tag if releasing;
-- branch cleanup (`git branch -D`, `git push origin --delete`, `git fetch --prune`).
+- review: the compare link to open the PR, what to look at, and local checks if wanted;
+- merge: **Squash and merge** on GitHub, with the ✅-checklist merge description to paste;
+- after the merge: `git switch main`, `git pull`, and tag if releasing;
+- branch cleanup (`git branch -D`, `git fetch --prune`; GitHub deletes the remote branch on merge).
 
 **Command format:** each comment on its own line *above* its command, never trailing (owner, Q13).
 PR descriptions use What / Why / How + checklist (`.github/pull_request_template.md`).
