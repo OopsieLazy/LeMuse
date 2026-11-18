@@ -121,6 +121,7 @@ interface State {
   panel?: boolean;
   library?: Partial<LibraryPanelProps>;
   discover?: Partial<DiscoverPanelProps>;
+  mini?: boolean;
 }
 
 // A tall portrait image is the case that used to run under the control bar.
@@ -183,6 +184,13 @@ export const STATES: Record<string, State> = {
   "blueprint-technical": { props: base, settings: { preset: "blueprint", font: "technical", uiScale: 1.2 } },
   "millennium-cover": { props: base, settings: { preset: "millennium", font: "millennium", fit: "cover" } },
   "settings-open": { props: base, settings: { accent: "#c2410c" }, panel: true },
+  // ---- ADR-0016: mini player, Copy link ----
+  mini: { props: { ...base, mini: true }, mini: true },
+  "mini-bar": { props: { ...base, mini: true, miniBarOpen: true }, mini: true },
+  "mini-menu": { props: { ...base, mini: true, miniMenuOpen: true }, mini: true },
+  "mini-tall": { props: { ...base, mini: true, slides: [tall], index: 0 }, mini: true },
+  "mini-empty": { props: { ...base, mini: true, slides: [], index: 0, total: 0 }, mini: true },
+  "link-copied": { props: { ...base, toast: "Link copied" } },
   // ---- ADR-0015: pages, categories, Find channels ----
   pages: { props: { ...base, active: { kind: "all" }, activeLabel: "All", total: 4489, page: 1 } },
   "pages-cinema": {
@@ -245,7 +253,7 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").repl
 
 function documentFor(name: string, st: State, extraHead = "") {
   const settings = sanitize({ ...DEFAULTS, ...st.settings });
-  const { attrs, style } = rootAttributes(settings, { fullscreen: st.fullscreen });
+  const { attrs, style } = rootAttributes(settings, { fullscreen: st.fullscreen, mini: st.mini });
   const attrText = Object.entries(attrs)
     .map(([k, v]) => ` ${k}="${esc(v)}"`)
     .join("");

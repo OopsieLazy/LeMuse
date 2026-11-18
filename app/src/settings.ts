@@ -41,6 +41,8 @@ export interface UiSettings {
   autoHide: boolean;
   autoHideSeconds: number;
   fullscreenImmersive: boolean;
+  /** Where the mini player was last (physical px), or null (ADR-0016). */
+  miniBounds: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** Ranges for every slider: [min, max, step]. One table feeds clamping and the UI. */
@@ -75,6 +77,7 @@ export const DEFAULTS: UiSettings = {
   autoHide: false,
   autoHideSeconds: 3,
   fullscreenImmersive: true,
+  miniBounds: null,
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -89,6 +92,20 @@ function num(key: keyof typeof RANGES, v: unknown, fallback: number): number {
 }
 
 const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+
+const int = (v: unknown, min: number, max: number) =>
+  typeof v === "number" && Number.isFinite(v) ? Math.round(Math.min(max, Math.max(min, v))) : null;
+
+/** Mini player bounds: whole pixels, sane sizes, positions within ±32k. */
+function bounds(v: unknown): UiSettings["miniBounds"] {
+  if (!v || typeof v !== "object") return null;
+  const b = v as Record<string, unknown>;
+  const x = int(b.x, -32000, 32000);
+  const y = int(b.y, -32000, 32000);
+  const width = int(b.width, 200, 8000);
+  const height = int(b.height, 120, 8000);
+  return x === null || y === null || width === null || height === null ? null : { x, y, width, height };
+}
 
 /** Any value in, a valid `UiSettings` out. Unknown keys are dropped. */
 export function sanitize(raw: unknown): UiSettings {
@@ -115,6 +132,7 @@ export function sanitize(raw: unknown): UiSettings {
     autoHide: bool(r.autoHide, d.autoHide),
     autoHideSeconds: num("autoHideSeconds", r.autoHideSeconds, d.autoHideSeconds),
     fullscreenImmersive: bool(r.fullscreenImmersive, d.fullscreenImmersive),
+    miniBounds: bounds(r.miniBounds),
   };
 }
 
@@ -129,7 +147,10 @@ export function inkFor(hex: string): string {
  * Attributes and custom properties for <html>. Pure, so the W3C and layout
  * snapshots render exactly what the app applies.
  */
-export function rootAttributes(s: UiSettings, state: { fullscreen?: boolean; idle?: boolean } = {}) {
+export function rootAttributes(
+  s: UiSettings,
+  state: { fullscreen?: boolean; idle?: boolean; mini?: boolean } = {},
+) {
   const attrs: Record<string, string> = {
     "data-preset": s.preset,
     "data-layout": s.layout,
@@ -140,6 +161,7 @@ export function rootAttributes(s: UiSettings, state: { fullscreen?: boolean; idl
     "data-timer": String(s.showTimer),
     "data-specs": String(s.showSpecs),
     "data-creator": String(s.showCreator),
+    "data-mini": state.mini ? "true" : "false",
   };
   if (s.mode !== "system") attrs["data-theme"] = s.mode;
   const style: Record<string, string> = {
@@ -157,7 +179,10 @@ export function rootAttributes(s: UiSettings, state: { fullscreen?: boolean; idl
 }
 
 /** Apply settings to the live document. */
-export function applyToDocument(s: UiSettings, state: { fullscreen?: boolean; idle?: boolean } = {}) {
+export function applyToDocument(
+  s: UiSettings,
+  state: { fullscreen?: boolean; idle?: boolean; mini?: boolean } = {},
+) {
   const root = document.documentElement;
   const { attrs, style } = rootAttributes(s, state);
   // Only clear a theme we set ourselves; a host page (the design artifact)

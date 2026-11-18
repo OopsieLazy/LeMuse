@@ -1,0 +1,16 @@
+What: big channels load in full across refreshes (no more 200 cap);
+auto refresh every 60 minutes; --json envelope on every CLI command;
+plans for new sources (incl. Pinterest), the dashboard server, and an
+audiences tracker.
+Why: owner's session-10 request. ADR-0017, ADR-0018, ADR-0019.
+
+✅ Resume cursor (migration 0006): head first, then continue the pass
+✅ pages_per_refresh 5 (was 2; one-time upgrade); new channels up to 5,000
+✅ Auto refresh (sync.interval_minutes, default 60, 0 = off)
+✅ lemuse --json: {"lemuse":1,"command","ok","data"|"error"}
+✅ docs/automation.md, docs/product/audiences.md, caching table
+⬜ New sources, one per PR: local folders, Wikimedia, The Met (ADR-0018)
+⬜ lemuse serve dashboard (ADR-0019); Pinterest needs Q20
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0013-full-channels-refresh-json.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -8,6 +8,22 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Dashboard, reference sheets, mini player v2 (work item 14, ADR-0019, ADR-0021):
+  - `lemuse serve`: a read-only dashboard on `127.0.0.1` with a token, a JSON API and the LeMuse page for OBS,
+    Home Assistant or a wall screen (`npm run build:dashboard`);
+  - `lemuse sheet`: a printable reference sheet (Print → PDF), a fresh pick each day;
+  - `lemuse sync --full` reads every channel to its end; a just-added channel reads up to 10,000 items;
+  - mini player v2: smaller, the image fills it, tap for the bottom bar, ☰ to switch topics and playlists.
+- Whole channels, auto refresh and JSON (work item 13, ADR-0017):
+  - big channels load in full: each refresh resumes where the last one stopped; a just-added channel reads up
+    to 5,000 items at once;
+  - the app refreshes every 60 minutes while it runs (`sync.interval_minutes`, 0 = off);
+  - `--json` on every CLI command, one envelope `{"lemuse":1,"command","ok","data"|"error"}`
+    (docs/automation.md); `status` lists channels still loading.
+  - **Release note:** a `lemuse.toml` with `pages_per_refresh = 2` (the old default written by `init`) is
+    raised to 5 once, with a comment beside it. Set it back to 2 and it stays.
+- Mini player and kept links (work item 12, ADR-0016): mini player (M), Copy link (L), image fallbacks,
+  `lemuse export-links`.
 - Pages, categories and Find channels (PR #9, ADR-0015):
   - views over 500 images get a page menu (1–500, 501–1,000, …);
   - LeMuse sorts images into ~70 categories (kind, material, medium, object, style) from titles, channel names

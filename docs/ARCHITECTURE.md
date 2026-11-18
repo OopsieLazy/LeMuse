@@ -58,6 +58,24 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
 | **WebView2 InPrivate** | Streamed images live only in memory; nothing lands in a disk cache | 0009 |
 | **GitHub Flow + Conventional Commits + squash + staged review loop** | Auditable and revertible; the owner keeps the final gate | 0006 |
 
+## What is cached, and where
+
+LeMuse keeps **metadata**, not images. Nothing below holds image bytes unless you press Save (or turn on
+download mode).
+
+| What | Where | Lifetime | Holds images? |
+|---|---|---|---|
+| Catalog: titles, creators, page and image **links**, categories, playlists, sync state | `<library>/catalog.db` (SQLite) | Kept; refreshes update it and never delete blocks (ADR-0013) | No, links only |
+| Your settings and topics | `<library>/lemuse.toml`, `<library>/ui.json` | Kept | No |
+| Images on screen and the next 2 | WebView2 **memory** (InPrivate) | Until the window closes or they scroll away | In memory only, never on disk (ADR-0009) |
+| Find-channels previews | WebView2 memory | Until the dialog closes | In memory only |
+| Saved originals | `<library>/objects/ab/cd/<sha256>.<ext>`, hard-linked into `views/<topic>/` | Kept until you delete them | Yes: only what you saved |
+| Browser preview and design artifact | `app/preview/preview-data.json`, the artifact page | Rebuilt on demand | No; the artifact draws placeholders |
+
+`<library>` is `%USERPROFILE%\Pictures\LeMuse` by default. `thumbs/` and `views/` are rebuildable; `objects/` is
+the source of truth for saved files. Back up `lemuse.toml`, `ui.json` and `catalog.db` (playlists live there) to
+keep your setup.
+
 ## Code map
 
 | Path | Responsibility |

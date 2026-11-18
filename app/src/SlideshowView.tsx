@@ -71,6 +71,18 @@ export interface SlideshowViewProps {
   onOpenDiscover?: () => void;
   /** Related channels for the current (Are.na) image. */
   onRelated?: () => void;
+  /** The small always-on-top player (ADR-0016). */
+  mini?: boolean;
+  onToggleMini?: () => void;
+  /** Mini player: bottom bar (tap the image) and the ☰ menu. */
+  miniBarOpen?: boolean;
+  miniMenuOpen?: boolean;
+  onToggleMiniBar?: () => void;
+  onToggleMiniMenu?: () => void;
+  /** Copy the current image's links. */
+  onCopyLink?: () => void;
+  /** A short confirmation, e.g. "Link copied". */
+  toast?: string;
   onSelect?: (source: SlideSource) => void;
   onOpenLibrary?: () => void;
   onTogglePlaylistMenu?: () => void;
@@ -129,6 +141,9 @@ const ICONS = {
   filter: "M4 5h16l-6 7.5V19l-4-2v-4.5Z",
   search: "M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13ZM15.5 15.5 20 20",
   related: "M8 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM22 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM22 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM7.6 10.6l8.8-3.2M7.6 13.4l8.8 3.2",
+  link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+  mini: "M3 5h18v14H3ZM12 12h7v5h-7Z",
+  expand: "M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7",
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -337,6 +352,99 @@ export function SlideshowView(p: SlideshowViewProps) {
             >
               <Icon d={ICONS.chevronUp} />
             </button>
+            {p.toast && (
+              <p className="toast" role="status">
+                {p.toast}
+              </p>
+            )}
+            {p.mini && (
+              <>
+                {/* Tap the image to show or hide the bottom bar (ADR-0016, v2). */}
+                <button
+                  type="button"
+                  className="mini-tap"
+                  onClick={p.onToggleMiniBar}
+                  aria-expanded={Boolean(p.miniBarOpen)}
+                  aria-controls="mini-bar"
+                  aria-label={p.miniBarOpen ? "Hide controls" : "Show controls"}
+                />
+                <button
+                  type="button"
+                  className="icon-btn mini-burger"
+                  onClick={p.onToggleMiniMenu}
+                  aria-expanded={Boolean(p.miniMenuOpen)}
+                  aria-controls="mini-menu"
+                  aria-label="Topics and playlists"
+                  title="Topics and playlists"
+                  data-shown={p.miniBarOpen || p.miniMenuOpen ? "true" : "false"}
+                >
+                  <Icon d={ICONS.topics} />
+                </button>
+                {p.miniMenuOpen && (
+                  <nav className="mini-menu" id="mini-menu" aria-label="Topics and playlists">
+                    <ul className="topic-list">
+                      <RailItem
+                        label="All"
+                        count={p.allCount}
+                        current={current === "all"}
+                        onClick={() => p.onSelect?.({ kind: "all" })}
+                      />
+                      {p.topics.map((t) => (
+                        <RailItem
+                          key={t.name}
+                          label={t.name}
+                          count={t.slides}
+                          current={current === sourceKey({ kind: "topic", name: t.name })}
+                          onClick={() => p.onSelect?.({ kind: "topic", name: t.name })}
+                        />
+                      ))}
+                      {p.playlists.map((l) => (
+                        <RailItem
+                          key={`p${l.id}`}
+                          label={l.name}
+                          count={l.items}
+                          current={current === sourceKey({ kind: "playlist", id: l.id })}
+                          onClick={() => p.onSelect?.({ kind: "playlist", id: l.id })}
+                        />
+                      ))}
+                    </ul>
+                  </nav>
+                )}
+                {p.miniBarOpen && (
+                  // The bar's background drags the borderless window; buttons stay clickable.
+                  <div className="mini-bar" id="mini-bar" data-tauri-drag-region="true" role="group" aria-label="Mini player">
+                    <span className="mini-title" data-tauri-drag-region="true">
+                      {slide ? slide.title || "Untitled" : p.activeLabel}
+                    </span>
+                    <button type="button" className="icon-btn" onClick={p.onPrev} disabled={!slide} aria-label="Previous image">
+                      <Icon d={ICONS.prev} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      onClick={p.onTogglePlay}
+                      disabled={!slide}
+                      aria-pressed={p.playing}
+                      aria-label={p.playing ? "Pause slideshow" : "Play slideshow"}
+                    >
+                      <Icon d={p.playing ? ICONS.pause : ICONS.play} />
+                    </button>
+                    <button type="button" className="icon-btn" onClick={p.onNext} disabled={!slide} aria-label="Next image">
+                      <Icon d={ICONS.next} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      onClick={p.onToggleMini}
+                      aria-label="Back to the full window"
+                      title="Full window (M)"
+                    >
+                      <Icon d={ICONS.expand} />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           <figcaption className="caption">
             <div className="timer" aria-hidden="true">
@@ -474,6 +582,16 @@ export function SlideshowView(p: SlideshowViewProps) {
                 >
                   <Icon d={ICONS.related} />
                 </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onCopyLink}
+                  disabled={!slide}
+                  aria-label="Copy image link"
+                  title="Copy the image and source links (L)"
+                >
+                  <Icon d={ICONS.link} />
+                </button>
                 <button type="button" className="icon-btn" disabled aria-label="Save original" title="Save arrives in a later build">
                   <Icon d={ICONS.save} />
                 </button>
@@ -487,6 +605,16 @@ export function SlideshowView(p: SlideshowViewProps) {
                   title="Fullscreen (F)"
                 >
                   <Icon d={p.fullscreen ? ICONS.exitFullscreen : ICONS.fullscreen} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onToggleMini}
+                  aria-pressed={Boolean(p.mini)}
+                  aria-label="Mini player"
+                  title="Mini player: small, on top, any monitor (M)"
+                >
+                  <Icon d={ICONS.mini} />
                 </button>
                 <button type="button" className="icon-btn" onClick={p.onToggleControls} aria-label="Hide controls" title="Hide controls (H)">
                   <Icon d={ICONS.chevronDown} />

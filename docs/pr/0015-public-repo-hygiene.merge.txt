@@ -1,0 +1,12 @@
+What: keep LeMuse outputs, local data and tokens out of the public repo;
+standing rule in CLAUDE.md to check what to ignore on every change.
+Why: owner's request (the repo is public; lemuse serve code is fine,
+its outputs are not).
+
+✅ .gitignore: config, UI settings, databases, logs, sheets, PDFs, exports
+✅ Scanner refuses them even with git add -f; images only as app icons
+✅ Scanner catches pasted dashboard tokens and ignored-but-tracked files
+✅ CLAUDE.md § Security: public-repo hygiene rule
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0015-public-repo-hygiene.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

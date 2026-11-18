@@ -52,14 +52,16 @@ pub struct SyncConfig {
     /// Refresh topic metadata when the app launches.
     #[serde(default = "default_true")]
     pub on_launch: bool,
-    /// Optional repeat interval while the app (or tray) is running.
-    #[serde(default)]
+    /// Refresh again every this many minutes while the app runs
+    /// (ADR-0017). `0` turns it off; otherwise 15–1440. Default 60.
+    #[serde(default = "default_interval")]
     pub interval_minutes: Option<u32>,
     /// `stream` (default) or `download`.
     #[serde(default)]
     pub files: FileMode,
-    /// Max API pages (100 items each) per source per refresh. "Paginate,
-    /// don't enumerate": older pages load lazily as the slideshow needs them.
+    /// Max API pages (100 items each) per source per refresh. A channel
+    /// larger than this resumes where it stopped on the next refresh, so it
+    /// completes over a few refreshes (ADR-0017). 1–100.
     #[serde(default = "default_pages")]
     pub pages_per_refresh: u32,
     /// Max concurrent file downloads (download mode / saves).
@@ -75,7 +77,7 @@ impl Default for SyncConfig {
     fn default() -> Self {
         Self {
             on_launch: true,
-            interval_minutes: None,
+            interval_minutes: default_interval(),
             files: FileMode::default(),
             pages_per_refresh: default_pages(),
             max_concurrent_downloads: default_concurrency(),
@@ -212,8 +214,17 @@ fn default_concurrency() -> u8 {
     2
 }
 fn default_pages() -> u32 {
-    2
+    DEFAULT_PAGES
 }
+fn default_interval() -> Option<u32> {
+    Some(60)
+}
+
+/// Pages per refresh by default (5 × 100 items), and the most allowed.
+pub const DEFAULT_PAGES: u32 = 5;
+pub const MAX_PAGES_PER_REFRESH: u32 = 100;
+/// Pages a just-added channel may read at once: up to 10,000 items in one go.
+pub const ADD_CHANNEL_PAGES: u32 = 100;
 fn default_slide_seconds() -> u32 {
     8
 }
@@ -233,6 +244,10 @@ pub fn ensure_library(paths: &crate::store::LibraryPaths) -> Result<Config> {
     if !cfg_path.exists() {
         let text = starter_toml(paths.root())?;
         std::fs::write(&cfg_path, text).map_err(|e| Error::io(&cfg_path, e))?;
+    } else {
+        // Best effort: a locked or hand-broken file is left alone and the
+        // load below reports any real problem.
+        let _ = crate::config_edit::upgrade_page_default(&cfg_path);
     }
     Config::load(&cfg_path)
 }
@@ -284,8 +299,17 @@ impl Config {
                 "sync.max_concurrent_downloads must be >= 1".into(),
             ));
         }
-        if self.sync.pages_per_refresh == 0 {
-            return Err(Error::Config("sync.pages_per_refresh must be >= 1".into()));
+        if !(1..=MAX_PAGES_PER_REFRESH).contains(&self.sync.pages_per_refresh) {
+            return Err(Error::Config(format!(
+                "sync.pages_per_refresh must be 1–{MAX_PAGES_PER_REFRESH}"
+            )));
+        }
+        if let Some(m) = self.sync.interval_minutes {
+            if m != 0 && !(15..=1440).contains(&m) {
+                return Err(Error::Config(
+                    "sync.interval_minutes must be 0 (off) or 15–1440".into(),
+                ));
+            }
         }
         // Review 0008 ("what if someone changes what we fetch"): every value
         // that reaches a URL or a header is checked here, so a hand-edited or
@@ -433,7 +457,8 @@ mod tests {
         assert!(t.shuffle);
         assert_eq!(t.slide_seconds, 8);
         assert_eq!(cfg.sync.files, FileMode::Stream);
-        assert_eq!(cfg.sync.pages_per_refresh, 2);
+        assert_eq!(cfg.sync.pages_per_refresh, DEFAULT_PAGES);
+        assert_eq!(cfg.sync.interval_minutes, Some(60));
         assert!(cfg.sync.on_launch);
     }
 

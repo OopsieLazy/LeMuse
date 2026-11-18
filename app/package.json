@@ -13,6 +13,7 @@
     "validate:w3c": "npm run build && npm run build:snapshot && node scripts/validate-w3c.mjs",
     "preview:data": "cargo run -q -p lemuse-cli -- preview-data --per-topic 40 > preview/preview-data.json",
     "preview:web": "vite --mode preview",
+    "build:dashboard": "tsc && vite build --mode dashboard --outDir dist-dashboard --emptyOutDir",
     "preview:artifact": "vite build --mode preview --outDir dist-preview --emptyOutDir && node scripts/make-artifact.mjs",
     "test:layout": "npm run build && npm run build:snapshot && node scripts/layout-test.mjs"
   },

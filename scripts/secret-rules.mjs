@@ -11,6 +11,10 @@ export const RULES = [
   ["Anthropic/OpenAI key", /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}\b/],
   ["JWT", /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/],
   ["bearer token literal", /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/],
+  // LeMuse's own dashboard token (lemuse serve, ADR-0019), e.g. a pasted
+  // dashboard address or an env assignment (review 0015).
+  ["dashboard token in a URL", /#token=[A-Za-z0-9_-]{32,}/],
+  ["LEMUSE_SERVE_TOKEN value", /\bLEMUSE_SERVE_TOKEN\s*[:=]\s*["']?[A-Za-z0-9_-]{32,}/],
   [
     "hard-coded credential",
     /\b(?:api[_-]?key|secret|token|passw(?:or)?d|client[_-]?secret)\b\s*[:=]\s*["'][^"'\s${}<>]{12,}["']/i,
@@ -53,8 +57,22 @@ export const FORBIDDEN_FILES = [
   /(^|\/)credentials$/i,
   /(^|\/)\.npmrc$/,
   /\.db(-wal|-shm)?$/,
+  // Local LeMuse data and outputs: config, UI settings, databases, logs,
+  // browser network captures, exported sheets and link lists (review 0015).
+  /(^|\/)lemuse\.toml(\.lock)?$/,
+  /(^|\/)ui\.json$/,
+  /\.(sqlite3?|log|har|pdf)$/i,
+  /(^|\/)sheet[^/]*\.html$/i,
+  /-links\.(csv|json|txt)$/i,
+  // No screenshots or downloaded images in the repo (ADR-0009); only the app's
+  // own icons, which are allowed below.
+  /\.(png|jpe?g|webp|gif|bmp|tiff?|heic|avif|ico|icns)$/i,
 ];
-export const ALLOWED_FORBIDDEN = [/(^|\/)\.env\.example$/];
+export const ALLOWED_FORBIDDEN = [
+  /(^|\/)\.env\.example$/,
+  /^app\/src-tauri\/icons\//,
+  /^app\/app-icon\.png$/,
+];
 
 export const isForbiddenFile = (f) =>
   FORBIDDEN_FILES.some((re) => re.test(f)) && !ALLOWED_FORBIDDEN.some((re) => re.test(f));

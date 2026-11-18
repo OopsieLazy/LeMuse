@@ -20,5 +20,6 @@ ureq.workspace = true
 tempfile.workspace = true
 toml_edit.workspace = true
 url.workspace = true
+getrandom.workspace = true
 
 [dev-dependencies]

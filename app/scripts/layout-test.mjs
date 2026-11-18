@@ -84,7 +84,7 @@ const measure = String(async function run() {
       const outside = (r) =>
         r.right > win.innerWidth + 1 || r.bottom > win.innerHeight + 1 || r.left < -1 || r.top < -1;
       const controls =
-        ".controls button, .page-select, .reveal, .rail-actions button, .brand .icon-btn, .playlist-menu :is(button, input, select)";
+        ".controls button, .page-select, .reveal, .rail-actions button, .brand .icon-btn, .playlist-menu :is(button, input, select), .mini-bar button, .mini-burger, .mini-menu button";
       for (const b of doc.querySelectorAll(controls)) {
         if (!visible(b, win)) continue;
         if (b.closest(".rail") && win.getComputedStyle(b.closest(".rail")).visibility === "hidden") continue;

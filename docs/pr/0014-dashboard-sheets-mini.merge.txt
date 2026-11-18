@@ -1,0 +1,19 @@
+What: mini player (v2: image fills it, tap for the bar, ☰ menu); Copy
+link, image fallbacks, export-links; whole channels across refreshes and
+sync --full; auto refresh; --json on every command; read-only dashboard
+(lemuse serve); printable daily reference sheets (lemuse sheet);
+public-repo hygiene in .gitignore and the secret scanner.
+Why: owner's session 9-12 requests. ADR-0016 to ADR-0021.
+
+✅ Mini player: small, on top, any monitor; tap for the bar; ☰ topics
+✅ Copy link (L); broken images try other sizes; lemuse export-links
+✅ Whole channels: resume cursor (migration 0006); new channels 10,000
+✅ Auto refresh every 60 min; lemuse --json envelope for automation
+✅ lemuse serve: GET/HEAD only, token, Host check, allow-listed files, CSP
+✅ lemuse sheet: escaped, https-only, same pick per day; print to PDF
+✅ Categories derived table (migration 0005); getrandom already locked
+✅ Scanner refuses outputs, images, tokens and ignored-but-tracked files
+⬜ Daily mailer (Q22), hosted LeMuse Web (Q21, Q23), webhooks
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0012 to 0015)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

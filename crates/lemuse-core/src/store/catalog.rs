@@ -18,6 +18,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0003_playlists.sql"),
     include_str!("../../migrations/0004_playlist_block_index.sql"),
     include_str!("../../migrations/0005_categories.sql"),
+    include_str!("../../migrations/0006_resume_cursor.sql"),
 ];
 
 /// Caps that keep a scripted or runaway UI from growing local state without
@@ -45,6 +46,26 @@ pub struct Slide {
     /// Connector id (`arena`, `cleveland`): Are.na images offer
     /// "Related channels".
     pub connector: String,
+    /// Full-size image link, if the source gave one (Copy link, Save).
+    pub original_url: Option<String>,
+    /// The block's other stored image sizes, best first: tried in turn when
+    /// `display_url` fails before the slide is skipped (ADR-0016).
+    pub fallback_urls: Vec<String>,
+}
+
+/// Every stored link of one image, for `lemuse export-links` (ADR-0016).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LinkRow {
+    pub block_id: i64,
+    pub connector: String,
+    pub title: Option<String>,
+    pub creator: Option<String>,
+    /// The image's page on its source (Are.na block, museum object).
+    pub page_url: Option<String>,
+    /// Where the item was originally saved from (Are.na `source.url`).
+    pub origin_url: Option<String>,
+    /// `(role, url)` for every stored size: original, large, medium, small.
+    pub images: Vec<(String, String)>,
 }
 
 /// Which images a query covers: some collections (a topic, or "All"), or
@@ -143,7 +164,14 @@ const SLIDES_SQL: &str = "WITH topic_blocks AS ({blocks}),
             EXISTS (SELECT 1 FROM block_files f WHERE f.block_id = b.id) AS saved,
             (SELECT group_concat(bc.category, ',') FROM block_categories bc
              WHERE bc.block_id = b.id) AS cats,
-            b.connector
+            b.connector,
+            (SELECT o.url FROM block_media o WHERE o.block_id = b.id AND o.role = 'original') AS original,
+            (SELECT group_concat(f.url, char(10)) FROM
+                (SELECT m.url FROM block_media m
+                 WHERE m.block_id = b.id AND m.url <> d.url
+                   AND m.role IN ('large', 'medium', 'original', 'small')
+                 ORDER BY CASE m.role WHEN 'large' THEN 0 WHEN 'medium' THEN 1
+                                      WHEN 'original' THEN 2 ELSE 3 END) f) AS fallbacks
      FROM topic_blocks tb
      JOIN blocks b ON b.id = tb.block_id
      JOIN display d ON d.block_id = b.id AND d.pick = 1
@@ -238,6 +266,14 @@ fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
         saved: r.get(8)?,
         categories,
         connector: r.get(10)?,
+        original_url: r.get(11)?,
+        fallback_urls: r
+            .get::<_, Option<String>>(12)?
+            .unwrap_or_default()
+            .lines()
+            .filter(|u| !u.is_empty())
+            .map(str::to_string)
+            .collect(),
     })
 }
 
@@ -356,6 +392,56 @@ impl Catalog {
     }
 
     /// The stored remote `updated_at` for a block, if we have it.
+    /// Where an unfinished pass over a collection stopped: the next page's
+    /// cursor and the newest `updated_at` that pass saw (ADR-0017).
+    pub fn resume_state(&self, collection_id: i64) -> Result<Option<(String, Option<String>)>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT resume_cursor, pass_newest FROM collections
+                 WHERE id = ?1 AND resume_cursor IS NOT NULL",
+                params![collection_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?)
+    }
+
+    pub fn set_resume(
+        &self,
+        collection_id: i64,
+        cursor: &str,
+        pass_newest: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE collections SET resume_cursor = ?2, pass_newest = ?3,
+                 last_synced_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+             WHERE id = ?1",
+            params![collection_id, cursor, pass_newest],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_resume(&self, collection_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE collections SET resume_cursor = NULL, pass_newest = NULL WHERE id = ?1",
+            params![collection_id],
+        )?;
+        Ok(())
+    }
+
+    /// Collections with an unfinished pass, and how many items they hold
+    /// locally so far (for `lemuse status`).
+    pub fn unfinished(&self) -> Result<Vec<(String, u64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT c.title, (SELECT COUNT(*) FROM collection_blocks cb WHERE cb.collection_id = c.id)
+             FROM collections c WHERE c.resume_cursor IS NOT NULL ORDER BY c.title",
+        )?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     pub fn remote_updated_at(&self, connector: &str, remote_id: &str) -> Result<Option<String>> {
         Ok(self
             .conn
@@ -589,6 +675,65 @@ impl Catalog {
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    /// Every stored link of every image in a scope, oldest first. No limit:
+    /// this feeds exports, not the slideshow.
+    pub fn links(&self, scope: &Scope<'_>) -> Result<Vec<LinkRow>> {
+        if scope.is_empty_collections() {
+            return Ok(Vec::new());
+        }
+        let (blocks, values) = scope_sql(scope, &CategoryFilter::default());
+        let sql = format!(
+            "WITH topic_blocks AS ({blocks})
+             SELECT b.id, b.connector, b.title, b.creator, b.page_url, b.origin_url,
+                    (SELECT group_concat(m.role || ' ' || m.url, char(10)) FROM block_media m
+                     WHERE m.block_id = b.id AND m.role IN ('original', 'large', 'medium', 'small'))
+             FROM topic_blocks tb JOIN blocks b ON b.id = tb.block_id
+             WHERE ?1 IS NOT NULL AND ?2 IS NOT NULL
+             ORDER BY b.id"
+        );
+        let args = [Value::Integer(0), Value::Integer(0)]
+            .into_iter()
+            .chain(values);
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(params_from_iter(args), |r| {
+                let media: Option<String> = r.get(6)?;
+                let mut images: Vec<(String, String)> = media
+                    .unwrap_or_default()
+                    .lines()
+                    .filter_map(|l| l.split_once(' '))
+                    .map(|(role, url)| (role.to_string(), url.to_string()))
+                    .collect();
+                let rank = |role: &str| match role {
+                    "original" => 0,
+                    "large" => 1,
+                    "medium" => 2,
+                    _ => 3,
+                };
+                images.sort_by_key(|(role, _)| rank(role));
+                Ok(LinkRow {
+                    block_id: r.get(0)?,
+                    connector: r.get(1)?,
+                    title: r.get(2)?,
+                    creator: r.get(3)?,
+                    page_url: r.get(4)?,
+                    origin_url: r.get(5)?,
+                    images,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// A playlist's id by name (ignoring case), for the CLI.
+    pub fn playlist_id(&self, name: &str) -> Result<Option<i64>> {
+        Ok(self
+            .playlists()?
+            .into_iter()
+            .find(|p| p.name.eq_ignore_ascii_case(name.trim()))
+            .map(|p| p.id))
     }
 
     // ── Categories: derived (ADR-0015) ───────────────────────────────────
@@ -1237,5 +1382,43 @@ mod tests {
             .unwrap();
         assert_eq!(s[0].block_id, b);
         assert!(s[0].categories.contains(&"metal".to_string()));
+    }
+
+    #[test]
+    fn slides_carry_fallbacks_and_links_export_everything() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let mut b = sample("7", "Gate");
+        b.media = vec![
+            media("original", "https://cdn.invalid/o.jpg"),
+            media("medium", "https://images.invalid/m.jpg"),
+            media("large", "https://images.invalid/l.jpg"),
+        ];
+        b.source.page_url = Some("https://www.are.na/block/7".into());
+        b.source.origin_url = Some("https://example.invalid/gate".into());
+        let id = c.upsert_block(&b).unwrap();
+        c.link_block(refs, id, None).unwrap();
+        let keys = [("arena", "refs")];
+        let s = &c.slides(&keys, 5, 0).unwrap()[0];
+        assert_eq!(s.display_url, "https://images.invalid/l.jpg");
+        assert_eq!(
+            s.fallback_urls,
+            ["https://images.invalid/m.jpg", "https://cdn.invalid/o.jpg"]
+        );
+        assert_eq!(s.original_url.as_deref(), Some("https://cdn.invalid/o.jpg"));
+        let rows = c.links(&Scope::collections(&keys)).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].images[0],
+            ("original".into(), "https://cdn.invalid/o.jpg".into())
+        );
+        assert_eq!(
+            rows[0].origin_url.as_deref(),
+            Some("https://example.invalid/gate")
+        );
+        let p = c.create_playlist("Gates").unwrap();
+        c.set_in_playlist(p.id, id, true).unwrap();
+        assert_eq!(c.playlist_id("gates").unwrap(), Some(p.id));
+        assert_eq!(c.links(&Scope::Playlist(p.id)).unwrap().len(), 1);
     }
 }

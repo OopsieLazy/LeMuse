@@ -32,6 +32,7 @@ Thumbs.db
 # UI preview + validation outputs (ADR-0009); regenerate with npm scripts
 app/preview/
 app/dist-preview/
+app/dist-dashboard/
 app/.snapshot/
 
 # Admin-review snapshot of uncommitted work (ADR-0011); never committed
@@ -43,3 +44,20 @@ app/.snapshot/
 *.pfx
 *.p12
 credentials*.json
+
+# Outputs of LeMuse commands and local runs (review 0015). This repo is PUBLIC:
+# these hold your topics, links, paths (Windows user name) or tokens.
+/lemuse.toml
+/ui.json
+*.toml.lock
+.lemuse.toml.*.tmp
+*.sqlite
+*.sqlite3
+*.log
+*.har
+sheet*.html
+*-links.csv
+*-links.json
+*-links.txt
+/*.csv
+/*.pdf

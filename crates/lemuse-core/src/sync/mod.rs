@@ -63,6 +63,12 @@ pub fn refresh_channel(
         return Err(crate::Error::Config(format!("no topic named `{topic}`")));
     };
     let mut one = cfg.clone();
+    // A just-added channel may read more at once (up to 5,000 items), so a
+    // big channel shows in full right away; the rest resumes later.
+    one.sync.pages_per_refresh = one
+        .sync
+        .pages_per_refresh
+        .max(crate::config::ADD_CHANNEL_PAGES);
     let mut t = t.clone();
     t.sources
         .retain(|s| s.source == arena::ID && s.channel.as_deref() == Some(channel));

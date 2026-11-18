@@ -8,8 +8,10 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   clearScreen: false,
-  publicDir: mode === "preview" ? "preview" : "public",
+  // The dashboard (`lemuse serve`, ADR-0019) reads live data from its API, so
+  // it ships no exported snapshot.
+  publicDir: mode === "preview" ? "preview" : mode === "dashboard" ? false : "public",
   server: mode === "preview" ? { port: 1421, open: true } : { port: 1420, strictPort: true },
   envPrefix: ["VITE_", "TAURI_ENV_"],
-  build: { target: "es2022", sourcemap: mode !== "preview" },
+  build: { target: "es2022", sourcemap: mode !== "preview" && mode !== "dashboard" },
 }));

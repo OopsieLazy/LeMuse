@@ -79,6 +79,13 @@ export function App() {
   const [notice, setNotice] = useState<string | undefined>();
   const [settings, setSettings] = useState<UiSettings>(DEFAULTS);
   const [fullscreen, setFullscreen] = useState(false);
+  // Mini player (ADR-0016) and the short "Link copied" note.
+  const [mini, setMini] = useState(false);
+  const [miniBarOpen, setMiniBarOpen] = useState(false);
+  const [miniMenuOpen, setMiniMenuOpen] = useState(false);
+  const [toast, setToast] = useState<string | undefined>();
+  // Per image: how many stored fallback sizes have been tried.
+  const [attempts, setAttempts] = useState<Map<number, number>>(new Map());
   const [idle, setIdle] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [inPlaylists, setInPlaylists] = useState<number[]>([]);
@@ -171,8 +178,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    applyToDocument(settings, { fullscreen, idle });
-  }, [settings, fullscreen, idle]);
+    applyToDocument(settings, { fullscreen, idle, mini });
+  }, [settings, fullscreen, idle, mini]);
 
   useEffect(() => {
     if (!loaded.current) return;
@@ -267,7 +274,17 @@ export function App() {
 
   // Shuffle once per load/toggle; a failed image must not reshuffle the order.
   const slides = useMemo(() => (shuffle ? shuffled(source) : source), [source, shuffle]);
-  const visible = useMemo(() => slides.filter((s) => !failed.has(s.block_id)), [slides, failed]);
+  // A failed image first tries the block's other stored sizes (ADR-0016).
+  const visible = useMemo(
+    () =>
+      slides
+        .filter((s) => !failed.has(s.block_id))
+        .map((s) => {
+          const n = attempts.get(s.block_id) ?? 0;
+          return n > 0 && s.fallback_urls?.[n - 1] ? { ...s, display_url: s.fallback_urls[n - 1] } : s;
+        }),
+    [slides, failed, attempts],
+  );
   const safeIndex = visible.length ? index % visible.length : 0;
   const slide = visible[safeIndex] as Slide | undefined;
 
@@ -359,13 +376,50 @@ export function App() {
     loadRelated(slide.block_id, 1);
   }, [slide, openDialog, loadRelated]);
 
-  // Keyboard: ← → Space S F H T P C R D A , Esc. Ignored while typing or in a dialog.
+  // ---- Mini player: small, borderless, always on top, any monitor ----
+  const toggleMini = useCallback(() => {
+    const next = !mini;
+    api
+      .setMini(next, settings.miniBounds)
+      .then((left) => {
+        setMini(next);
+        setMenuOpen(false);
+        setFilterOpen(false);
+        setMiniBarOpen(false);
+        setMiniMenuOpen(false);
+        if (left) patch({ miniBounds: left });
+      })
+      .catch((e) => setNotice(`Mini player: ${message(e)}`));
+  }, [mini, settings.miniBounds, patch]);
+
+  // ---- Copy link: the source page and the full-size image ----
+  const toastTimer = useRef(0);
+  const say = useCallback((text: string) => {
+    setToast(text);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(undefined), 2500);
+  }, []);
+  const copyLink = useCallback(() => {
+    if (!slide) return;
+    const lines = [
+      slide.title || "Untitled",
+      slide.page_url ? `Page: ${slide.page_url}` : "",
+      `Image: ${slide.original_url ?? slide.display_url}`,
+    ].filter(Boolean);
+    api
+      .copyText(lines.join("\n"))
+      .then(() => say("Link copied"))
+      .catch(() => say("Couldn't reach the clipboard"));
+  }, [slide, say]);
+
+  // Keyboard: ← → Space S F H T P C R D M L A , Esc. Ignored while typing or in a dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "Escape" && (menuOpen || filterOpen)) {
+      if (e.key === "Escape" && (menuOpen || filterOpen || miniMenuOpen)) {
         setMenuOpen(false);
         setFilterOpen(false);
+        setMiniMenuOpen(false);
         return;
       }
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, dialog")) return;
@@ -382,6 +436,8 @@ export function App() {
       else if (k === "p" && slide) toggleMenu();
       else if (k === "c") toggleFilter();
       else if (k === "r") openRelated();
+      else if (k === "m") toggleMini();
+      else if (k === "l") copyLink();
       else if (k === "d") openDiscover();
       else if (k === "a") openLibrary();
       else if (k === ",") openSettings();
@@ -389,7 +445,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, menuOpen, filterOpen, slide, fullscreen]);
+  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, slide, fullscreen]);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
@@ -563,10 +619,23 @@ export function App() {
         }}
         onOpenDiscover={openDiscover}
         onRelated={openRelated}
+        mini={mini}
+        onToggleMini={toggleMini}
+        miniBarOpen={miniBarOpen}
+        miniMenuOpen={miniMenuOpen}
+        onToggleMiniBar={() => {
+          setMiniMenuOpen(false);
+          setMiniBarOpen((o) => !o);
+        }}
+        onToggleMiniMenu={() => setMiniMenuOpen((o) => !o)}
+        onCopyLink={copyLink}
+        toast={toast}
         onSelect={(next) => {
           setFailed(new Set());
+          setAttempts(new Map());
           setNotice(undefined);
           setMenuOpen(false);
+          setMiniMenuOpen(false);
           setActive(next);
           setPage(0);
           setIndex(0);
@@ -586,7 +655,12 @@ export function App() {
         onTogglePlay={() => setPlaying((p) => !p)}
         onToggleShuffle={() => setShuffle((s) => !s)}
         onRefresh={onRefresh}
-        onImageError={(id) => setFailed((f) => new Set(f).add(id))}
+        onImageError={(id) => {
+          const s = slides.find((x) => x.block_id === id);
+          const n = attempts.get(id) ?? 0;
+          if (s && n < (s.fallback_urls?.length ?? 0)) setAttempts((m) => new Map(m).set(id, n + 1));
+          else setFailed((f) => new Set(f).add(id));
+        }}
       />
       <DiscoverPanel
         ref={discoverRef}

@@ -182,6 +182,36 @@ pub fn add_channel(
 /// Remove an Are.na channel from a topic. Returns whether anything changed.
 /// Catalogued images stay in the catalog (archive policy, ADR-0013); they
 /// just stop showing under that topic, and playlists keep them.
+/// Marks a config already upgraded by [`upgrade_page_default`].
+const PAGE_UPGRADE_NOTE: &str = "pages_per_refresh: 2 was the old default";
+
+/// One-time upgrade (ADR-0017): `lemuse init` used to write
+/// `pages_per_refresh = 2`, which kept big channels at their newest 200
+/// items. Raise exactly that value to the new default and leave a comment,
+/// which also stops this from running again if the user sets 2 on purpose.
+/// Returns whether the file changed.
+pub fn upgrade_page_default(path: &Path) -> Result<bool> {
+    let _guard = lock(path)?;
+    let (original, mut doc) = read_doc(path)?;
+    if original.contains(PAGE_UPGRADE_NOTE) {
+        return Ok(false);
+    }
+    let Some(sync) = doc.get_mut("sync").and_then(Item::as_table_mut) else {
+        return Ok(false);
+    };
+    if sync.get("pages_per_refresh").and_then(Item::as_integer) != Some(2) {
+        return Ok(false);
+    }
+    sync["pages_per_refresh"] = toml_edit::value(i64::from(crate::config::DEFAULT_PAGES));
+    if let Some(mut key) = sync.key_mut("pages_per_refresh") {
+        key.leaf_decor_mut().set_prefix(format!(
+            "# {PAGE_UPGRADE_NOTE}; LeMuse now resumes big channels on each refresh (ADR-0017)\n"
+        ));
+    }
+    validate_and_write(path, &original, &doc)?;
+    Ok(true)
+}
+
 pub fn remove_channel(path: &Path, topic: &str, slug: &str) -> Result<bool> {
     let _guard = lock(path)?;
     let (original, mut doc) = read_doc(path)?;
@@ -314,5 +344,33 @@ mod tests {
         assert!(add_channel(&path, "a", "lamps", false).is_err());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
         assert!(!path.with_extension("toml.tmp").exists());
+    }
+
+    #[test]
+    fn old_page_default_is_raised_once_and_comments_survive() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lemuse.toml");
+        std::fs::write(
+            &path,
+            "[library]\nroot = \"./library\"\n\n[sync]\n# mine\non_launch = true\npages_per_refresh = 2\n",
+        )
+        .unwrap();
+        assert!(upgrade_page_default(&path).unwrap());
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            text.contains("pages_per_refresh = 5") && text.contains("# mine"),
+            "{text}"
+        );
+        assert!(text.contains(PAGE_UPGRADE_NOTE));
+        // Set back to 2 on purpose: left alone from now on.
+        std::fs::write(&path, text.replace("= 5", "= 2")).unwrap();
+        assert!(!upgrade_page_default(&path).unwrap());
+        // Any other value is the user's choice.
+        std::fs::write(
+            &path,
+            "[library]\nroot = \"./library\"\n\n[sync]\npages_per_refresh = 3\n",
+        )
+        .unwrap();
+        assert!(!upgrade_page_default(&path).unwrap());
     }
 }
