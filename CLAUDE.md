@@ -176,8 +176,9 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams and the reasoning
 
 - API v3 (`https://api.are.na/v3`); v2 is deprecated. Send a descriptive `LeMuse/<ver> (+contact)` User-Agent;
   generic UAs get 403. Owner is on the **free** tier: 120 reads/min with a token, 30 as guest, **no search API**.
-- Use **only** channels the user lists as topic sources. No crawling, no following links to discover channels,
-  no bulk export. "Paginate, don't enumerate": cap pages per refresh, load more lazily. Budget 80% of the tier's
+- Use **only** channels the user lists as topic sources. No crawling, no automatic following of links to discover
+  channels, no bulk export. Find channels (ADR-0015) reads only on a click: one page of related channels or a
+  24-item preview; the search itself happens on Are.na's site in the browser (the search API is Premium-only). "Paginate, don't enumerate": cap pages per refresh, load more lazily. Budget 80% of the tier's
   read limit, ≥500 ms between calls, honour `retry_after`.
 - **Stream by default:** display `large` → `medium` → `original` from the CDN. Preload at most 2 slides ahead.
   Saves download originals from `image.src` (never the q75 resized variants).

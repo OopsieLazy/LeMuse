@@ -159,7 +159,17 @@ fn map_artwork(a: &Value) -> Option<RemoteItem> {
         kind: BlockKind::Image,
         title: a["title"].as_str().map(str::to_string),
         description: a["creation_date"].as_str().map(str::to_string),
-        content: a["type"].as_str().map(str::to_string),
+        // Object type and technique ("Furniture and woodwork · Wood"):
+        // the museum's own medium words, which categories read (ADR-0015).
+        content: {
+            let parts: Vec<&str> = [a["type"].as_str(), a["technique"].as_str()]
+                .into_iter()
+                .flatten()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect();
+            (!parts.is_empty()).then(|| parts.join(" · "))
+        },
         tags: Vec::new(),
         license: LicenseInfo {
             license_id: Some("CC0-1.0".into()),

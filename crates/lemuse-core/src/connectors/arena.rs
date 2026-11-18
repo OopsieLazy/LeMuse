@@ -254,35 +254,189 @@ pub fn lookup_channel(http: &dyn HttpClient, slug: &str) -> Result<ChannelInfo> 
         return Err(fail(ChannelRefError::NotAChannel.to_string()));
     }
     let url = format!("{API_BASE}/channels/{slug}");
-    let resp = http.get(&url, &[("Accept", "application/json")])?;
-    match resp.status {
-        401 | 403 => {
-            return Err(fail(
-                "That channel is private. Private channels need your Are.na token (coming next)."
-                    .into(),
-            ))
-        }
-        404 => return Err(fail("No Are.na channel has that link.".into())),
-        _ => {}
-    }
-    let v = super::json_or_error(ID, &url, resp)?;
+    let v = get_json(http, &url, "No Are.na channel has that link.")?;
     let returned = v["slug"].as_str().unwrap_or(slug).to_ascii_lowercase();
     if !is_valid_slug(&returned) {
         return Err(fail(
             "Are.na sent back a channel slug LeMuse can't use.".into(),
         ));
     }
-    let title: String = v["title"]
-        .as_str()
-        .unwrap_or(&returned)
+    let title = plain_text(v["title"].as_str().unwrap_or(&returned));
+    Ok(ChannelInfo {
+        slug: returned,
+        title,
+        contents: v["counts"]["contents"].as_u64(),
+    })
+}
+
+/// One GET through the shared client, with Are.na's statuses turned into
+/// messages a person can act on. `missing` is the 404 message.
+fn get_json(http: &dyn HttpClient, url: &str, missing: &str) -> Result<Value> {
+    let resp = http.get(url, &[("Accept", "application/json")])?;
+    let fail = |message: &str| Error::Connector {
+        connector: ID.into(),
+        message: message.into(),
+    };
+    match resp.status {
+        401 | 403 => Err(fail(
+            "That channel is private. Private channels need your Are.na token (coming next).",
+        )),
+        404 => Err(fail(missing)),
+        _ => super::json_or_error(ID, url, resp),
+    }
+}
+
+/// Remote text cut down for display: no control characters, at most
+/// [`MAX_TITLE_CHARS`], trimmed. The UI still renders it as text only.
+fn plain_text(s: &str) -> String {
+    let t: String = s
         .chars()
         .filter(|c| !c.is_control())
         .take(MAX_TITLE_CHARS)
         .collect();
-    Ok(ChannelInfo {
-        slug: returned,
-        title: title.trim().to_string(),
-        contents: v["counts"]["contents"].as_u64(),
+    t.trim().to_string()
+}
+
+/// Is this a URL the preview may show as an image: https, no credentials.
+/// The app's CSP still limits which hosts actually load.
+fn is_https_image(u: &str) -> bool {
+    url::Url::parse(u)
+        .map(|p| p.scheme() == "https" && p.username().is_empty() && p.password().is_none())
+        .unwrap_or(false)
+}
+
+// ── Discover (ADR-0015) ─────────────────────────────────────────────────
+//
+// Are.na's search API is Premium-only, so LeMuse never searches. These two
+// calls run only when the user clicks: each is one or two GETs for one
+// channel or one block the user is looking at. Nothing is followed further,
+// stored, or fetched in the background.
+
+/// Most items a channel preview shows (one page).
+pub const PREVIEW_ITEMS: u32 = 24;
+/// Most related channels one page shows.
+pub const RELATED_PER_PAGE: u32 = 24;
+/// Highest related-channels page we ask for.
+pub const MAX_RELATED_PAGE: u32 = 20;
+
+/// One thumbnail in a channel preview. Shown, never stored.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PreviewItem {
+    pub title: Option<String>,
+    pub image_url: String,
+    pub kind: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ChannelPreview {
+    pub channel: ChannelInfo,
+    pub items: Vec<PreviewItem>,
+}
+
+/// The channel's first images, for "look before you add": the lookup plus
+/// one contents page (two GETs).
+pub fn preview_channel(http: &dyn HttpClient, slug: &str) -> Result<ChannelPreview> {
+    let channel = lookup_channel(http, slug)?;
+    let url = format!(
+        "{API_BASE}/channels/{}/contents?per={PREVIEW_ITEMS}&page=1",
+        channel.slug
+    );
+    let v = get_json(http, &url, "No Are.na channel has that link.")?;
+    let page = parse_contents_page(&v)?;
+    let items = page
+        .items
+        .iter()
+        .filter_map(|it| {
+            let b = &it.block;
+            let pick = ["small", "medium", "large"]
+                .iter()
+                .find_map(|role| b.media.iter().find(|m| m.role == *role))?;
+            is_https_image(&pick.url).then(|| PreviewItem {
+                title: b.title.as_deref().map(plain_text).filter(|t| !t.is_empty()),
+                image_url: pick.url.clone(),
+                kind: b.kind.as_str(),
+            })
+        })
+        .take(PREVIEW_ITEMS as usize)
+        .collect();
+    Ok(ChannelPreview { channel, items })
+}
+
+/// A channel another Are.na user made, as listed under "Related channels".
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ChannelSummary {
+    pub slug: String,
+    pub title: String,
+    pub owner: Option<String>,
+    pub contents: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct RelatedChannels {
+    pub channels: Vec<ChannelSummary>,
+    pub total: Option<u64>,
+    pub next_page: Option<u32>,
+}
+
+/// Are.na block ids are decimal numbers.
+pub fn is_valid_block_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 20 && id.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// The public channels one block is connected to: one
+/// `GET /v3/blocks/<id>/connections` page. Channel slugs that fail
+/// [`is_valid_slug`] are dropped; titles and owners are plain text.
+pub fn related_channels(
+    http: &dyn HttpClient,
+    block_id: &str,
+    page: u32,
+) -> Result<RelatedChannels> {
+    if !is_valid_block_id(block_id) || page == 0 || page > MAX_RELATED_PAGE {
+        return Err(Error::Connector {
+            connector: ID.into(),
+            message: "That image has no Are.na block to look up.".into(),
+        });
+    }
+    let url =
+        format!("{API_BASE}/blocks/{block_id}/connections?per={RELATED_PER_PAGE}&page={page}");
+    let v = get_json(http, &url, "Are.na no longer has that image.")?;
+    let data = v["data"].as_array().ok_or_else(|| Error::Connector {
+        connector: ID.into(),
+        message: "connections response missing `data` array".into(),
+    })?;
+    let channels = data
+        .iter()
+        .filter(|c| c["type"].as_str() == Some("Channel"))
+        .filter(|c| c["state"].as_str().is_none_or(|s| s == "available"))
+        .filter_map(|c| {
+            let slug = c["slug"].as_str()?.to_ascii_lowercase();
+            if !is_valid_slug(&slug) {
+                return None;
+            }
+            Some(ChannelSummary {
+                title: plain_text(c["title"].as_str().unwrap_or(&slug)),
+                owner: c["owner"]["name"]
+                    .as_str()
+                    .map(plain_text)
+                    .filter(|o| !o.is_empty()),
+                contents: c["counts"]["contents"].as_u64(),
+                slug,
+            })
+        })
+        .take(RELATED_PER_PAGE as usize)
+        .collect();
+    let next_page = if v["meta"]["has_more_pages"].as_bool().unwrap_or(false) {
+        v["meta"]["next_page"]
+            .as_u64()
+            .and_then(|n| u32::try_from(n).ok())
+            .filter(|n| *n <= MAX_RELATED_PAGE)
+    } else {
+        None
+    };
+    Ok(RelatedChannels {
+        channels,
+        total: v["meta"]["total_count"].as_u64(),
+        next_page,
     })
 }
 
@@ -615,5 +769,62 @@ mod tests {
     fn budget_leaves_headroom() {
         assert_eq!(Tier::Free.budget_per_min(), 96);
         assert!(Tier::Guest.budget_per_min() < Tier::Guest.read_limit_per_min());
+    }
+
+    const CONNECTIONS: &str = include_str!("../../tests/fixtures/arena_block_connections.json");
+
+    #[test]
+    fn related_channels_is_one_request_and_drops_bad_slugs() {
+        let http = FixtureClient::default();
+        let url = format!("{API_BASE}/blocks/1000692/connections?per=24&page=1");
+        http.push(&url, 200, CONNECTIONS);
+        let r = related_channels(&http, "1000692", 1).unwrap();
+        assert_eq!(http.requests.lock().unwrap().len(), 1);
+        let slugs: Vec<_> = r.channels.iter().map(|c| c.slug.as_str()).collect();
+        assert_eq!(
+            slugs,
+            ["pretty-things-s5g9f0kmw0s", "objects-forms-rituals"]
+        );
+        assert_eq!(r.channels[1].owner.as_deref(), Some("Another Owner"));
+        assert_eq!((r.total, r.next_page), (Some(107), Some(2)));
+    }
+
+    #[test]
+    fn related_channels_refuses_bad_ids_without_a_request() {
+        let http = FixtureClient::default();
+        for (id, page) in [
+            ("", 1),
+            ("12/../../me", 1),
+            ("1 2", 1),
+            ("12", 0),
+            ("12", 21),
+        ] {
+            assert!(related_channels(&http, id, page).is_err(), "{id} {page}");
+        }
+        assert!(http.requests.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn preview_shows_first_images_only() {
+        let http = FixtureClient::default();
+        http.push(&format!("{API_BASE}/channels/woodworking"), 200, CHANNEL);
+        http.push(
+            &format!("{API_BASE}/channels/woodworking/contents?per=24&page=1"),
+            200,
+            FIXTURE,
+        );
+        let p = preview_channel(&http, "woodworking").unwrap();
+        assert_eq!(http.requests.lock().unwrap().len(), 2);
+        assert_eq!(p.channel.title, "Woodworking");
+        assert!(!p.items.is_empty() && p.items.len() <= 24);
+        assert!(p.items.iter().all(|i| i.image_url.starts_with("https://")));
+    }
+
+    #[test]
+    fn preview_skips_non_https_images() {
+        assert!(is_https_image("https://images.are.na/a.jpg"));
+        assert!(!is_https_image("http://images.are.na/a.jpg"));
+        assert!(!is_https_image("javascript:alert(1)"));
+        assert!(!is_https_image("https://u:p@images.are.na/a.jpg")); // secret-scan: allow
     }
 }

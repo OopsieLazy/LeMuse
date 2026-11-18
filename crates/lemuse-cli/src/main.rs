@@ -75,6 +75,15 @@ enum Command {
         #[arg(long)]
         new_topic: bool,
     },
+    /// Show an Are.na channel's first images without adding it (2 reads).
+    PreviewChannel { link: String },
+    /// Public Are.na channels a block is also in (1 read per page).
+    Related {
+        /// Are.na block id (the number in are.na/block/<id>).
+        block_id: String,
+        #[arg(long, default_value_t = 1)]
+        page: u32,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -101,6 +110,29 @@ fn main() -> ExitCode {
 
 fn run(cmd: Command, paths: &LibraryPaths) -> lemuse_core::Result<()> {
     match cmd {
+        Command::PreviewChannel { link } => {
+            let cfg = ensure_library(paths)?;
+            let slug = lemuse_core::connectors::arena::parse_channel_ref(&link)
+                .map_err(|e| lemuse_core::Error::Config(e.to_string()))?;
+            let http = lemuse_core::sync::production_client(&cfg);
+            let preview = lemuse_core::connectors::arena::preview_channel(http.as_ref(), &slug)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&preview).unwrap_or_default()
+            );
+            Ok(())
+        }
+        Command::Related { block_id, page } => {
+            let cfg = ensure_library(paths)?;
+            let http = lemuse_core::sync::production_client(&cfg);
+            let related =
+                lemuse_core::connectors::arena::related_channels(http.as_ref(), &block_id, page)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&related).unwrap_or_default()
+            );
+            Ok(())
+        }
         Command::AddChannel {
             link,
             topic,
@@ -183,7 +215,9 @@ fn run(cmd: Command, paths: &LibraryPaths) -> lemuse_core::Result<()> {
             // Metadata only (titles, creators, CDN URLs). No image bytes are
             // fetched or written: the preview streams them (ADR-0009).
             let cfg = Config::load(&paths.config())?;
-            let catalog = Catalog::open(&paths.catalog())?;
+            let mut catalog = Catalog::open(&paths.catalog())?;
+            let vocabulary = lemuse_core::categories::vocabulary();
+            catalog.ensure_categories(vocabulary)?;
             let mut topics = Vec::new();
             for t in &cfg.topics {
                 let slides = catalog.slides(&t.collection_keys(), per_topic, 0)?;
@@ -201,6 +235,7 @@ fn run(cmd: Command, paths: &LibraryPaths) -> lemuse_core::Result<()> {
                     "generated_from": "lemuse preview-data",
                     "blocks": catalog.block_count()?,
                     "topics": topics,
+                    "vocabulary": lemuse_core::categories::ui_vocabulary(vocabulary),
                 }))
                 .unwrap_or_default()
             );

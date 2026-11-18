@@ -14,20 +14,23 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use lemuse_core::categories;
 use lemuse_core::config::Config;
+use lemuse_core::connectors::arena;
 use lemuse_core::import::AddedChannel;
-use lemuse_core::store::catalog::{Catalog, Playlist, Slide};
+use lemuse_core::store::catalog::{Catalog, CategoryCount, CategoryFilter, Playlist, Scope, Slide};
 use lemuse_core::store::LibraryPaths;
 use lemuse_core::sync::{refresh_channel, refresh_library, Trigger};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-/// Most slides one `slides` call returns.
+/// Most slides one `slides` call returns: one page of the page menu.
 const PAGE_LIMIT: u32 = 500;
-/// Minimum time between two "Add channel" lookups. Each costs one Are.na
-/// read; this stops a script in a compromised page from spending the read
-/// budget: at most 24 lookups a minute, the 80% guest budget (review 0008 A-30).
-const ADD_COOLDOWN: Duration = Duration::from_millis(2500);
+/// Spacing per Are.na read started from the UI (Add channel, Preview,
+/// Related channels). It stops a script in a compromised page from spending
+/// the read budget: at most 24 reads a minute, the 80% guest budget
+/// (review 0008 A-30, ADR-0015).
+const READ_SPACING: Duration = Duration::from_millis(2500);
 
 #[derive(Serialize)]
 struct LibraryStatus {
@@ -82,9 +85,52 @@ enum RefreshEvent {
 #[derive(Default)]
 struct Refreshing(Arc<AtomicBool>);
 
-/// Serialises edits to lemuse.toml and holds the Add-channel cooldown.
+/// Serialises edits to lemuse.toml and holds the time the next UI-started
+/// Are.na read is allowed (shared by Add channel, Preview and Related).
 #[derive(Default)]
-struct ConfigEdits(Mutex<Option<Instant>>);
+struct ConfigEdits {
+    next_read: Mutex<Option<Instant>>,
+    /// Held while lemuse.toml is edited (the core's file lock also guards
+    /// against the CLI).
+    edit: Mutex<()>,
+}
+
+/// Reserve `reads` Are.na reads for a UI action, or say how long to wait.
+/// Refused while a refresh runs: they share Are.na's read limit.
+fn reserve_reads(app: &AppHandle, reads: u32) -> Result<Instant, String> {
+    if app.state::<Refreshing>().0.load(Ordering::SeqCst) {
+        return Err(
+            "A refresh is running. Try again when it finishes (they share Are.na's read limit)."
+                .into(),
+        );
+    }
+    let edits = app.state::<ConfigEdits>();
+    let mut next_allowed = edits
+        .next_read
+        .lock()
+        .map_err(|_| "config lock poisoned".to_string())?;
+    let now = Instant::now();
+    if let Some(at) = *next_allowed {
+        if now < at {
+            let wait = (at - now).as_secs() + 1;
+            return Err(format!("One moment: try again in {wait} s."));
+        }
+    }
+    *next_allowed = Some(now + READ_SPACING * reads);
+    Ok(now)
+}
+
+/// Honour Are.na's Retry-After before the next UI-started read.
+fn note_rate_limit<T>(app: &AppHandle, started: Instant, result: &lemuse_core::Result<T>) {
+    if let Err(lemuse_core::Error::RateLimited {
+        retry_after_secs, ..
+    }) = result
+    {
+        if let Ok(mut next) = app.state::<ConfigEdits>().next_read.lock() {
+            *next = Some(started + Duration::from_secs((*retry_after_secs).clamp(1, 600)));
+        }
+    }
+}
 
 fn catalog() -> Result<Catalog, String> {
     Catalog::open(&library_paths().catalog()).map_err(|e| e.to_string())
@@ -161,25 +207,104 @@ fn all_count() -> Result<u64, String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn slides(source: SlideSource, limit: u32, offset: u32) -> Result<Vec<Slide>, String> {
-    let limit = limit.min(PAGE_LIMIT);
+/// Run `f` on the catalog with the scope a [`SlideSource`] names.
+fn with_scope<T>(
+    source: &SlideSource,
+    f: impl FnOnce(&Catalog, &Scope<'_>) -> lemuse_core::Result<T>,
+) -> Result<T, String> {
     let catalog = catalog()?;
-    match source {
-        SlideSource::All => {
-            let cfg = load_config(&library_paths())?;
-            catalog.slides(&all_keys(&cfg), limit, offset)
+    let keys = match source {
+        SlideSource::Playlist { id } => {
+            return f(&catalog, &Scope::Playlist(*id)).map_err(|e| e.to_string())
         }
-        SlideSource::Topic { name } => {
-            let cfg = load_config(&library_paths())?;
-            let t = cfg
-                .topic(&name)
-                .ok_or_else(|| format!("no topic named `{name}`"))?;
-            catalog.slides(&t.collection_keys(), limit, offset)
-        }
-        SlideSource::Playlist { id } => catalog.playlist_slides(id, limit, offset),
-    }
-    .map_err(|e| e.to_string())
+        SlideSource::All => all_keys(&load_config(&library_paths())?),
+        SlideSource::Topic { name } => load_config(&library_paths())?
+            .topic(name)
+            .ok_or_else(|| format!("no topic named `{name}`"))?
+            .collection_keys(),
+    };
+    f(&catalog, &Scope::collections(&keys)).map_err(|e| e.to_string())
+}
+
+/// One page of slides (at most [`PAGE_LIMIT`]); the core checks the filter.
+#[tauri::command]
+fn slides(
+    source: SlideSource,
+    filter: Option<CategoryFilter>,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Slide>, String> {
+    let filter = filter.unwrap_or_default();
+    with_scope(&source, |c, scope| {
+        c.slides_in(scope, &filter, limit.min(PAGE_LIMIT), offset)
+    })
+}
+
+/// Images in a view after the filter, over all pages (the page menu).
+#[tauri::command]
+fn slide_count(source: SlideSource, filter: Option<CategoryFilter>) -> Result<u64, String> {
+    let filter = filter.unwrap_or_default();
+    with_scope(&source, |c, scope| c.count_in(scope, &filter))
+}
+
+/// Per-category counts for the filter's chips.
+#[tauri::command]
+fn category_counts(
+    source: SlideSource,
+    filter: Option<CategoryFilter>,
+) -> Result<Vec<CategoryCount>, String> {
+    let filter = filter.unwrap_or_default();
+    with_scope(&source, |c, scope| c.category_counts(scope, &filter))
+}
+
+/// The built-in category groups and the Discover word lists (ADR-0015).
+#[tauri::command]
+fn vocabulary() -> categories::UiVocabulary {
+    categories::ui_vocabulary(categories::vocabulary())
+}
+
+// ── Discover (ADR-0015) ─────────────────────────────────────────────────
+
+/// "Look before you add": a pasted link's channel and its first images.
+/// The link is parsed by the core (exact Are.na hosts; never fetched);
+/// two reads, spaced like Add channel.
+#[tauri::command]
+async fn preview_channel(app: AppHandle, link: String) -> Result<arena::ChannelPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let slug = arena::parse_channel_ref(&link).map_err(|e| e.to_string())?;
+        let started = reserve_reads(&app, 2)?;
+        let cfg = load_config(&library_paths())?;
+        let http = lemuse_core::sync::production_client(&cfg);
+        let result = arena::preview_channel(http.as_ref(), &slug);
+        note_rate_limit(&app, started, &result);
+        result.map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The public channels an Are.na image also appears in: one read, only
+/// when the user asks. Nothing is followed further or stored.
+#[tauri::command]
+async fn related_channels(
+    app: AppHandle,
+    block_id: i64,
+    page: u32,
+) -> Result<arena::RelatedChannels, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let remote = catalog()?
+            .arena_block_id(block_id)
+            .map_err(|e| e.to_string())?
+            .ok_or("Related channels work for Are.na images only.")?;
+        let started = reserve_reads(&app, 1)?;
+        let cfg = load_config(&library_paths())?;
+        let http = lemuse_core::sync::production_client(&cfg);
+        let result = arena::related_channels(http.as_ref(), &remote, page);
+        note_rate_limit(&app, started, &result);
+        result.map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ── Add channel (ADR-0014) ──────────────────────────────────────────────
@@ -200,25 +325,13 @@ async fn add_channel(
         move || -> Result<AddedChannel, String> {
             // A refresh is already spending Are.na's read budget; a lookup on
             // top could push past it (review 0008 A-30).
-            if app.state::<Refreshing>().0.load(Ordering::SeqCst) {
-                return Err(
-                    "A refresh is running. Add the channel when it finishes (they share Are.na's read limit)."
-                        .into(),
-                );
-            }
+            let started = reserve_reads(&app, 1)?;
+            // lemuse.toml edits from the app go one at a time.
             let edits = app.state::<ConfigEdits>();
-            let mut next_allowed = edits
-                .0
+            let _edit = edits
+                .edit
                 .lock()
                 .map_err(|_| "config lock poisoned".to_string())?;
-            let now = Instant::now();
-            if let Some(at) = *next_allowed {
-                if now < at {
-                    let wait = (at - now).as_secs() + 1;
-                    return Err(format!("One moment: try again in {wait} s."));
-                }
-            }
-            *next_allowed = Some(now + ADD_COOLDOWN);
             let paths = library_paths();
             let cfg = load_config(&paths)?;
             let http = lemuse_core::sync::production_client(&cfg);
@@ -229,13 +342,7 @@ async fn add_channel(
                 &topic,
                 create_topic,
             );
-            // Honour Are.na's Retry-After before the next lookup.
-            if let Err(lemuse_core::Error::RateLimited {
-                retry_after_secs, ..
-            }) = &result
-            {
-                *next_allowed = Some(now + Duration::from_secs((*retry_after_secs).clamp(1, 600)));
-            }
+            note_rate_limit(&app, started, &result);
             result.map_err(|e| e.to_string())
         }
     })
@@ -253,7 +360,7 @@ fn remove_channel(
     channel: String,
 ) -> Result<bool, String> {
     let _guard = edits
-        .0
+        .edit
         .lock()
         .map_err(|_| "config lock poisoned".to_string())?;
     lemuse_core::config_edit::remove_channel(&library_paths().config(), &topic, &channel)
@@ -383,6 +490,13 @@ pub fn run() {
         .manage(Refreshing::default())
         .manage(ConfigEdits::default())
         .setup(|app| {
+            // Sort images into categories if this build's vocabulary hasn't
+            // yet (first launch after an update). Never blocks the window.
+            std::thread::spawn(|| {
+                if let Ok(mut c) = catalog() {
+                    let _ = c.ensure_categories(categories::vocabulary());
+                }
+            });
             // The window is already up from the cached catalog; the launch
             // refresh never blocks it.
             let on_launch = load_config(&library_paths())
@@ -403,6 +517,11 @@ pub fn run() {
             get_ui_settings,
             set_ui_settings,
             all_count,
+            slide_count,
+            category_counts,
+            vocabulary,
+            preview_channel,
+            related_channels,
             add_channel,
             remove_channel,
             playlists,

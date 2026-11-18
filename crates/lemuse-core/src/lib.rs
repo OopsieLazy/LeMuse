@@ -6,6 +6,7 @@
 //!
 //! Module map:
 //! - [`model`]      — the local "block" data model (source-agnostic).
+//! - [`categories`] — LeMuse's own sorting of images (built-in vocabulary).
 //! - [`config`]     — user config: library root + gather list (TOML).
 //! - [`config_edit`] — structural, validated edits to that config.
 //! - [`import`]     — "Add channel": pasted link → checked slug → topic.
@@ -13,6 +14,7 @@
 //! - [`connectors`] — one adapter per source (Are.na first), behind a trait.
 //! - [`sync`]       — orchestration: lock, plan, fetch, diff, download, backoff.
 
+pub mod categories;
 pub mod config;
 pub mod config_edit;
 pub mod connectors;

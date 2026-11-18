@@ -8,7 +8,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Playlist, Slide, TopicInfo } from "../src/api";
+import type { ChannelPreview, Playlist, Slide, TopicInfo, Vocabulary } from "../src/api";
+import { DiscoverPanel, type DiscoverPanelProps } from "../src/DiscoverPanel";
 import { LibraryPanel, type LibraryPanelProps } from "../src/LibraryPanel";
 import { SettingsPanel } from "../src/SettingsPanel";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
@@ -24,7 +25,69 @@ const playlists: Playlist[] = [
   { id: 1, name: "Chair studies", items: 24 },
   { id: 2, name: "A deliberately long playlist name that has to wrap", items: 3 },
 ];
-const slides = sample.topics[0].slides as Slide[];
+// Sample metadata predates categories; give each slide some (ADR-0015).
+const CATS = [["sculpture", "ceramic"], ["furniture", "wood"], ["metal", "tools-instruments"], ["print", "paper"]];
+const slides: Slide[] = sample.topics[0].slides.map((s, i) => ({
+  ...s,
+  categories: ["image", ...CATS[i % CATS.length]],
+  connector: i % 2 ? "arena" : "cleveland",
+}));
+
+// A slice of the built-in vocabulary (crates/lemuse-core/assets/categories.toml).
+const vocabulary: Vocabulary = {
+  groups: [
+    { id: "kind", label: "Kind", categories: [{ id: "image", label: "Image" }, { id: "web-page", label: "Web page" }] },
+    {
+      id: "material",
+      label: "Material",
+      categories: [
+        { id: "wood", label: "Wood" },
+        { id: "metal", label: "Metal" },
+        { id: "ceramic", label: "Ceramic & clay" },
+        { id: "rubber", label: "Rubber & silicone" },
+        { id: "paper", label: "Paper & card" },
+        { id: "bone-ivory-shell", label: "Bone, ivory & shell" },
+      ],
+    },
+    {
+      id: "medium",
+      label: "Medium & method",
+      categories: [
+        { id: "print", label: "Print" },
+        { id: "sculpture", label: "Sculpture" },
+        { id: "painting", label: "Painting" },
+        { id: "casting-molding", label: "Casting & molds" },
+      ],
+    },
+    {
+      id: "object",
+      label: "Object",
+      categories: [
+        { id: "furniture", label: "Furniture" },
+        { id: "tools-instruments", label: "Tools & instruments" },
+        { id: "electronics", label: "Electronics & tech" },
+      ],
+    },
+  ],
+  discover: [
+    { label: "Drawing practice", words: ["gesture drawing", "figure drawing", "drapery", "perspective"] },
+    { label: "CAD & making", words: ["exploded view", "joinery", "injection molding", "sheet metal"] },
+    { label: "Material", words: ["rubber", "wood", "plywood", "silicone"] },
+  ],
+};
+const categoryCounts = {
+  image: 4484, "web-page": 412, wood: 327, metal: 255, ceramic: 270, rubber: 1, paper: 12,
+  "bone-ivory-shell": 36, print: 262, sculpture: 302, painting: 286, "casting-molding": 217,
+  furniture: 812, "tools-instruments": 108, electronics: 321,
+};
+const channelPreview: ChannelPreview = {
+  channel: { slug: "woodworking", title: "Woodworking", contents: 214 },
+  items: slides.slice(0, 12).map((s, i) => ({
+    title: i === 3 ? null : s.title,
+    image_url: s.display_url,
+    kind: "image",
+  })),
+};
 
 const base: SlideshowViewProps = {
   mode: "app",
@@ -47,6 +110,8 @@ const base: SlideshowViewProps = {
     refreshing: false,
   },
   refresh: { label: "Up to date · 12 new or changed", busy: false, tone: "ok" },
+  vocabulary,
+  categoryCounts,
 };
 
 interface State {
@@ -55,6 +120,7 @@ interface State {
   fullscreen?: boolean;
   panel?: boolean;
   library?: Partial<LibraryPanelProps>;
+  discover?: Partial<DiscoverPanelProps>;
 }
 
 // A tall portrait image is the case that used to run under the control bar.
@@ -117,6 +183,62 @@ export const STATES: Record<string, State> = {
   "blueprint-technical": { props: base, settings: { preset: "blueprint", font: "technical", uiScale: 1.2 } },
   "millennium-cover": { props: base, settings: { preset: "millennium", font: "millennium", fit: "cover" } },
   "settings-open": { props: base, settings: { accent: "#c2410c" }, panel: true },
+  // ---- ADR-0015: pages, categories, Find channels ----
+  pages: { props: { ...base, active: { kind: "all" }, activeLabel: "All", total: 4489, page: 1 } },
+  "pages-cinema": {
+    props: { ...base, active: { kind: "all" }, activeLabel: "All", total: 4489, page: 8 },
+    settings: { layout: "cinema" },
+  },
+  "filter-menu": {
+    props: {
+      ...base,
+      total: 812,
+      filterMenuOpen: true,
+      filter: { include: ["furniture"], exclude: ["painting"] },
+    },
+  },
+  "filter-menu-top": {
+    props: { ...base, slides: [tall], index: 0, filterMenuOpen: true, filter: { include: ["wood"], exclude: [] } },
+    settings: { layout: "caption-top" },
+  },
+  "filter-empty": {
+    props: { ...base, slides: [], index: 0, total: 0, filter: { include: ["rubber", "furniture"], exclude: [] } },
+  },
+  "discover-open": { props: base, discover: {} },
+  "discover-preview": {
+    props: base,
+    discover: {
+      preview: channelPreview,
+      previewLink: "https://www.are.na/someone/woodworking",
+      status: { tone: "ok", text: "Previewing Woodworking. Add it to a topic below if you like it." },
+    },
+  },
+  "discover-related": {
+    props: base,
+    discover: {
+      related: {
+        imageTitle: "Part of a chair",
+        result: {
+          total: 107,
+          next_page: 2,
+          channels: [
+            { slug: "pretty-things", title: "Pretty things", owner: "Example Owner", contents: 51 },
+            { slug: "objects-forms-rituals", title: "Objects, forms, rituals", owner: null, contents: 103 },
+            {
+              slug: "long",
+              title: "A channel with a deliberately long title that has to wrap onto a second line",
+              owner: "Another Owner",
+              contents: null,
+            },
+          ],
+        },
+      },
+    },
+  },
+  "discover-busy-preview-mode": {
+    props: { ...base, mode: "preview" },
+    discover: { busy: true, related: { imageTitle: "Untitled", result: null } },
+  },
 };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -141,6 +263,17 @@ function documentFor(name: string, st: State, extraHead = "") {
             playlists={st.props.playlists}
             staticOpen
             {...st.library}
+          />,
+        )
+      : "") +
+    (st.discover
+      ? renderToStaticMarkup(
+          <DiscoverPanel
+            mode={st.props.mode}
+            vocabulary={st.props.vocabulary ?? null}
+            topics={st.props.topics}
+            staticOpen
+            {...st.discover}
           />,
         )
       : "");
@@ -184,6 +317,13 @@ for (const [name, st] of Object.entries(STATES)) {
     props: {
       ...st.props,
       slides: st.props.slides.map((s) => ({ ...s, display_url: placeholder(s.width ?? 1200, s.height ?? 900) })),
+    },
+    discover: st.discover && {
+      ...st.discover,
+      preview: st.discover.preview && {
+        ...st.discover.preview,
+        items: st.discover.preview.items.map((it) => ({ ...it, image_url: placeholder(400, 300) })),
+      },
     },
   };
   layoutDocs.push({ name, html: documentFor(name, swapped, `\n<style>${css}</style>`), images: swapped.props.slides.length ? 1 : 0 });

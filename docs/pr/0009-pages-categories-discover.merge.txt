@@ -1,0 +1,22 @@
+feat: pages, categories and Find channels (#9)
+
+What: page menu for views over 500 images; LeMuse's own image
+categories with a genre-style include/exclude filter; Find channels
+(search words, Are.na search in the browser, preview before adding,
+related channels for the current image).
+Why: owner's session-7 request; Are.na has no tags and its search API
+is Premium-only (Q10).
+
+✅ Pages of 500 with a page menu; total in the caption
+✅ ~70 categories in 5 groups from titles, channel names, museum data
+✅ Filter: include/exclude chips with counts, for All, topics, playlists
+✅ Find channels: ~1,100 search words; opens Are.na search in browser
+✅ Preview a channel (2 reads) and Related channels (1 read per page)
+✅ UI reads spaced to <=24/min, refused during refresh, 429 back-off
+✅ Opener scope narrowed to Are.na and museum sites; no new dependency
+⬜ In-app search (needs Are.na Premium; owner said no)
+⬜ Manual category corrections; shuffle across pages (PLAN)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0009-pages-categories-discover.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

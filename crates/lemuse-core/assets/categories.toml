@@ -1,0 +1,505 @@
+# LeMuse category vocabulary (ADR-0015).
+#
+# Are.na has no tags or genres: a block only says what *type* it is (image,
+# link, attachment, embed, text). LeMuse sorts images into these categories
+# itself, from the block's title and description, the museum's object type,
+# and the names of the channels or searches it came from.
+#
+# Rules for editing:
+# - `id` is lower-case letters, digits and `-`; it is stored in the catalog,
+#   so renaming an id drops the old category (they are rebuilt on launch).
+# - `terms` are whole words or short phrases, written in the singular; a
+#   plural "s"/"es" on the matched text is understood. Phrases match words in
+#   order ("art deco"). Avoid words with a common second meaning ("light",
+#   "screen", "card", "figure") — they mislabel too much.
+# - `kinds` matches the Are.na block type instead of words.
+# - Changing this file re-sorts every image the next time LeMuse starts.
+
+[[group]]
+id = "kind"
+label = "Kind"
+
+[[group.category]]
+id = "image"
+label = "Image"
+kinds = ["image"]
+
+[[group.category]]
+id = "web-page"
+label = "Web page"
+kinds = ["link"]
+
+[[group.category]]
+id = "document"
+label = "Document / file"
+kinds = ["attachment"]
+
+[[group.category]]
+id = "video-embed"
+label = "Video & embed"
+kinds = ["embed"]
+
+[[group.category]]
+id = "text"
+label = "Text"
+kinds = ["text"]
+
+[[group]]
+id = "material"
+label = "Material"
+
+[[group.category]]
+id = "wood"
+label = "Wood"
+terms = ["wood", "wooden", "woodwork", "woodworking", "woodcarving", "timber", "lumber", "plywood", "veneer",
+  "oak", "walnut", "maple", "birch", "teak", "beech", "mahogany", "rosewood", "ebony", "cedar", "elm",
+  "boxwood", "marquetry", "parquetry", "bentwood"]
+
+[[group.category]]
+id = "bamboo-rattan"
+label = "Bamboo & rattan"
+terms = ["bamboo", "rattan", "wicker", "cane", "basketry", "basket", "willow"]
+
+[[group.category]]
+id = "metal"
+label = "Metal"
+terms = ["metal", "metalwork", "metalworking", "iron", "ironwork", "steel", "stainless", "brass", "bronze", "copper",
+  "silver", "gold", "gilt", "gilded", "aluminium", "aluminum", "pewter", "tin", "zinc", "chrome", "titanium",
+  "wrought", "cast iron", "sheet metal", "silverware"]
+
+[[group.category]]
+id = "glass"
+label = "Glass"
+terms = ["glass", "glassware", "stained glass", "blown glass", "crystal", "enamel", "enameled", "enamelled"]
+
+[[group.category]]
+id = "ceramic"
+label = "Ceramic & clay"
+terms = ["ceramic", "ceramics", "porcelain", "stoneware", "earthenware", "terracotta", "terra cotta", "clay",
+  "pottery", "faience", "majolica", "maiolica", "glaze", "glazed", "celadon", "raku"]
+
+[[group.category]]
+id = "stone"
+label = "Stone"
+terms = ["stone", "marble", "granite", "limestone", "sandstone", "alabaster", "jade", "slate", "onyx", "basalt",
+  "travertine", "terrazzo"]
+
+[[group.category]]
+id = "concrete"
+label = "Concrete & plaster"
+terms = ["concrete", "cement", "plaster", "stucco", "gypsum", "brick", "masonry"]
+
+[[group.category]]
+id = "plastic"
+label = "Plastic & resin"
+terms = ["plastic", "plastics", "resin", "epoxy", "polymer", "vinyl", "nylon", "pvc", "polypropylene", "polyethylene",
+  "polycarbonate", "bakelite", "perspex", "plexiglass", "plexiglas", "acetate", "celluloid", "injection molded",
+  "injection moulded"]
+
+[[group.category]]
+id = "rubber"
+label = "Rubber & silicone"
+terms = ["rubber", "silicone", "latex", "neoprene", "elastomer", "gasket"]
+
+[[group.category]]
+id = "foam"
+label = "Foam & soft"
+terms = ["foam", "sponge", "upholstery", "upholstered", "cushion", "inflatable", "padded"]
+
+[[group.category]]
+id = "textile"
+label = "Textile & fabric"
+terms = ["textile", "fabric", "cloth", "lace", "silk", "cotton", "linen", "wool", "woollen", "woolen", "felt",
+  "tapestry", "embroidery", "embroidered", "weaving", "woven", "knit", "knitted", "knitting", "velvet", "denim",
+  "quilt", "rug", "carpet", "macrame", "brocade"]
+
+[[group.category]]
+id = "leather"
+label = "Leather"
+terms = ["leather", "suede", "rawhide"]
+
+[[group.category]]
+id = "paper"
+label = "Paper & card"
+terms = ["paper", "cardboard", "paperboard", "papier mache", "origami", "papercut", "kirigami", "vellum",
+  "parchment"]
+
+[[group.category]]
+id = "bone-ivory-shell"
+label = "Bone, ivory & shell"
+terms = ["ivory", "bone", "horn", "tortoiseshell", "shell", "mother of pearl", "nacre", "coral", "amber"]
+
+[[group.category]]
+id = "cork"
+label = "Cork & natural fibre"
+terms = ["cork", "jute", "hemp", "sisal", "straw", "seagrass"]
+
+[[group]]
+id = "medium"
+label = "Medium & method"
+
+[[group.category]]
+id = "drawing"
+label = "Drawing & sketch"
+terms = ["drawing", "drawings", "sketch", "sketches", "sketchbook", "pencil", "charcoal", "graphite", "chalk",
+  "pastel", "crayon", "pen and ink", "ink drawing", "croquis", "gesture drawing", "figure drawing", "life drawing",
+  "doodle", "illustration", "illustrated"]
+
+[[group.category]]
+id = "painting"
+label = "Painting"
+terms = ["painting", "paintings", "oil on canvas", "oil painting", "watercolour", "watercolor", "gouache",
+  "tempera", "fresco", "canvas", "panel painting", "miniature painting"]
+
+[[group.category]]
+id = "print"
+label = "Print"
+terms = ["print", "prints", "printmaking", "etching", "engraving", "engraved", "woodcut", "woodblock", "lithograph",
+  "lithography", "screenprint", "screen print", "silkscreen", "linocut", "aquatint", "mezzotint", "drypoint",
+  "risograph", "letterpress", "monotype"]
+
+[[group.category]]
+id = "photograph"
+label = "Photograph"
+terms = ["photograph", "photographs", "photography", "photo", "daguerreotype", "cyanotype", "polaroid",
+  "gelatin silver", "albumen print", "film photo"]
+
+[[group.category]]
+id = "sculpture"
+label = "Sculpture"
+terms = ["sculpture", "sculptures", "sculptural", "statue", "statuette", "bust", "figurine", "relief", "monument",
+  "carved figure", "installation"]
+
+[[group.category]]
+id = "casting-molding"
+label = "Casting & molds"
+terms = ["mold", "mould", "molding", "moulding", "molded", "moulded", "casting", "cast", "slip cast", "slipcast",
+  "die cast", "diecast", "lost wax", "sand casting", "vacuum forming", "vacuum formed", "thermoforming"]
+
+[[group.category]]
+id = "carving"
+label = "Carving"
+terms = ["carved", "carving", "carvings", "whittling", "whittled", "chiselled", "chiseled", "incised", "inlaid",
+  "inlay", "relief carving"]
+
+[[group.category]]
+id = "joinery"
+label = "Joinery & assembly"
+terms = ["joinery", "dovetail", "mortise", "tenon", "dowel", "finger joint", "wood joint", "hinge", "fastener",
+  "fasteners", "screw", "bolt", "rivet", "flat pack", "flatpack", "knock down", "assembly"]
+
+[[group.category]]
+id = "forging-welding"
+label = "Forging & welding"
+terms = ["forged", "forging", "blacksmith", "blacksmithing", "weld", "welded", "welding", "brazed", "soldered",
+  "hammered", "repousse", "smithing"]
+
+[[group.category]]
+id = "cad-3d"
+label = "CAD & 3D"
+terms = ["cad", "3d", "3d model", "3d render", "render", "rendering", "blender", "rhino", "solidworks", "fusion 360",
+  "autocad", "sketchup", "keyshot", "wireframe", "exploded view", "technical drawing", "blueprint", "orthographic",
+  "isometric", "section drawing", "cross section", "cutaway", "3d print", "3d printed", "cnc", "parametric"]
+
+[[group.category]]
+id = "diagram"
+label = "Diagram & chart"
+terms = ["diagram", "diagrams", "schematic", "chart", "infographic", "flowchart", "map", "maps", "cartography",
+  "atlas", "data visualization", "dataviz", "annotated"]
+
+[[group.category]]
+id = "typography"
+label = "Type & lettering"
+terms = ["typography", "typeface", "typefaces", "font", "fonts", "lettering", "calligraphy", "glyph", "glyphs",
+  "type specimen", "specimen", "alphabet", "letterform", "letterforms", "signage", "sign painting"]
+
+[[group.category]]
+id = "logo-branding"
+label = "Logo & branding"
+terms = ["logo", "logos", "logotype", "logomark", "branding", "brand identity", "visual identity", "trademark",
+  "emblem", "monogram", "badge"]
+
+[[group.category]]
+id = "ui-interface"
+label = "UI & interface"
+terms = ["ui", "ux", "gui", "user interface", "interface", "interfaces", "dashboard", "app design", "web design",
+  "website", "skeuomorphic", "skeuomorphism", "vst", "plugin ui", "hmi", "control panel"]
+
+[[group.category]]
+id = "graphic-poster"
+label = "Poster & graphic"
+terms = ["poster", "posters", "graphic design", "advertisement", "advert", "flyer", "billboard", "broadside",
+  "magazine cover", "album cover", "record sleeve", "book cover", "editorial design", "layout"]
+
+[[group.category]]
+id = "collage"
+label = "Collage & mixed"
+terms = ["collage", "assemblage", "mixed media", "photomontage", "montage", "zine"]
+
+[[group]]
+id = "object"
+label = "Object"
+
+[[group.category]]
+id = "furniture"
+label = "Furniture"
+terms = ["furniture", "chair", "armchair", "stool", "seat", "seating", "table", "desk", "cabinet", "cupboard",
+  "shelf", "shelves", "shelving", "bookcase", "bench", "sofa", "couch", "daybed", "bed", "dresser", "wardrobe",
+  "sideboard", "credenza", "chest of drawers", "commode", "screen panel", "rocking chair", "lounge chair"]
+
+[[group.category]]
+id = "lighting"
+label = "Lighting"
+terms = ["lamp", "lamps", "lighting", "chandelier", "candle", "candlestick", "candelabrum", "candelabra", "lantern",
+  "sconce", "floor lamp", "desk lamp", "pendant lamp", "light fixture", "luminaire", "torchiere"]
+
+[[group.category]]
+id = "vessels-tableware"
+label = "Vessels & tableware"
+terms = ["vessel", "vessels", "vase", "bowl", "cup", "mug", "jug", "pitcher", "teapot", "tea bowl", "ewer", "jar",
+  "bottle", "flask", "urn", "amphora", "beaker", "goblet", "tankard", "tureen", "dish", "platter", "tableware",
+  "cutlery", "flatware", "spoon", "fork", "knife", "kettle", "pot", "basin", "tray"]
+
+[[group.category]]
+id = "tools-instruments"
+label = "Tools & instruments"
+terms = ["tool", "tools", "hand tool", "instrument", "scientific instrument", "clock", "watch", "wristwatch",
+  "compass", "sundial", "astrolabe", "microscope", "telescope", "caliper", "calipers", "ruler", "hammer",
+  "saw", "chisel", "wrench", "spanner", "pliers", "drill", "lathe", "workbench", "vise", "vice"]
+
+[[group.category]]
+id = "electronics"
+label = "Electronics & tech"
+terms = ["radio", "camera", "cameras", "computer", "computers", "laptop", "phone", "telephone", "smartphone",
+  "typewriter", "calculator", "synthesizer", "synth", "sampler", "drum machine", "hifi", "hi fi", "stereo",
+  "speaker", "speakers", "loudspeaker", "headphones", "walkman", "cassette", "tape deck", "turntable", "record player",
+  "television", "tv", "monitor", "keyboard", "mouse", "console", "game console", "gameboy", "handheld", "pda",
+  "pager", "circuit", "pcb", "electronics", "electronic", "gadget", "gadgets", "device", "devices", "hardware",
+  "amplifier", "mixer", "receiver", "tuner", "oscilloscope"]
+
+[[group.category]]
+id = "machines"
+label = "Machines & mechanisms"
+terms = ["machine", "machines", "machinery", "engine", "motor", "gear", "gears", "mechanism", "mechanisms",
+  "mechanical", "automaton", "robot", "robotics", "pump", "turbine", "piston", "crank", "pulley", "linkage",
+  "industrial machine"]
+
+[[group.category]]
+id = "architecture"
+label = "Architecture & interiors"
+terms = ["architecture", "architectural", "building", "buildings", "house", "castle", "fortress", "fort",
+  "tower", "church", "cathedral", "temple", "palace", "interior", "interiors", "interior design", "facade",
+  "bridge", "pavilion", "staircase", "stair", "stairs", "door", "doors", "doorway", "window", "windows", "gate",
+  "arch", "column", "dome", "roof", "floor plan", "elevation", "cabin", "hut"]
+
+[[group.category]]
+id = "vehicles"
+label = "Vehicles"
+terms = ["car", "cars", "automobile", "bicycle", "bike", "motorcycle", "motorbike", "scooter", "train",
+  "locomotive", "tram", "ship", "boat", "yacht", "sailboat", "canoe", "aircraft", "airplane", "aeroplane",
+  "helicopter", "truck", "van", "bus", "tractor", "vehicle", "vehicles", "carriage", "spacecraft", "rocket"]
+
+[[group.category]]
+id = "jewelry"
+label = "Jewelry & accessories"
+terms = ["jewelry", "jewellery", "ring", "earring", "necklace", "bracelet", "brooch", "pendant", "locket",
+  "bangle", "cufflink", "tiara", "crown", "amulet", "bead", "beads", "beadwork", "eyewear", "glasses",
+  "sunglasses", "bag", "handbag", "wallet"]
+
+[[group.category]]
+id = "clothing"
+label = "Clothing & fashion"
+terms = ["clothing", "clothes", "garment", "dress", "gown", "fashion", "costume", "coat", "jacket", "shirt",
+  "kimono", "robe", "shoe", "shoes", "sneaker", "sneakers", "boot", "boots", "sandal", "hat", "helmet", "glove",
+  "gloves", "textile design", "workwear", "uniform"]
+
+[[group.category]]
+id = "books"
+label = "Books & manuscripts"
+terms = ["book", "books", "bound volume", "manuscript", "manuscripts", "codex", "album", "folio", "scroll",
+  "artist book", "artists book", "bookbinding", "binding", "notebook", "journal", "catalog", "catalogue",
+  "magazine", "publication"]
+
+[[group.category]]
+id = "games-toys"
+label = "Games & toys"
+terms = ["chess", "chessmen", "chess set", "chessboard", "game", "games", "board game", "toy", "toys", "doll",
+  "puppet", "puzzle", "dice", "playing cards", "lego", "model kit", "action figure"]
+
+[[group.category]]
+id = "packaging"
+label = "Packaging & objects"
+terms = ["packaging", "package", "box", "boxes", "container", "tin can", "wrapper", "casket",
+  "coffer", "trunk", "crate"]
+
+[[group.category]]
+id = "musical"
+label = "Musical instruments"
+terms = ["musical instrument", "guitar", "violin", "cello", "piano", "harpsichord", "drum", "drums", "flute",
+  "horn instrument", "trumpet", "harp", "lute", "zither", "organ", "accordion"]
+
+[[group.category]]
+id = "weapons-armor"
+label = "Arms & armor"
+terms = ["sword", "dagger", "armor", "armour", "shield", "helm", "spear", "axe", "bow", "arrow", "firearm",
+  "gun", "pistol", "rifle", "cannon", "blade", "sabre", "saber", "katana"]
+
+[[group.category]]
+id = "nature"
+label = "Nature & animals"
+terms = ["plant", "plants", "flower", "flowers", "floral", "botanical", "tree", "trees", "leaf", "leaves",
+  "landscape", "garden", "animal", "animals", "bird", "birds", "fish", "horse", "dog", "cat", "insect",
+  "butterfly", "shell", "fossil", "mineral", "rock", "seascape"]
+
+[[group.category]]
+id = "people"
+label = "People & portraits"
+terms = ["portrait", "portraits", "self portrait", "faces", "nude", "anatomy", "hands",
+  "pose", "poses", "model sheet", "character", "woman", "man", "child", "children", "dancer", "dancers"]
+
+[[group]]
+id = "style"
+label = "Style & era"
+
+[[group.category]]
+id = "art-deco"
+label = "Art Deco"
+terms = ["art deco", "deco", "streamline", "streamline moderne", "machine age"]
+
+[[group.category]]
+id = "art-nouveau"
+label = "Art Nouveau"
+terms = ["art nouveau", "nouveau", "jugendstil", "secession", "arts and crafts", "liberty style"]
+
+[[group.category]]
+id = "bauhaus-modern"
+label = "Bauhaus & modernism"
+terms = ["bauhaus", "modernism", "modernist", "modern design", "de stijl", "constructivism", "constructivist",
+  "international style", "swiss style", "swiss design", "ulm"]
+
+[[group.category]]
+id = "mid-century"
+label = "Mid-century"
+terms = ["mid century", "midcentury", "mid century modern", "atomic age", "space age", "1950s", "1960s", "50s", "60s",
+  "eames", "danish modern", "scandinavian"]
+
+[[group.category]]
+id = "brutalist"
+label = "Brutalist"
+terms = ["brutalism", "brutalist", "raw concrete", "beton brut"]
+
+[[group.category]]
+id = "minimal"
+label = "Minimal"
+terms = ["minimal", "minimalism", "minimalist", "dieter rams", "braun", "muji", "japandi", "reductive",
+  "less but better"]
+
+[[group.category]]
+id = "postmodern-memphis"
+label = "Postmodern & Memphis"
+terms = ["postmodern", "postmodernism", "memphis", "memphis group", "memphis design", "ettore sottsass", "sottsass",
+  "1980s", "80s", "radical design", "anti design"]
+
+[[group.category]]
+id = "y2k"
+label = "Y2K & digital"
+terms = ["y2k", "y2k aesthetic", "frutiger", "frutiger aero", "aero", "vaporwave", "cyber", "cybercore",
+  "vectorheart", "translucent", "iridescent", "chrome type", "early web", "web 1.0", "web 2.0", "2000s", "90s",
+  "1990s", "millennium"]
+
+[[group.category]]
+id = "retro-vintage"
+label = "Retro & vintage"
+terms = ["vintage", "retro", "antique", "obsolete", "nostalgia", "nostalgic", "70s", "1970s",
+  "retro hardware", "retro tech"]
+
+[[group.category]]
+id = "industrial-product"
+label = "Industrial & product design"
+terms = ["industrial design", "product design", "industrial designer", "product designer", "id", "design object",
+  "objects", "prototype", "prototypes", "sketch model", "concept model", "mockup", "mock up"]
+
+[[group.category]]
+id = "renaissance-classical"
+label = "Renaissance & classical"
+terms = ["renaissance", "italian renaissance", "northern renaissance", "classical", "antiquity", "roman", "greek",
+  "neoclassical", "baroque", "rococo", "mannerism"]
+
+[[group.category]]
+id = "medieval-gothic"
+label = "Medieval & Gothic"
+terms = ["medieval", "middle ages", "gothic", "romanesque", "byzantine", "illuminated", "heraldic", "heraldry"]
+
+[[group.category]]
+id = "folk-vernacular"
+label = "Folk & vernacular"
+terms = ["folk", "folk art", "vernacular", "craft", "crafts", "handmade", "hand made", "rustic", "primitive",
+  "nomadic", "shaker", "mingei", "wabi sabi", "wabi-sabi"]
+
+[[group.category]]
+id = "contemporary"
+label = "Contemporary"
+terms = ["contemporary", "contemporary art", "contemporary design", "2020s", "2010s"]
+
+[[group.category]]
+id = "abstract"
+label = "Abstract & geometric"
+terms = ["abstract", "abstraction", "geometric", "geometry", "pattern", "patterns", "op art", "kinetic", "grid",
+  "modular", "tessellation", "symmetry", "organic form", "biomorphic"]
+
+# ── Search words (Discover, ADR-0015) ───────────────────────────────────
+# Extra words for the Discover word list. Every category label and term above
+# is offered too; these add practice- and craft-oriented searches that make
+# good Are.na channel searches but are too broad to sort images by.
+
+[[discover]]
+label = "Drawing practice"
+words = ["gesture drawing", "figure drawing", "life drawing", "anatomy reference", "hands reference",
+  "faces reference", "drapery", "folds", "perspective", "two point perspective", "composition", "thumbnails",
+  "value study", "light and shadow", "line weight", "hatching", "cross hatching", "contour drawing",
+  "blind contour", "urban sketching", "sketchbook", "ink drawing", "brush pen", "character design", "model sheet",
+  "concept art", "environment design", "creature design", "prop design", "storyboard", "visual development",
+  "color study", "plein air", "still life", "master study", "silhouette", "shape language", "pose reference",
+  "expression sheet", "costume design"]
+
+[[discover]]
+label = "Design"
+words = ["industrial design", "product design", "design process", "design sketches", "marker rendering",
+  "form study", "form language", "cmf", "color material finish", "ergonomics", "packaging design",
+  "graphic design", "poster design", "editorial design", "book design", "grid systems", "swiss typography",
+  "type specimen", "lettering", "signage", "wayfinding", "exhibition design", "interior design", "set design",
+  "furniture design", "lighting design", "object design", "speculative design", "design archive",
+  "design history", "dieter rams", "braun design", "olivetti", "memphis design", "japanese design",
+  "scandinavian design", "italian design", "bauhaus", "ulm school", "color palette"]
+
+[[discover]]
+label = "CAD & making"
+words = ["cad", "technical drawing", "exploded view", "orthographic projection", "section drawing", "cutaway",
+  "blueprint", "patent drawing", "assembly drawing", "mechanical design", "mechanisms", "linkages", "gears",
+  "hinges", "joinery", "fasteners", "sheet metal", "injection molding", "design for manufacturing", "3d printing",
+  "cnc", "laser cut", "prototyping", "model making", "sketch models", "foam models", "workshop", "jigs",
+  "tooling", "molds", "casting", "ceramics process", "woodworking", "metalworking", "welding", "upholstery",
+  "materials library", "material samples", "surface finish", "textures"]
+
+[[discover]]
+label = "Objects & tech"
+words = ["chairs", "stools", "lamps", "vessels", "tableware", "tools", "hand tools", "scientific instruments",
+  "clocks", "watches", "radios", "cameras", "computers", "keyboards", "synthesizers", "audio equipment", "hifi",
+  "walkman", "telephones", "typewriters", "calculators", "game consoles", "handheld devices", "retro hardware",
+  "vintage electronics", "control panels", "buttons and knobs", "dials", "interfaces", "user interface",
+  "skeuomorphic ui", "vst plugins", "dashboard design", "icons", "pixel art", "vehicles", "bicycles", "cars",
+  "boats", "aircraft"]
+
+[[discover]]
+label = "Architecture & space"
+words = ["architecture", "brutalism", "modernist architecture", "vernacular architecture", "interiors",
+  "facades", "staircases", "doors", "windows", "floor plans", "architectural models", "architectural drawing",
+  "landscape architecture", "gardens", "pavilions", "cabins", "tiny houses", "shelters", "temporary structures",
+  "urban design"]
+
+[[discover]]
+label = "Mood & aesthetics"
+words = ["y2k", "frutiger aero", "vaporwave", "cybercore", "retro futurism", "space age", "atomic age",
+  "art deco", "art nouveau", "minimalism", "maximalism", "wabi sabi", "brutalist web", "early web", "chrome",
+  "translucent", "iridescent", "monochrome", "earth tones", "pastel", "neon", "glitch", "analog", "grain",
+  "texture", "patterns", "ornament", "geometric", "organic forms", "biomorphic"]

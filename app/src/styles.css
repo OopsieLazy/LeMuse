@@ -956,9 +956,194 @@ ul.channel-list {
   gap: var(--space-3);
 }
 
+/* ============ Pages, categories, Find channels (ADR-0015) ============ */
+
+.brand-btn {
+  align-self: center;
+}
+
+.page-select {
+  max-width: var(--pager-width);
+  min-height: var(--control-size);
+  padding: 0 var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.icon-btn[data-active="true"] {
+  color: var(--accent);
+}
+
+.slide-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+}
+
+.slide-tag {
+  padding: 0 var(--space-3);
+  border: var(--border);
+  border-radius: var(--chip-radius);
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  line-height: var(--leading);
+}
+
+.filter-menu {
+  width: min(var(--filter-menu-width), calc(100vw - 2 * var(--space-6)));
+}
+
+.menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.filter-groups {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.filter-group-label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-2xs);
+  color: var(--muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border);
+  border-radius: var(--chip-radius);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-count {
+  color: var(--muted);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The mark says the state without relying on colour alone. */
+.chip-mark::before {
+  content: "+";
+  color: var(--muted);
+}
+
+.chip[data-state="include"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.chip[data-state="include"] .chip-mark::before {
+  content: "¹3";
+  color: inherit;
+}
+
+.chip[data-state="include"] .chip-count {
+  color: inherit;
+}
+
+.chip[data-state="exclude"] {
+  border-color: var(--error);
+  color: var(--error);
+  text-decoration: line-through;
+}
+
+.chip[data-state="exclude"] .chip-mark::before {
+  content: "¹5";
+  color: inherit;
+}
+
+.related-list .channel-slug {
+  display: grid;
+  font-family: inherit;
+}
+
+.related-title {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.related-meta {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.preview {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.preview-head {
+  display: grid;
+  margin: 0;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--thumb-size), 1fr));
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.preview-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--stage);
+}
+
 /* ============ Narrow windows and phones (docked layouts) ============ */
 
 @media (max-width: 720px) {
+  /* The category filter is too tall to sit above a wrapped control bar:
+     on narrow windows it becomes a sheet along the bottom edge. */
+  :root .caption .playlist-menu.filter-menu {
+    position: fixed;
+    top: auto;
+    right: var(--space-4);
+    bottom: var(--space-4);
+    left: var(--space-4);
+    width: auto;
+    max-height: var(--sheet-max-height);
+  }
+
   :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);

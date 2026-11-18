@@ -2,10 +2,12 @@
 
 use std::path::Path;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::types::Value;
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 
 use serde::Serialize;
 
+use crate::categories::{self, Matcher, Vocabulary};
 use crate::model::{Block, Collection};
 use crate::{Error, Result};
 
@@ -15,6 +17,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0002_stream_media.sql"),
     include_str!("../../migrations/0003_playlists.sql"),
     include_str!("../../migrations/0004_playlist_block_index.sql"),
+    include_str!("../../migrations/0005_categories.sql"),
 ];
 
 /// Caps that keep a scripted or runaway UI from growing local state without
@@ -37,6 +40,79 @@ pub struct Slide {
     pub creator: Option<String>,
     pub attribution: Option<String>,
     pub saved: bool,
+    /// Category ids LeMuse assigned (ADR-0015), sorted.
+    pub categories: Vec<String>,
+    /// Connector id (`arena`, `cleveland`): Are.na images offer
+    /// "Related channels".
+    pub connector: String,
+}
+
+/// Which images a query covers: some collections (a topic, or "All"), or
+/// one playlist.
+#[derive(Debug, Clone)]
+pub enum Scope<'a> {
+    Collections(Vec<(&'a str, &'a str)>),
+    Playlist(i64),
+}
+
+impl<'a> Scope<'a> {
+    pub fn collections<S: AsRef<str>>(keys: &'a [(S, S)]) -> Self {
+        Scope::Collections(keys.iter().map(|(c, k)| (c.as_ref(), k.as_ref())).collect())
+    }
+
+    fn is_empty_collections(&self) -> bool {
+        matches!(self, Scope::Collections(k) if k.is_empty())
+    }
+}
+
+/// Most categories one filter may name on each side.
+pub const MAX_FILTER_CATEGORIES: usize = 24;
+
+/// A genre-style filter (ADR-0015): images must be in every `include`
+/// category and in none of the `exclude` ones. Ids are checked against the
+/// built-in vocabulary before they reach SQL, where they are bound values.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct CategoryFilter {
+    #[serde(default)]
+    pub include: Vec<String>,
+    #[serde(default)]
+    pub exclude: Vec<String>,
+}
+
+impl CategoryFilter {
+    pub fn check(&self) -> Result<()> {
+        if self.include.len() > MAX_FILTER_CATEGORIES || self.exclude.len() > MAX_FILTER_CATEGORIES
+        {
+            return Err(Error::Config(format!(
+                "a filter names at most {MAX_FILTER_CATEGORIES} categories on each side"
+            )));
+        }
+        if !self
+            .include
+            .iter()
+            .chain(&self.exclude)
+            .all(|id| categories::is_known(id))
+        {
+            return Err(Error::Config("unknown category in filter".into()));
+        }
+        if self.include.iter().any(|i| self.exclude.contains(i)) {
+            return Err(Error::Config(
+                "a category can't be both included and excluded".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.include.is_empty() && self.exclude.is_empty()
+    }
+}
+
+/// How many images of a scope (after the filter) are in one category.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CategoryCount {
+    pub id: String,
+    pub count: u64,
 }
 
 /// A playlist as the rail shows it.
@@ -64,7 +140,10 @@ const SLIDES_SQL: &str = "WITH topic_blocks AS ({blocks}),
      )
      SELECT b.id, b.title, d.url, d.width, d.height, b.page_url, b.creator,
             b.attribution_text,
-            EXISTS (SELECT 1 FROM block_files f WHERE f.block_id = b.id) AS saved
+            EXISTS (SELECT 1 FROM block_files f WHERE f.block_id = b.id) AS saved,
+            (SELECT group_concat(bc.category, ',') FROM block_categories bc
+             WHERE bc.block_id = b.id) AS cats,
+            b.connector
      FROM topic_blocks tb
      JOIN blocks b ON b.id = tb.block_id
      JOIN display d ON d.block_id = b.id AND d.pick = 1
@@ -84,10 +163,10 @@ const BY_ADDED: &str = "tb.ord DESC";
 const PLAYLIST_BLOCKS: &str =
     "SELECT block_id, seq AS ord FROM playlist_items WHERE playlist_id = ?3";
 
-/// CTE body for blocks in `n` collections; parameters start at `?3`.
-fn collection_blocks(n: usize) -> String {
+/// CTE body for blocks in `n` collections; parameters start at `?first`.
+fn collection_blocks(n: usize, first: usize) -> String {
     let keys = (0..n)
-        .map(|i| format!("(?{}, ?{})", i * 2 + 3, i * 2 + 4))
+        .map(|i| format!("(?{}, ?{})", first + i * 2, first + i * 2 + 1))
         .collect::<Vec<_>>()
         .join(", ");
     format!(
@@ -97,7 +176,56 @@ fn collection_blocks(n: usize) -> String {
     )
 }
 
+/// The `topic_blocks` CTE body for a scope and filter, plus its bound
+/// values (numbered from `?3`; `?1`/`?2` are LIMIT and OFFSET). Only fixed
+/// SQL from this file is spliced; every id and key is a bound value.
+fn scope_sql(scope: &Scope<'_>, filter: &CategoryFilter) -> (String, Vec<Value>) {
+    let mut values: Vec<Value> = Vec::new();
+    let base = match scope {
+        Scope::Collections(keys) => {
+            for (c, k) in keys {
+                values.push(Value::Text((*c).to_string()));
+                values.push(Value::Text((*k).to_string()));
+            }
+            collection_blocks(keys.len(), 3)
+        }
+        Scope::Playlist(id) => {
+            values.push(Value::Integer(*id));
+            PLAYLIST_BLOCKS.to_string()
+        }
+    };
+    let mut conds = Vec::new();
+    for (ids, negate) in [(&filter.include, ""), (&filter.exclude, "NOT ")] {
+        for id in ids {
+            values.push(Value::Text(id.clone()));
+            conds.push(format!(
+                "{negate}EXISTS (SELECT 1 FROM block_categories bc
+                 WHERE bc.block_id = s.block_id AND bc.category = ?{})",
+                values.len() + 2
+            ));
+        }
+    }
+    let cond = if conds.is_empty() {
+        "1".to_string()
+    } else {
+        conds.join(" AND ")
+    };
+    (
+        format!("SELECT s.block_id, s.ord FROM ({base}) s WHERE {cond}"),
+        values,
+    )
+}
+
 fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
+    let cats: Option<String> = r.get(9)?;
+    let mut categories: Vec<String> = cats
+        .as_deref()
+        .unwrap_or("")
+        .split(',')
+        .filter(|c| !c.is_empty())
+        .map(str::to_string)
+        .collect();
+    categories.sort();
     Ok(Slide {
         block_id: r.get(0)?,
         title: r.get(1)?,
@@ -108,6 +236,8 @@ fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
         creator: r.get(6)?,
         attribution: r.get(7)?,
         saved: r.get(8)?,
+        categories,
+        connector: r.get(10)?,
     })
 }
 
@@ -115,6 +245,9 @@ impl Catalog {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
+        // The app, its refresh thread and the CLI share this file; wait for
+        // a writer instead of failing (rusqlite's default, made explicit).
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let mut c = Self { conn };
         c.migrate()?;
@@ -361,23 +494,41 @@ impl Catalog {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<Slide>> {
-        if collections.is_empty() {
+        self.slides_in(
+            &Scope::collections(collections),
+            &CategoryFilter::default(),
+            limit,
+            offset,
+        )
+    }
+
+    /// One page of a scope's slides, filtered by category. Collections are
+    /// newest-updated first; playlists most-recently-added first.
+    pub fn slides_in(
+        &self,
+        scope: &Scope<'_>,
+        filter: &CategoryFilter,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<Slide>> {
+        filter.check()?;
+        if scope.is_empty_collections() {
             return Ok(Vec::new());
         }
+        let (blocks, values) = scope_sql(scope, filter);
+        let order = match scope {
+            Scope::Collections(_) => BY_UPDATED,
+            Scope::Playlist(_) => BY_ADDED,
+        };
         let sql = SLIDES_SQL
-            .replace("{blocks}", &collection_blocks(collections.len()))
-            .replace("{order}", BY_UPDATED);
-        let flat: Vec<&str> = collections
-            .iter()
-            .flat_map(|(connector, key)| [connector.as_ref(), key.as_ref()])
-            .collect();
-        let mut args: Vec<&dyn rusqlite::ToSql> = vec![&limit, &offset];
-        for s in &flat {
-            args.push(s);
-        }
+            .replace("{blocks}", &blocks)
+            .replace("{order}", order);
+        let args = [Value::Integer(limit.into()), Value::Integer(offset.into())]
+            .into_iter()
+            .chain(values);
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(args.as_slice(), map_slide)?
+            .query_map(params_from_iter(args), map_slide)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
     }
@@ -385,21 +536,121 @@ impl Catalog {
     /// How many slides [`Catalog::slides`] would return, without loading
     /// them (review 0003 D-19).
     pub fn count_slides<S: AsRef<str>>(&self, collections: &[(S, S)]) -> Result<u64> {
-        if collections.is_empty() {
+        self.count_in(&Scope::collections(collections), &CategoryFilter::default())
+    }
+
+    /// How many slides [`Catalog::slides_in`] would return over all pages.
+    pub fn count_in(&self, scope: &Scope<'_>, filter: &CategoryFilter) -> Result<u64> {
+        filter.check()?;
+        if scope.is_empty_collections() {
             return Ok(0);
         }
-        let sql = COUNT_SQL.replace("{blocks}", &collection_blocks(collections.len()));
-        let flat: Vec<&str> = collections
-            .iter()
-            .flat_map(|(connector, key)| [connector.as_ref(), key.as_ref()])
-            .collect();
-        let mut args: Vec<&dyn rusqlite::ToSql> = vec![&0, &0];
-        for s in &flat {
-            args.push(s);
-        }
+        let (blocks, values) = scope_sql(scope, filter);
+        let sql = COUNT_SQL.replace("{blocks}", &blocks);
+        let args = [Value::Integer(0), Value::Integer(0)]
+            .into_iter()
+            .chain(values);
         Ok(self
             .conn
-            .query_row(&sql, args.as_slice(), |r| r.get::<_, i64>(0))? as u64)
+            .query_row(&sql, params_from_iter(args), |r| r.get::<_, i64>(0))? as u64)
+    }
+
+    /// For each category, how many of the scope's slides (after `filter`)
+    /// are in it: the numbers on the filter's chips.
+    pub fn category_counts(
+        &self,
+        scope: &Scope<'_>,
+        filter: &CategoryFilter,
+    ) -> Result<Vec<CategoryCount>> {
+        filter.check()?;
+        if scope.is_empty_collections() {
+            return Ok(Vec::new());
+        }
+        let (blocks, values) = scope_sql(scope, filter);
+        let sql = format!(
+            "WITH topic_blocks AS ({blocks})
+             SELECT bc.category, COUNT(*) FROM topic_blocks tb
+             JOIN block_categories bc ON bc.block_id = tb.block_id
+             WHERE EXISTS (SELECT 1 FROM block_media m WHERE m.block_id = tb.block_id
+                           AND m.role IN ('large', 'medium', 'original'))
+               AND ?1 IS NOT NULL AND ?2 IS NOT NULL
+             GROUP BY bc.category ORDER BY bc.category"
+        );
+        let args = [Value::Integer(0), Value::Integer(0)]
+            .into_iter()
+            .chain(values);
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(params_from_iter(args), |r| {
+                Ok(CategoryCount {
+                    id: r.get(0)?,
+                    count: r.get::<_, i64>(1)? as u64,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    // ── Categories: derived (ADR-0015) ───────────────────────────────────
+
+    /// Re-sort every block into categories. Runs after each refresh; one
+    /// transaction, so readers see the old or the new sorting, never half.
+    pub fn rebuild_categories(&mut self, v: &Vocabulary) -> Result<usize> {
+        let matcher = Matcher::new(v);
+        let tx = self.conn.transaction()?;
+        let mut rows = 0usize;
+        {
+            let mut read = tx.prepare(
+                "SELECT b.id, b.kind, b.title, b.description, b.content,
+                        group_concat(c.title, char(10))
+                 FROM blocks b
+                 LEFT JOIN collection_blocks cb ON cb.block_id = b.id
+                 LEFT JOIN collections c ON c.id = cb.collection_id
+                 GROUP BY b.id",
+            )?;
+            type Texts = [Option<String>; 4];
+            let blocks = read
+                .query_map([], |r| {
+                    let texts: Texts = [r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?];
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, texts))
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            tx.execute("DELETE FROM block_categories", [])?;
+            let mut write =
+                tx.prepare("INSERT INTO block_categories (block_id, category) VALUES (?1, ?2)")?;
+            for (id, kind, texts) in &blocks {
+                let found = matcher.categorize(kind, texts.iter().flatten().map(String::as_str));
+                for c in found {
+                    write.execute(params![id, c])?;
+                    rows += 1;
+                }
+            }
+        }
+        tx.execute(
+            "INSERT INTO derived_state (key, value) VALUES ('categories', ?1)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            params![v.fingerprint],
+        )?;
+        tx.commit()?;
+        Ok(rows)
+    }
+
+    /// Rebuild categories only if this vocabulary hasn't built them yet
+    /// (first launch after an update). Cheap when nothing changed.
+    pub fn ensure_categories(&mut self, v: &Vocabulary) -> Result<bool> {
+        let built: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT value FROM derived_state WHERE key = 'categories'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if built.as_deref() == Some(v.fingerprint.as_str()) {
+            return Ok(false);
+        }
+        self.rebuild_categories(v)?;
+        Ok(true)
     }
 
     // ── Playlists: local state (ADR-0014) ───────────────────────────────
@@ -521,14 +772,24 @@ impl Catalog {
 
     /// A playlist's slides, most recently added first.
     pub fn playlist_slides(&self, playlist_id: i64, limit: u32, offset: u32) -> Result<Vec<Slide>> {
-        let sql = SLIDES_SQL
-            .replace("{blocks}", PLAYLIST_BLOCKS)
-            .replace("{order}", BY_ADDED);
-        let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt
-            .query_map(params![limit, offset, playlist_id], map_slide)?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        self.slides_in(
+            &Scope::Playlist(playlist_id),
+            &CategoryFilter::default(),
+            limit,
+            offset,
+        )
+    }
+
+    /// The Are.na block id behind a local block, if it came from Are.na.
+    pub fn arena_block_id(&self, block_id: i64) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT remote_id FROM blocks WHERE id = ?1 AND connector = 'arena'",
+                params![block_id],
+                |r| r.get(0),
+            )
+            .optional()?)
     }
 
     pub fn block_count(&self) -> Result<u64> {
@@ -859,5 +1120,122 @@ mod tests {
         let id = c.upsert_block(&sample("1", "x")).unwrap();
         assert!(c.set_in_playlist(9999, id, true).is_err());
         assert_eq!(c.block_count().unwrap(), 1);
+    }
+
+    fn categorized(c: &mut Catalog, remote_id: &str, title: &str, coll: i64) -> i64 {
+        let mut b = sample(remote_id, title);
+        b.media = vec![media(
+            "large",
+            &format!("https://images.are.na/{remote_id}.jpg"),
+        )];
+        let id = c.upsert_block(&b).unwrap();
+        c.link_block(coll, id, None).unwrap();
+        id
+    }
+
+    #[test]
+    fn categories_filter_pages_and_counts() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let oak = categorized(&mut c, "1", "Oak chair", refs);
+        let steel = categorized(&mut c, "2", "Steel chair", refs);
+        let _vase = categorized(&mut c, "3", "Rubber vase", refs);
+        let v = crate::categories::vocabulary();
+        assert!(c.ensure_categories(v).unwrap());
+        assert!(
+            !c.ensure_categories(v).unwrap(),
+            "same vocabulary: no rebuild"
+        );
+
+        let keys = [("arena", "refs")];
+        let scope = Scope::collections(&keys);
+        let f = |inc: &[&str], exc: &[&str]| CategoryFilter {
+            include: inc.iter().map(|s| s.to_string()).collect(),
+            exclude: exc.iter().map(|s| s.to_string()).collect(),
+        };
+        let ids = |filter: &CategoryFilter| {
+            c.slides_in(&scope, filter, 10, 0)
+                .unwrap()
+                .iter()
+                .map(|s| s.block_id)
+                .collect::<Vec<_>>()
+        };
+        let chairs = f(&["furniture"], &[]);
+        let mut got = ids(&chairs);
+        got.sort();
+        assert_eq!(got, vec![oak, steel]);
+        assert_eq!(ids(&f(&["furniture"], &["wood"])), vec![steel]);
+        assert_eq!(c.count_in(&scope, &f(&["rubber"], &[])).unwrap(), 1);
+        // Pages: offset walks the same order.
+        let all: Vec<i64> = ids(&CategoryFilter::default());
+        let page2 = c
+            .slides_in(&scope, &CategoryFilter::default(), 1, 1)
+            .unwrap();
+        assert_eq!(page2[0].block_id, all[1]);
+        // Counts within the current filter.
+        let counts = c.category_counts(&scope, &chairs).unwrap();
+        let n = |id: &str| counts.iter().find(|x| x.id == id).map_or(0, |x| x.count);
+        assert_eq!(
+            (n("furniture"), n("wood"), n("metal"), n("rubber")),
+            (2, 1, 1, 0)
+        );
+        // Slides carry their categories.
+        let s = c.slides_in(&scope, &f(&["wood"], &[]), 10, 0).unwrap();
+        assert_eq!(
+            s[0].categories,
+            vec!["cad-3d", "furniture", "image", "wood"]
+        );
+        // Playlist scope uses the same filter.
+        let p = c.create_playlist("Mix").unwrap();
+        c.set_in_playlist(p.id, oak, true).unwrap();
+        c.set_in_playlist(p.id, steel, true).unwrap();
+        let pl = c
+            .slides_in(&Scope::Playlist(p.id), &f(&[], &["metal"]), 10, 0)
+            .unwrap();
+        assert_eq!(pl.iter().map(|s| s.block_id).collect::<Vec<_>>(), vec![oak]);
+    }
+
+    #[test]
+    fn filters_are_checked_before_sql() {
+        let c = Catalog::open_in_memory().unwrap();
+        let keys = [("arena", "refs")];
+        let scope = Scope::collections(&keys);
+        let bad = CategoryFilter {
+            include: vec!["wood' OR 1=1 --".into()],
+            exclude: vec![],
+        };
+        assert!(c.slides_in(&scope, &bad, 10, 0).is_err());
+        let both = CategoryFilter {
+            include: vec!["wood".into()],
+            exclude: vec!["wood".into()],
+        };
+        assert!(c.count_in(&scope, &both).is_err());
+        let many = CategoryFilter {
+            include: vec!["wood".into(); MAX_FILTER_CATEGORIES + 1],
+            exclude: vec![],
+        };
+        assert!(c.category_counts(&scope, &many).is_err());
+    }
+
+    #[test]
+    fn channel_names_label_their_images() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let id = c
+            .upsert_collection(&Collection {
+                id: None,
+                connector: "arena".into(),
+                remote_key: "metal-things".into(),
+                title: "Metal".into(),
+            })
+            .unwrap();
+        let b = categorized(&mut c, "9", "IMG_2041.jpg", id);
+        c.rebuild_categories(crate::categories::vocabulary())
+            .unwrap();
+        let keys = [("arena", "metal-things")];
+        let s = c
+            .slides_in(&Scope::collections(&keys), &CategoryFilter::default(), 5, 0)
+            .unwrap();
+        assert_eq!(s[0].block_id, b);
+        assert!(s[0].categories.contains(&"metal".to_string()));
     }
 }

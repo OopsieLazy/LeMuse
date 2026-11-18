@@ -4,27 +4,27 @@
 topic is fed by Are.na channels you choose (later by open museum and 3D sources). Images stream from the
 source; anything you like, you can save locally with one click. Topics refresh automatically on launch.
 
-**Current milestone:** PRs #1–#7 in owner review. PR #8 planned below (2026-11-17, session 6).
+**Current milestone:** PRs #1–#9 in owner review (2026-11-17, session 7).
 
-## Now: PR #8 `feat/0008-playlists-import` (owner's session-6 request)
+## Now: PR #9 `feat/0009-pages-categories-discover` (owner's session-7 request)
 
-Planned before executing. One PR, one commit per concern. ADR-0014.
+Planned before executing. One PR, one commit per concern. ADR-0015. Stacked on #8.
 
 | # | Scope | Status |
 |---|---|---|
-| 1 | **Security upkeep:** rusqlite 0.32 → 0.41.1 (bundled SQLite 3.54: RUSTSEC-2026-0459, FTS5 CVE-2026-11822/11824); `https_only` + no auth on redirects; CI installs npm deps with `--ignore-scripts` (npm worm wave); 14-day dependency cooldown rule | ✅ |
-| 2 | **Hardening "what if the fetch target changes":** channel slugs, `contact` and queries validated in `Config::validate`; hosts stay compile-time constants | ✅ |
-| 3 | **Add channel:** paste an Are.na link or slug → strict parse (exact host, slug charset) → one lookup via `HttpClient` → written to `lemuse.toml` with `toml_edit` (no string building) → refresh just that channel. Remove a channel. Rate-limited IPC | ✅ |
-| 4 | **Playlists:** local lists of images (migration 0003, local state, never touched by refresh); add/remove the current image; create, rename, delete | ✅ |
-| 5 | **All:** every topic's images in one slideshow; slide counts via `COUNT(*)` (D-19) | ✅ |
-| 6 | UI states in snapshot (W3C + layout test); preview backend; run the real app for the owner before merge | ✅ |
+| 1 | **Pages:** views over 500 images are split into pages of 500 (1–500, 501–1000, …) with a page menu | ✅ |
+| 2 | **Categories:** Are.na has no tags or genres (only block type and file type), so LeMuse sorts images into categories itself from their titles, descriptions, channel names and museum metadata, using a built-in vocabulary (materials, media, objects, styles, kinds). Genre-style filter: include ✓ / exclude ✕ chips with counts | ✅ |
+| 3 | **Discover channels:** a long built-in word list (dropdown) → "Search on Are.na" opens Are.na's own search in the browser (the search API is Premium-only, Q10); paste a link → **preview** the channel's first images before adding; **Related channels** for the current image (one request per click) | ✅ |
+| 4 | UI states in snapshot (W3C + layout test); preview backend; run the real app for the owner before merge | ✅ |
+
+PR #8 (playlists, All, Add channel) is built and waiting for the owner. Q16 answered: no copying back to Are.na.
 
 **Next:** Save, Are.na token in Credential Manager (private channels, 120 reads/min), `load_more`; then The Met and
 Wikimedia Commons (ADR-0013).
 
 **Thoughts recorded, not built yet** (ADR-0012 § Later):
 
-- **Import / find channels:** paste a link (no search API on the free plan), and import the channels you follow.
+- **Import the channels you follow** (needs the token; paste-a-link and Find channels are built).
 - **In-app browser:** a zero-permission InPrivate "peek" window. It costs no install size because WebView2 is
   already on Windows. The default stays the system browser.
 
@@ -131,6 +131,7 @@ images play full-window. Save puts the original in `views/<topic>/`.
 | Q12 | Layout of PR #3 | ✅ **Liked** (2026-11-17): rail left, stage, caption strip. Keep as the default "Studio" layout |
 | Q14 | Are the generic-name channel matches right; links for the 6 not added; OK to have them in the public config? | ✅ **Right** (2026-11-17). The owner adds the rest with the Add-channel feature (PR #8) |
 | Q15 | Allow read-only git for the admin-review agent hook? | ✅ **No** (2026-11-17); it reads the snapshot file |
+| Q16 | Copy playlists to Are.na channels? | ✅ **Not needed for now** (2026-11-17) |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register
@@ -159,4 +160,7 @@ images play full-window. Save puts the original in `views/<topic>/`.
 | A-11 | Review 0002 | Starter Are.na channels are third-party curated and may change | Owner review; M2 topic editor |
 | A-37 | Review 0008 | Download mode (and Save) fetch image URLs from any https host the API names | Save PR: allow-list download hosts per connector, matching the CSP |
 | D-42 | Review 0008 | npm audit exception for picomatch GHSA-fc5q-39xc-vjpf (dev-only, no fixed release) | Re-check by 2026-12-15; the gate fails on expiry |
-| D-45 | Review 0008 | Copy a playlist to an Are.na channel (needs the owner's token and write access) | Owner decision; after the token work |
+| D-45 | Review 0008 | Copy a playlist to an Are.na channel (needs the owner's token and write access) | ✅ Q16: not needed for now |
+| D-53 | Review 0009 | Shuffle mixes the current page only | M2: shuffle across pages (random order in SQL) |
+| D-54 | Review 0009 | Word-based categories mislabel some images; untitled images rely on channel names | M2: manual corrections; later maybe a local image model (ADR-0015 option B) |
+| A-39 | Review 0009 | In-app Are.na search needs Premium | Only if the owner buys Premium (Q10 = no) |

@@ -61,7 +61,8 @@ reach CSS.
 ### Links
 
 Source links open in the **system browser** through the official `tauri-plugin-opener` (pinned `=2.7.2`),
-allowed for `https://*` only. In the browser preview they're plain `target=_blank` links.
+allowed for `https://*` only (narrowed to Are.na and the museum sites in ADR-0015). In the browser preview
+they're plain `target=_blank` links.
 
 ### New permissions (admin review: least privilege)
 

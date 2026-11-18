@@ -1,12 +1,16 @@
 import type { FormEvent, MouseEvent } from "react";
 import {
   isHttps,
+  NO_FILTER,
+  PAGE_SIZE,
   sourceKey,
+  type CategoryFilter,
   type LibraryStatus,
   type Playlist,
   type Slide,
   type SlideSource,
   type TopicInfo,
+  type Vocabulary,
 } from "./api";
 
 // Pure view: everything it shows comes in through props, so the same markup
@@ -51,6 +55,22 @@ export interface SlideshowViewProps {
   /** The add-to-playlist menu above the controls. */
   playlistMenuOpen?: boolean;
   playlistMenuError?: string;
+  /** Images in the view after the filter, over all pages (ADR-0015). */
+  total?: number;
+  /** Which page of PAGE_SIZE images is loaded (0-based). */
+  page?: number;
+  onPage?: (page: number) => void;
+  vocabulary?: Vocabulary | null;
+  filter?: CategoryFilter;
+  /** Category id → images in the current view (after the filter). */
+  categoryCounts?: Record<string, number>;
+  filterMenuOpen?: boolean;
+  onToggleFilterMenu?: () => void;
+  onCycleCategory?: (id: string) => void;
+  onClearFilter?: () => void;
+  onOpenDiscover?: () => void;
+  /** Related channels for the current (Are.na) image. */
+  onRelated?: () => void;
   onSelect?: (source: SlideSource) => void;
   onOpenLibrary?: () => void;
   onTogglePlaylistMenu?: () => void;
@@ -106,6 +126,30 @@ const ICONS = {
   topics: "M4 6h16M4 12h16M4 18h10",
   add: "M12 5v14M5 12h14",
   playlistAdd: "M4 6h11M4 11h11M4 16h7M18 13v7M14.5 16.5h7",
+  filter: "M4 5h16l-6 7.5V19l-4-2v-4.5Z",
+  search: "M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13ZM15.5 15.5 20 20",
+  related: "M8 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM22 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM22 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM7.6 10.6l8.8-3.2M7.6 13.4l8.8 3.2",
+};
+
+const fmt = (n: number) => n.toLocaleString("en-US");
+
+/** "1–500", "501–1,000", … for the page menu. */
+export function pageLabel(page: number, total: number): string {
+  const start = page * PAGE_SIZE + 1;
+  return `${fmt(start)}–${fmt(Math.min(total, start + PAGE_SIZE - 1))}`;
+}
+
+type ChipState = "include" | "exclude" | "off";
+
+function chipState(f: CategoryFilter, id: string): ChipState {
+  if (f.include.includes(id)) return "include";
+  return f.exclude.includes(id) ? "exclude" : "off";
+}
+
+const CHIP_TEXT: Record<ChipState, string> = {
+  off: "not filtered; select to show only these",
+  include: "shown only; select to hide these",
+  exclude: "hidden; select to clear",
 };
 
 export function Icon({ d }: { d: string }) {
@@ -129,6 +173,9 @@ function RailItem(p: { label: string; count: number; current: boolean; onClick?:
 
 function emptyText(p: SlideshowViewProps): [string, string] {
   if (p.notice) return [`No images for ${p.activeLabel} yet`, p.notice];
+  const f = p.filter ?? NO_FILTER;
+  if (f.include.length || f.exclude.length)
+    return ["No images match this filter", "Change or clear the category filter to see more."];
   if (!p.active) return ["No topic selected", "Pick a topic, or add an Are.na channel with the + button."];
   if (p.active.kind === "playlist")
     return [
@@ -147,6 +194,21 @@ export function SlideshowView(p: SlideshowViewProps) {
   const current = sourceKey(p.active);
   const inLists = new Set(p.inPlaylists ?? []);
   const [emptyTitle, emptyBody] = emptyText(p);
+  const filter = p.filter ?? NO_FILTER;
+  const filtering = filter.include.length + filter.exclude.length;
+  const total = p.total ?? p.slides.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(p.page ?? 0, pages - 1);
+  const labels = new Map(
+    (p.vocabulary?.groups ?? []).flatMap((g) => g.categories.map((c) => [c.id, c.label] as const)),
+  );
+  // Material, medium, object and style labels; the kind ("Image") adds little.
+  const slideTags = (slide?.categories ?? [])
+    .filter((c) => c !== "image" && labels.has(c))
+    .map((c) => labels.get(c) as string)
+    .slice(0, 5);
+  const counts = p.categoryCounts ?? {};
+  const canRelate = Boolean(slide && slide.connector === "arena" && p.mode === "app");
   const onNewPlaylist = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const input = e.currentTarget.elements.namedItem("playlist-name");
@@ -164,6 +226,15 @@ export function SlideshowView(p: SlideshowViewProps) {
           <button
             type="button"
             className="icon-btn brand-add"
+            onClick={p.onOpenDiscover}
+            aria-label="Find Are.na channels"
+            title="Find channels (D)"
+          >
+            <Icon d={ICONS.search} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn brand-btn"
             onClick={p.onOpenLibrary}
             aria-label="Add a channel or manage playlists"
             title="Add channel, playlists (A)"
@@ -297,6 +368,16 @@ export function SlideshowView(p: SlideshowViewProps) {
                     )}
                   </p>
                 )}
+                {slideTags.length > 0 && (
+                  <p className="slide-tags">
+                    <span className="visually-hidden">Categories: </span>
+                    {slideTags.map((t) => (
+                      <span key={t} className="slide-tag">
+                        {t}
+                      </span>
+                    ))}
+                  </p>
+                )}
               </div>
               <dl className="specs">
                 <div>
@@ -306,11 +387,35 @@ export function SlideshowView(p: SlideshowViewProps) {
                   </dd>
                 </div>
                 <div>
+                  <dt>Images</dt>
+                  <dd>{fmt(total)}</dd>
+                </div>
+                <div>
                   <dt>Size</dt>
                   <dd>{slide?.width && slide.height ? `${slide.width} × ${slide.height} px` : "Unknown"}</dd>
                 </div>
               </dl>
               <div className="controls" role="group" aria-label="Slideshow controls">
+                {pages > 1 && (
+                  <>
+                    <label htmlFor="page-select" className="visually-hidden">
+                      Page of {fmt(total)} images
+                    </label>
+                    <select
+                      id="page-select"
+                      className="page-select"
+                      value={page}
+                      onChange={(e) => p.onPage?.(Number(e.target.value))}
+                      title={`Images ${pageLabel(page, total)} of ${fmt(total)}: pick another 500`}
+                    >
+                      {Array.from({ length: pages }, (_, i) => (
+                        <option key={i} value={i}>
+                          {pageLabel(i, total)}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
                 <button type="button" className="icon-btn only-overlay" onClick={p.onToggleRail} aria-expanded={Boolean(p.railOpen)} aria-controls="topic-rail" aria-label="Topics" title="Topics (T)">
                   <Icon d={ICONS.topics} />
                 </button>
@@ -346,6 +451,28 @@ export function SlideshowView(p: SlideshowViewProps) {
                   title="Add to playlist (P)"
                 >
                   <Icon d={ICONS.playlistAdd} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onToggleFilterMenu}
+                  aria-expanded={Boolean(p.filterMenuOpen)}
+                  aria-controls="filter-menu"
+                  aria-label={filtering ? `Filter by category (${filtering} active)` : "Filter by category"}
+                  data-active={filtering ? "true" : "false"}
+                  title="Filter by category (C)"
+                >
+                  <Icon d={ICONS.filter} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onRelated}
+                  disabled={!canRelate}
+                  aria-label="Related Are.na channels"
+                  title={canRelate ? "Channels this image is also in (R)" : "Related channels: Are.na images, desktop app"}
+                >
+                  <Icon d={ICONS.related} />
                 </button>
                 <button type="button" className="icon-btn" disabled aria-label="Save original" title="Save arrives in a later build">
                   <Icon d={ICONS.save} />
@@ -415,6 +542,63 @@ export function SlideshowView(p: SlideshowViewProps) {
                     {p.playlistMenuError}
                   </p>
                 )}
+              </div>
+            )}
+            {p.filterMenuOpen && (
+              <div className="playlist-menu filter-menu" id="filter-menu" role="group" aria-labelledby="filter-menu-title">
+                <div className="menu-head">
+                  <p className="menu-title" id="filter-menu-title">
+                    Filter by category
+                  </p>
+                  <span className="row-actions">
+                    <button type="button" className="text-btn" onClick={p.onClearFilter} disabled={!filtering}>
+                      Clear
+                    </button>
+                    <button type="button" className="text-btn" onClick={p.onToggleFilterMenu}>
+                      Done
+                    </button>
+                  </span>
+                </div>
+                <p className="menu-empty">
+                  LeMuse sorts images itself from titles, channel names and museum details, so a few will be off.
+                  Select once to show only, twice to hide.
+                </p>
+                <div className="filter-groups">
+                  {(p.vocabulary?.groups ?? []).map((g) => {
+                    const chips = g.categories.filter(
+                      (c) => (counts[c.id] ?? 0) > 0 || chipState(filter, c.id) !== "off",
+                    );
+                    if (!chips.length) return null;
+                    return (
+                      <div key={g.id} className="filter-group" role="group" aria-labelledby={`filter-${g.id}`}>
+                        <p className="filter-group-label" id={`filter-${g.id}`}>
+                          {g.label}
+                        </p>
+                        <ul className="chips">
+                          {chips.map((c) => {
+                            const state = chipState(filter, c.id);
+                            const n = counts[c.id] ?? 0;
+                            return (
+                              <li key={c.id}>
+                                <button
+                                  type="button"
+                                  className="chip"
+                                  data-state={state}
+                                  aria-label={`${c.label}, ${fmt(n)} images, ${CHIP_TEXT[state]}`}
+                                  onClick={() => p.onCycleCategory?.(c.id)}
+                                >
+                                  <span className="chip-mark" aria-hidden="true" />
+                                  <span className="chip-label">{c.label}</span>
+                                  <span className="chip-count">{fmt(n)}</span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </figcaption>

@@ -8,6 +8,13 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Pages, categories and Find channels (PR #9, ADR-0015):
+  - views over 500 images get a page menu (1–500, 501–1,000, …);
+  - LeMuse sorts images into ~70 categories (kind, material, medium, object, style) from titles, channel names
+    and museum data; a genre-style filter includes or excludes them;
+  - Find channels: ~1,100 search words that open Are.na's search in the browser, a channel preview before
+    adding, and Related channels for the current image;
+  - CLI `preview-channel` and `related`. Links now open only on Are.na and the museum sites.
 - Architecture skeleton for LeMuse (PR #1):
   - Rust workspace with `lemuse-core`, the `lemuse` CLI, and a Tauri 2 + React desktop shell.
   - Topics: `[[topic]]` / `[[topic.source]]` config. Each topic is a slideshow fed by Are.na channels you pick.

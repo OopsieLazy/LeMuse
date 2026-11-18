@@ -96,6 +96,13 @@
   --menu-max-height: min(60vh, calc(360px * var(--ui-scale)));
   --field-min: calc(120px * var(--ui-scale));
   --status-min: calc(200px * var(--ui-scale));
+
+  /* ---- Category filter and Find channels (ADR-0015) ---- */
+  --filter-menu-width: calc(420px * var(--ui-scale));
+  --chip-radius: 999px;
+  --thumb-size: calc(96px * var(--ui-scale));
+  --pager-width: calc(132px * var(--ui-scale));
+  --sheet-max-height: 70vh;
 }
 
 /* Studio dark: follows the system unless light is chosen... */

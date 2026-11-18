@@ -5,6 +5,22 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-17 (session 7): Pages, categories, Find channels (PR #9)
+
+**Branch:** `feat/0009-pages-categories-discover` (stacked on #8) · **Status:** awaiting owner review (app launched)
+
+- **Done:** page menu for views over 500; LeMuse's own categories (Are.na has no tags) with an include/exclude
+  filter; Find channels: search words → Are.na search in the browser, preview before adding, Related channels
+  (ADR-0015). CLI `preview-channel`, `related`.
+- **Security:** filter ids checked and bound; discovery reads only on a click, ≤ 24/min; opener scope narrowed
+  to 5 hosts; no new dependency.
+- **Checks:** 79 tests; W3C 41 files; layout 195 renders; secret scan clean.
+- **Review 0009:** A-38…A-46, D-47…D-56; fixed or decided, D-53/D-54 deferred.
+- **Owner decisions:** Q16 no copying to Are.na. In-app search needs Premium (Q10 = no), so it opens Are.na's site.
+- **Next:** owner reviews and merges #1–#9; then Save + Are.na token + `load_more`.
+
+---
+
 ## 2026-11-17 (session 6): Playlists, All, Add channel; security upkeep (PR #8)
 
 **Branch:** `feat/0008-playlists-import` (stacked on #7) · **Status:** awaiting owner review (app launched)

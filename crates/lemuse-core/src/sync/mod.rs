@@ -31,8 +31,13 @@ pub fn refresh_library(
     let client = production_client(cfg);
     let mut conns = connectors::all(client.clone(), arena::Tier::Guest);
     let mut catalog = Catalog::open(&paths.catalog())?;
-    let mut engine = SyncEngine::new(paths.clone(), &mut catalog, client);
-    engine.run(cfg, &mut conns, trigger)
+    let summary = {
+        let mut engine = SyncEngine::new(paths.clone(), &mut catalog, client);
+        engine.run(cfg, &mut conns, trigger)?
+    };
+    // Categories are derived from what was just fetched (ADR-0015).
+    catalog.rebuild_categories(crate::categories::vocabulary())?;
+    Ok(summary)
 }
 
 /// The production HTTP client every front-end shares: rustls, `https_only`,

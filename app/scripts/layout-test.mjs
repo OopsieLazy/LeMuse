@@ -83,7 +83,8 @@ const measure = String(async function run() {
       }
       const outside = (r) =>
         r.right > win.innerWidth + 1 || r.bottom > win.innerHeight + 1 || r.left < -1 || r.top < -1;
-      const controls = ".controls button, .reveal, .rail-actions button, .brand-add, .playlist-menu :is(button, input)";
+      const controls =
+        ".controls button, .page-select, .reveal, .rail-actions button, .brand .icon-btn, .playlist-menu :is(button, input, select)";
       for (const b of doc.querySelectorAll(controls)) {
         if (!visible(b, win)) continue;
         if (b.closest(".rail") && win.getComputedStyle(b.closest(".rail")).visibility === "hidden") continue;
@@ -94,8 +95,13 @@ const measure = String(async function run() {
         if (outside(dialog.getBoundingClientRect()))
           fail(`dialog "${dialog.getAttribute("aria-labelledby")}" doesn't fit the window`);
       }
-      const menu = doc.querySelector(".playlist-menu");
-      if (menu && visible(menu, win) && outside(menu.getBoundingClientRect())) fail("playlist menu leaves the window");
+      for (const menu of doc.querySelectorAll(".playlist-menu")) {
+        if (visible(menu, win) && outside(menu.getBoundingClientRect())) fail(`menu "${menu.id}" leaves the window`);
+      }
+      // Discover's preview grid must not push the dialog sideways.
+      for (const grid of doc.querySelectorAll("dialog[open] .preview-grid")) {
+        if (grid.scrollWidth > grid.clientWidth + 1) fail("preview grid scrolls sideways");
+      }
       frame.remove();
     }
   }
