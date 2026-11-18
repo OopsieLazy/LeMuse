@@ -1129,6 +1129,76 @@ ul.channel-list {
   background: var(--stage);
 }
 
+/* ============ Mini player and Copy link (ADR-0016) ============ */
+
+/* Image only; the bar appears when the pointer is over the window or a
+   control has focus. Selectors carry :root[...] so they beat every layout. */
+:root[data-mini="true"] .app {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "viewer";
+}
+
+:root[data-mini="true"] .rail,
+:root[data-mini="true"] .caption,
+:root[data-mini="true"] .reveal {
+  display: none;
+}
+
+:root[data-mini="true"] .frame {
+  padding: 0;
+}
+
+.mini-bar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: var(--z-menu);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--panel-fill);
+  border-bottom: var(--border);
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease);
+}
+
+.frame:hover .mini-bar,
+.mini-bar:focus-within {
+  opacity: 1;
+}
+
+.mini-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  cursor: move;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-6);
+  z-index: var(--z-menu);
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  transform: translateX(-50%);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--dialog-shadow);
+  font-size: var(--text-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini-bar {
+    transition: none;
+  }
+}
+
 /* ============ Narrow windows and phones (docked layouts) ============ */
 
 @media (max-width: 720px) {

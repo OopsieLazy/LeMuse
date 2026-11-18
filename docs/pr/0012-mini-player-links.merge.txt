@@ -1,0 +1,14 @@
+What: mini player (small, borderless, always on top, any monitor);
+Copy link; image fallbacks to other stored sizes; lemuse export-links.
+Why: owner's session-9 goals (portable player for other monitors and
+dashboards; keep image links in case they're removed). ADR-0016.
+
+✅ Mini player (M): drag to any monitor, resize, remembers its place
+✅ Copy link (L): title, source page, full-size image
+✅ Broken image tries its other stored sizes before skipping
+✅ lemuse export-links: CSV (escaped, formula-guarded), JSON, text
+✅ 8 window permissions, main window only; no new dependency
+⬜ iPhone web app and local dashboard page (v0.11, Q18)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0012-mini-player-links.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -67,6 +67,18 @@ export interface Slide {
   categories: string[];
   /** Connector id: `arena` images offer Related channels. */
   connector: string;
+  /** Full-size image link (Copy link). */
+  original_url?: string | null;
+  /** Other stored sizes, tried in turn when `display_url` fails (ADR-0016). */
+  fallback_urls?: string[];
+}
+
+/** Where the mini player sat last time, in physical pixels. */
+export interface MiniBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 /** Images per page of the page menu; the core caps it too. */
@@ -148,6 +160,13 @@ export interface Backend {
   saveSettings(settings: unknown): Promise<void>;
   /** Toggle fullscreen; resolves to the new state. */
   toggleFullscreen(): Promise<boolean>;
+  /**
+   * Enter or leave the mini player (ADR-0016). Entering uses `saved` bounds
+   * when they're still on a screen; leaving resolves to the bounds to save.
+   */
+  setMini(on: boolean, saved: MiniBounds | null): Promise<MiniBounds | null>;
+  /** Put text on the clipboard. */
+  copyText(text: string): Promise<void>;
   /** Open an https link outside the app (system browser). */
   openExternal(url: string): Promise<void>;
   libraryStatus(): Promise<LibraryStatus>;
@@ -219,6 +238,12 @@ export function isOpenable(url: string): boolean {
 
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+/** Mini player sizes (logical px). MAIN_MIN mirrors tauri.conf.json. */
+const MINI_DEFAULT = { width: 480, height: 300 };
+const MINI_MIN = { width: 240, height: 150 };
+const MAIN_MIN = { width: 720, height: 480 };
+let restore: (MiniBounds & { maximized: boolean }) | null = null;
+
 function tauriBackend(): Backend {
   // Lazy imports keep @tauri-apps/api out of the preview's critical path.
   const invoke = async <T,>(cmd: string, args?: Record<string, unknown>) =>
@@ -254,6 +279,54 @@ function tauriBackend(): Backend {
       await w.setFullscreen(next);
       return next;
     },
+    async setMini(on, saved) {
+      const { getCurrentWindow, availableMonitors, LogicalSize, PhysicalPosition, PhysicalSize } = await import(
+        "@tauri-apps/api/window"
+      );
+      const w = getCurrentWindow();
+      if (on) {
+        if (await w.isFullscreen()) await w.setFullscreen(false);
+        const pos = await w.outerPosition();
+        const size = await w.innerSize();
+        restore = { x: pos.x, y: pos.y, width: size.width, height: size.height, maximized: await w.isMaximized() };
+        if (restore.maximized) await w.unmaximize();
+        await w.setDecorations(false);
+        await w.setAlwaysOnTop(true);
+        await w.setMinSize(new LogicalSize(MINI_MIN.width, MINI_MIN.height));
+        // Saved bounds only if their centre is still on a connected screen.
+        const screens = await availableMonitors();
+        const onScreen =
+          saved &&
+          screens.some((m) => {
+            const cx = saved.x + saved.width / 2;
+            const cy = saved.y + saved.height / 2;
+            return (
+              cx >= m.position.x && cx < m.position.x + m.size.width && cy >= m.position.y && cy < m.position.y + m.size.height
+            );
+          });
+        if (saved && onScreen) {
+          await w.setSize(new PhysicalSize(saved.width, saved.height));
+          await w.setPosition(new PhysicalPosition(saved.x, saved.y));
+        } else {
+          await w.setSize(new LogicalSize(MINI_DEFAULT.width, MINI_DEFAULT.height));
+        }
+        return null;
+      }
+      const pos = await w.outerPosition();
+      const size = await w.innerSize();
+      const now = { x: pos.x, y: pos.y, width: size.width, height: size.height };
+      await w.setAlwaysOnTop(false);
+      await w.setDecorations(true);
+      await w.setMinSize(new LogicalSize(MAIN_MIN.width, MAIN_MIN.height));
+      if (restore) {
+        await w.setSize(new PhysicalSize(restore.width, restore.height));
+        await w.setPosition(new PhysicalPosition(restore.x, restore.y));
+        if (restore.maximized) await w.maximize();
+      }
+      restore = null;
+      return now;
+    },
+    copyText: (text) => navigator.clipboard.writeText(text),
     async openExternal(url) {
       if (!isOpenable(url)) throw new Error("LeMuse only opens Are.na and museum pages.");
       const { openUrl } = await import("@tauri-apps/plugin-opener");
@@ -412,6 +485,11 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     },
     openExternal: async (url) => {
       if (isHttps(url)) window.open(url, "_blank", "noopener,noreferrer");
+    },
+    // The browser can't resize itself: the preview shows the mini layout only.
+    setMini: async () => null,
+    copyText: async (text) => {
+      await navigator.clipboard.writeText(text);
     },
     onRefresh: () => () => {},
   };
