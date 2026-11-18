@@ -17,6 +17,7 @@ pub mod error;
 pub mod model;
 pub mod store;
 pub mod sync;
+pub mod ui_settings;
 
 pub use error::{Error, Result};
 

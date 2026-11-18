@@ -91,6 +91,8 @@ jobs:
           java-version: 21
       - name: Build UI + W3C validation (Nu HTML Checker, ADR-0009)
         run: npm run validate:w3c
+      - name: Layout test (headless Edge, ADR-0012)
+        run: node scripts/layout-test.mjs
       - name: Clippy (Tauri shell)
         working-directory: .
         run: cargo clippy -p lemuse-app -- -D warnings

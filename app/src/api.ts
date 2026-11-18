@@ -40,6 +40,13 @@ export type RefreshEvent =
 
 export interface Backend {
   kind: "app" | "preview";
+  /** Saved look-and-feel settings; untrusted, run them through `sanitize`. */
+  loadSettings(): Promise<unknown>;
+  saveSettings(settings: unknown): Promise<void>;
+  /** Toggle fullscreen; resolves to the new state. */
+  toggleFullscreen(): Promise<boolean>;
+  /** Open an https link outside the app (system browser). */
+  openExternal(url: string): Promise<void>;
   libraryStatus(): Promise<LibraryStatus>;
   topics(): Promise<TopicInfo[]>;
   slides(topic: string, limit?: number, offset?: number): Promise<Slide[]>;
@@ -60,6 +67,17 @@ interface PreviewData {
   topics: PreviewTopic[];
 }
 
+const SETTINGS_KEY = "lemuse.ui-settings";
+
+/** Only https links ever leave the app (ADR-0012). */
+export function isHttps(url: string): boolean {
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 function tauriBackend(): Backend {
@@ -72,6 +90,20 @@ function tauriBackend(): Backend {
     topics: () => invoke<TopicInfo[]>("topics"),
     slides: (topic, limit = 200, offset = 0) => invoke<Slide[]>("slides", { topic, limit, offset }),
     refreshNow: () => invoke<void>("refresh_now"),
+    loadSettings: () => invoke<unknown>("get_ui_settings"),
+    saveSettings: (settings) => invoke<void>("set_ui_settings", { settings }),
+    async toggleFullscreen() {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const w = getCurrentWindow();
+      const next = !(await w.isFullscreen());
+      await w.setFullscreen(next);
+      return next;
+    },
+    async openExternal(url) {
+      if (!isHttps(url)) return;
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(url);
+    },
     onRefresh(cb) {
       let unlisten: (() => void) | undefined;
       let cancelled = false;
@@ -116,6 +148,34 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
       ((await data()).topics.find((t) => t.name === topic)?.slides ?? []).slice(offset, offset + limit),
     refreshNow: async () => {
       throw new Error("Refresh runs in the desktop app; the preview shows a saved snapshot.");
+    },
+    // Browser storage is a per-viewer convenience here; it can be missing or
+    // throw (private windows), so every access is guarded.
+    loadSettings: async () => {
+      try {
+        return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}");
+      } catch {
+        return {};
+      }
+    },
+    saveSettings: async (settings) => {
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      } catch {
+        /* not persisted in this browser */
+      }
+    },
+    async toggleFullscreen() {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+      } catch {
+        /* the host page may refuse fullscreen */
+      }
+      return Boolean(document.fullscreenElement);
+    },
+    openExternal: async (url) => {
+      if (isHttps(url)) window.open(url, "_blank", "noopener,noreferrer");
     },
     onRefresh: () => () => {},
   };

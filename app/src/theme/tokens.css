@@ -1,0 +1,213 @@
+/*
+ * LeMuse design tokens (ADR-0012). The ONLY place visual values live.
+ * Components in styles.css read these; settings.ts overrides a few at runtime
+ * (--ui-scale, --radius-base, --rail-width, --stage-pad,
+ * --image-shadow-strength, --accent, --accent-ink). Inventory of what is and
+ * isn't tokenized, and why: docs/design/tokens.md.
+ *
+ * Order matters: base (Studio light) → Studio dark (system or chosen) → fixed
+ * presets → typeface sets. Equal specificity, so later blocks win.
+ */
+
+:root {
+  /* ---- Colour: Studio light (default) ---- */
+  --bg: #f2f3f1;
+  --panel: #fafaf8;
+  --panel-fill: var(--panel);
+  --stage: #e3e4e0;
+  --fg: #1b1c1e;
+  --muted: #64676d;
+  --line: #d9dbd7;
+  --accent: #3150c2;
+  --accent-ink: #ffffff;
+  --ok: #2f7a4f;
+  --error: #b23b2e;
+  --backdrop: rgb(10 12 16 / 0.45);
+  --shadow-rgb: 0 0 0;
+  color-scheme: light;
+
+  /* ---- Typography ---- */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-data: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  --ui-scale: 1;
+  --text-2xs: calc(10px * var(--ui-scale));
+  --text-xs: calc(12px * var(--ui-scale));
+  --text-sm: calc(13px * var(--ui-scale));
+  --text-md: calc(14px * var(--ui-scale));
+  --text-lg: calc(16px * var(--ui-scale));
+  --text-xl: calc(17px * var(--ui-scale));
+  --weight-medium: 500;
+  --weight-strong: 600;
+  --leading: 1.45;
+  --leading-tight: 1.3;
+  --tracking-display: -0.01em;
+  --tracking-label: 0.08em;
+
+  /* ---- Space (4 px rhythm, scales with the interface) ---- */
+  --space-1: calc(2px * var(--ui-scale));
+  --space-2: calc(4px * var(--ui-scale));
+  --space-3: calc(6px * var(--ui-scale));
+  --space-4: calc(8px * var(--ui-scale));
+  --space-5: calc(12px * var(--ui-scale));
+  --space-6: calc(16px * var(--ui-scale));
+  --space-7: calc(20px * var(--ui-scale));
+  --space-8: calc(24px * var(--ui-scale));
+
+  /* ---- Layout ---- */
+  --rail-width: 248px;
+  --stage-pad: 28px;
+  --stage-pad-narrow: 12px;
+  --control-size: calc(36px * var(--ui-scale));
+  --icon-size: calc(20px * var(--ui-scale));
+  --icon-stroke: 1.8;
+  --timer-height: 2px;
+  --dialog-width: 560px;
+  --dialog-max-height: min(85vh, 760px);
+  --measure: 44ch;
+
+  /* ---- Shape ---- */
+  --radius-base: 6px;
+  --radius-sm: calc(var(--radius-base) * 0.5);
+  --radius-md: var(--radius-base);
+  --radius-lg: calc(var(--radius-base) * 1.35);
+  --border: 1px solid var(--line);
+  --focus-ring: 2px solid var(--accent);
+  --focus-offset: 2px;
+
+  /* ---- Elevation ---- */
+  --image-shadow-strength: 0.6;
+  --image-shadow: 0 1px 2px rgb(var(--shadow-rgb) / calc(0.3 * var(--image-shadow-strength))),
+    0 8px 28px rgb(var(--shadow-rgb) / calc(0.24 * var(--image-shadow-strength)));
+  --dialog-shadow: 0 24px 64px rgb(var(--shadow-rgb) / 0.35);
+
+  /* ---- Motion ---- */
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* ---- Layers ---- */
+  --z-reveal: 5;
+  --z-drawer: 20;
+}
+
+/* Studio dark: follows the system unless light is chosen... */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121314;
+    --panel: #18191b;
+    --stage: #0b0c0d;
+    --fg: #e8e9ea;
+    --muted: #9a9da3;
+    --line: #2a2c2f;
+    --accent: #8fa5ff;
+    --accent-ink: #0d1330;
+    --ok: #7cc79a;
+    --error: #ff8f80;
+    --backdrop: rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+
+/* ...or when dark is chosen explicitly. */
+:root[data-theme="dark"] {
+  --bg: #121314;
+  --panel: #18191b;
+  --stage: #0b0c0d;
+  --fg: #e8e9ea;
+  --muted: #9a9da3;
+  --line: #2a2c2f;
+  --accent: #8fa5ff;
+  --accent-ink: #0d1330;
+  --ok: #7cc79a;
+  --error: #ff8f80;
+  --backdrop: rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+/* ---- Fixed presets (ignore light/dark) ---- */
+
+/* Gallery: black wall, bone accent; the chrome disappears around the work. */
+:root[data-preset="gallery"] {
+  --bg: #0d0d0d;
+  --panel: #141414;
+  --panel-fill: var(--panel);
+  --stage: #000000;
+  --fg: #ededed;
+  --muted: #8c8c8c;
+  --line: #232323;
+  --accent: #e8e2d6;
+  --accent-ink: #111111;
+  --ok: #9bd3ad;
+  --error: #ff9a8a;
+  --backdrop: rgb(0 0 0 / 0.7);
+  color-scheme: dark;
+}
+
+/* Blueprint: drafting-sheet blue with a yellow pencil accent. */
+:root[data-preset="blueprint"] {
+  --bg: #0f2a4a;
+  --panel: #12325a;
+  --panel-fill: var(--panel);
+  --stage: #0a2240;
+  --fg: #e6f0ff;
+  --muted: #9db6d8;
+  --line: #2b4f7d;
+  --accent: #ffd166;
+  --accent-ink: #1a1400;
+  --ok: #8fe3b0;
+  --error: #ffab9e;
+  --backdrop: rgb(4 14 28 / 0.6);
+  color-scheme: dark;
+}
+
+/* Paper: an off-white sketchbook page with ink-blue marks. */
+:root[data-preset="paper"] {
+  --bg: #f4f0e8;
+  --panel: #faf7f1;
+  --panel-fill: var(--panel);
+  --stage: #e8e2d6;
+  --fg: #23201b;
+  --muted: #6b6457;
+  --line: #ddd5c6;
+  --accent: #1f3a5f;
+  --accent-ink: #ffffff;
+  --ok: #2f6b45;
+  --error: #a3362a;
+  --backdrop: rgb(30 26 20 / 0.4);
+  color-scheme: light;
+}
+
+/* Millennium: brushed-silver chrome and aqua blue, for y2k and vintage tech. */
+:root[data-preset="millennium"] {
+  --bg: #dfe3ea;
+  --panel: #eef1f6;
+  --panel-fill: linear-gradient(180deg, #f8fafd 0%, #e4e9f0 100%);
+  --stage: #c9cfd9;
+  --fg: #10141c;
+  --muted: #4f5a6b;
+  --line: #b4bdca;
+  --accent: #2a6df4;
+  --accent-ink: #ffffff;
+  --ok: #1f7a4a;
+  --error: #b0302a;
+  --backdrop: rgb(20 30 50 / 0.4);
+  color-scheme: light;
+}
+
+/* ---- Typeface sets (system fonts only: the app works offline, no font downloads) ---- */
+
+:root[data-font="editorial"] {
+  --font-display: Georgia, Cambria, "Times New Roman", serif;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+
+:root[data-font="technical"] {
+  --font-ui: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --font-display: "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+
+:root[data-font="millennium"] {
+  --font-ui: Tahoma, Verdana, "Segoe UI", sans-serif;
+  --font-display: "Trebuchet MS", Tahoma, Verdana, sans-serif;
+}

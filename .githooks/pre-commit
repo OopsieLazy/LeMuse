@@ -24,3 +24,11 @@ if ! npm --prefix app run --silent validate:w3c; then
   echo "pre-commit: W3C validation failed; commit stopped." >&2
   exit 1
 fi
+
+# Layout test reuses the build and snapshot from the W3C step (headless Edge,
+# no network, no screenshots).
+echo "pre-commit: layout test (image never under the control bar, nothing off screen)"
+if ! (cd app && node scripts/layout-test.mjs); then
+  echo "pre-commit: layout test failed; commit stopped." >&2
+  exit 1
+fi

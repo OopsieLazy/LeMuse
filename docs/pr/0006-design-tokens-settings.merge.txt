@@ -1,0 +1,19 @@
+feat: design tokens, Settings panel, fullscreen, hideable controls (#6)
+
+What: tokenized design system, Settings panel (themes, layouts, sliders,
+toggles), fullscreen, hideable/auto-hiding control bar, layout test.
+Why: the owner's design list; Studio stays the default (ADR-0012).
+
+✅ All visual values in theme/tokens.css; inventory in docs/design/tokens.md
+✅ 5 themes, 5 layouts, 4 typeface sets, accent, 7 sliders, 6 toggles
+✅ Settings saved to ui.json via the core (sanitized on load)
+✅ F fullscreen, H hide bar, T topics drawer, comma Settings
+✅ Image never under the control bar: layout test 18 states x 5 sizes
+✅ Links open in the system browser (opener, https only)
+✅ Admin-review hook reads a work snapshot (review 0005 D-28/D-29)
+✅ W3C 0 errors; npm audit 0; tests pass
+⬜ Channel import by link; in-app peek browser (ADR-0012 Later)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0006-design-tokens-settings.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -24,6 +24,7 @@ pub const OBJECTS_DIR: &str = "objects";
 pub const THUMBS_DIR: &str = "thumbs";
 pub const VIEWS_DIR: &str = "views";
 pub const LOCK_FILE: &str = ".sync.lock";
+pub const UI_SETTINGS_FILE: &str = "ui.json";
 
 /// Resolved paths for one library root.
 #[derive(Debug, Clone)]
@@ -49,6 +50,10 @@ impl LibraryPaths {
     }
     pub fn lock(&self) -> PathBuf {
         self.root.join(LOCK_FILE)
+    }
+    /// Look-and-feel settings saved by the app (ADR-0012).
+    pub fn ui_settings(&self) -> PathBuf {
+        self.root.join(UI_SETTINGS_FILE)
     }
     pub fn config(&self) -> PathBuf {
         self.root.join(crate::config::CONFIG_FILE_NAME)

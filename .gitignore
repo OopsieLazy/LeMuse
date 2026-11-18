@@ -33,3 +33,6 @@ Thumbs.db
 app/preview/
 app/dist-preview/
 app/.snapshot/
+
+# Admin-review snapshot of uncommitted work (ADR-0011); never committed
+.claude/review/

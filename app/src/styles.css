@@ -1,52 +1,10 @@
-/* Layout: a topic rail on the left and a light-table stage on the right; the
-   caption strip under the image carries attribution, specs and controls.
-   The chrome stays quiet so the reference image is the only loud thing. */
-:root {
-  --bg: #f2f3f1;
-  --panel: #fafaf8;
-  --stage: #e3e4e0;
-  --fg: #1b1c1e;
-  --muted: #64676d;
-  --line: #d9dbd7;
-  --accent: #3150c2;
-  --accent-ink: #ffffff;
-  --ok: #2f7a4f;
-  --error: #b23b2e;
-  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-data: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121314;
-    --panel: #18191b;
-    --stage: #0b0c0d;
-    --fg: #e8e9ea;
-    --muted: #9a9da3;
-    --line: #2a2c2f;
-    --accent: #8fa5ff;
-    --accent-ink: #0d1330;
-    --ok: #7cc79a;
-    --error: #ff8f80;
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #121314;
-  --panel: #18191b;
-  --stage: #0b0c0d;
-  --fg: #e8e9ea;
-  --muted: #9a9da3;
-  --line: #2a2c2f;
-  --accent: #8fa5ff;
-  --accent-ink: #0d1330;
-  --ok: #7cc79a;
-  --error: #ff8f80;
-  color-scheme: dark;
-}
+/*
+ * Components. Every colour, size, space, radius, shadow, duration and layer
+ * comes from theme/tokens.css. Layout presets and toggles are attribute
+ * selectors on <html> set by settings.ts. Literal values left here are
+ * structural (0, 100%, 1fr, grid areas) or the 720 px breakpoint, which can't
+ * be a custom property inside a media query (docs/design/tokens.md).
+ */
 
 html,
 body,
@@ -58,55 +16,128 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.45 var(--font-ui);
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  line-height: var(--leading);
 }
 
-button {
+button,
+input {
   font: inherit;
   color: inherit;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
+
+/* ============ Shell and layout presets ============ */
 
 .app {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  grid-template-areas: "rail viewer";
   height: 100%;
 }
 
-/* ---- Topic rail ---- */
+:root[data-layout="rail-right"] .app {
+  grid-template-columns: minmax(0, 1fr) var(--rail-width);
+  grid-template-areas: "viewer rail";
+}
+
+:root[data-layout="rail-right"] .rail {
+  border-right: 0;
+  border-left: var(--border);
+}
+
+:root[data-layout="caption-top"] .stage {
+  flex-direction: column-reverse;
+}
+
+:root[data-layout="caption-top"] .caption {
+  display: flex;
+  flex-direction: column-reverse;
+  border-top: 0;
+  border-bottom: var(--border);
+}
+
+/* Cinema, Minimal and fullscreen-immersive: the image gets the whole window;
+   topics open as a drawer from the Topics button (T). */
+:root:is([data-layout="cinema"], [data-layout="minimal"], [data-immersive="true"]) .app {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "viewer";
+}
+
+:root:is([data-layout="cinema"], [data-layout="minimal"], [data-immersive="true"]) .rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: var(--z-drawer);
+  width: var(--rail-width);
+  box-shadow: var(--dialog-shadow);
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform var(--dur-med) var(--ease), visibility var(--dur-med);
+}
+
+:root:is([data-layout="cinema"], [data-layout="minimal"], [data-immersive="true"]) .app[data-rail-open="true"] .rail {
+  transform: none;
+  visibility: visible;
+}
+
+.only-overlay {
+  display: none;
+}
+
+:root:is([data-layout="cinema"], [data-layout="minimal"], [data-immersive="true"]) .only-overlay {
+  display: grid;
+}
+
+:root[data-layout="cinema"] {
+  --stage-pad: 0px;
+}
+
+:root[data-layout="minimal"] :is(.specs, .byline, .timer) {
+  display: none;
+}
+
+/* ============ Topic rail ============ */
 
 .rail {
+  grid-area: rail;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
+  background: var(--panel-fill);
+  border-right: var(--border);
 }
 
 .brand {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 18px 18px 12px;
+  gap: var(--space-4);
+  padding: var(--space-7) var(--space-7) var(--space-5);
 }
 
 .brand-name {
-  font: 600 17px/1 var(--font-display);
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+  letter-spacing: var(--tracking-display);
 }
 
 .brand-mode {
-  font: 500 10px/1 var(--font-data);
+  font-family: var(--font-data);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-label);
   color: var(--accent);
   border: 1px solid currentColor;
-  border-radius: 3px;
-  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
 }
 
 .topic-list {
@@ -115,18 +146,18 @@ button {
   overflow-y: auto;
   list-style: none;
   margin: 0;
-  padding: 4px 8px;
+  padding: var(--space-2) var(--space-4);
 }
 
 .topic {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-4);
   width: 100%;
-  padding: 7px 10px;
+  padding: var(--space-3) var(--space-5);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -142,25 +173,23 @@ button {
 }
 
 .topic-count {
-  font: 12px/1 var(--font-data);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   opacity: 0.7;
 }
 
 .rail-foot {
   display: grid;
-  gap: 6px;
-  padding: 12px 18px 18px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-7) var(--space-7);
+  border-top: var(--border);
+  font-size: var(--text-xs);
 }
 
 .rail-foot p {
   margin: 0;
-}
-
-.refresh-label {
-  color: var(--fg);
 }
 
 .refresh-label.tone-ok {
@@ -175,12 +204,17 @@ button {
   color: var(--muted);
 }
 
+.rail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+}
+
 .refresh {
-  justify-self: start;
-  margin-top: 4px;
-  padding: 6px 14px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  padding: var(--space-3) var(--space-6);
+  border: var(--border);
+  border-radius: var(--radius-md);
   background: var(--bg);
   cursor: pointer;
 }
@@ -190,9 +224,10 @@ button {
   color: var(--muted);
 }
 
-/* ---- Viewer ---- */
+/* ============ Viewer ============ */
 
 .viewer {
+  grid-area: viewer;
   min-width: 0;
   min-height: 0;
 }
@@ -204,13 +239,19 @@ button {
   margin: 0;
 }
 
+/* The image lives in a single grid cell whose size comes from the space left
+   by the control bar. It can shrink to fit but never overflow, so it can never
+   sit under the bar. */
 .frame {
-  flex: 1;
+  position: relative;
+  flex: 1 1 auto;
   min-height: 0;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
-  padding: 28px;
+  padding: var(--stage-pad);
   background: var(--stage);
+  overflow: hidden;
 }
 
 .frame img {
@@ -220,17 +261,31 @@ button {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 28px rgb(0 0 0 / 0.14);
+  box-shadow: var(--image-shadow);
+}
+
+:root[data-fit="cover"] .frame {
+  padding: 0;
+}
+
+:root[data-fit="cover"] .frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  box-shadow: none;
 }
 
 .empty {
-  max-width: 44ch;
+  max-width: var(--measure);
   text-align: center;
 }
 
 .empty-title {
-  margin: 0 0 6px;
-  font: 600 17px/1.3 var(--font-display);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-tight);
 }
 
 .empty-body {
@@ -238,15 +293,54 @@ button {
   color: var(--muted);
 }
 
-.caption {
+/* Floating "show controls" button, only while the bar is hidden. */
+.reveal {
+  position: absolute;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: var(--z-reveal);
+  display: none;
+  place-items: center;
+  width: var(--control-size);
+  height: var(--control-size);
+  padding: 0;
+  border: var(--border);
+  border-radius: var(--radius-lg);
   background: var(--panel);
-  border-top: 1px solid var(--line);
+  opacity: 0.4;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.reveal:hover,
+.reveal:focus-visible {
+  opacity: 1;
+}
+
+:root[data-controls="hidden"] .reveal {
+  display: grid;
+}
+
+:root[data-controls="hidden"] .caption {
+  display: none;
+}
+
+/* ============ Control bar ============ */
+
+.caption {
+  flex: none;
+  background: var(--panel-fill);
+  border-top: var(--border);
 }
 
 .timer {
-  height: 2px;
+  height: var(--timer-height);
   background: var(--line);
   overflow: hidden;
+}
+
+:root[data-timer="false"] .timer {
+  display: none;
 }
 
 .timer-fill {
@@ -275,23 +369,46 @@ button {
     animation: none;
     transform: scaleX(0);
   }
+
+  .rail,
+  .reveal {
+    transition: none;
+  }
 }
 
+/* Flex with wrapping (not a fixed grid), so when the window or the interface
+   size leaves too little room, specs and controls drop to a second row
+   instead of pushing buttons off screen. */
 .caption-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 24px;
-  padding: 12px 20px 14px;
+  gap: var(--space-4) var(--space-8);
+  padding: var(--space-5) var(--space-7) var(--space-6);
 }
 
 .meta {
+  flex: 1 1 calc(220px * var(--ui-scale));
   min-width: 0;
+}
+
+.specs {
+  flex: none;
+}
+
+/* May shrink to the row and wrap its buttons onto a second line. */
+.controls {
+  flex: 0 1 auto;
+  max-width: 100%;
+  flex-wrap: wrap;
 }
 
 .slide-title {
   margin: 0;
-  font: 600 16px/1.3 var(--font-display);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-tight);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -300,14 +417,18 @@ button {
 .byline {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  margin: 3px 0 0;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-1) 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .creator {
   color: var(--fg);
+}
+
+:root[data-creator="false"] .creator {
+  display: none;
 }
 
 .source-link {
@@ -321,48 +442,62 @@ button {
 
 .specs {
   display: flex;
-  gap: 20px;
+  gap: var(--space-7);
   margin: 0;
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
+}
+
+:root[data-specs="false"] .specs {
+  display: none;
 }
 
 .specs dt {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-label);
 }
 
 .specs dd {
-  margin: 2px 0 0;
+  margin: var(--space-1) 0 0;
   white-space: nowrap;
 }
 
 .controls {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.controls-sep {
+  width: 1px;
+  height: var(--icon-size);
+  margin: 0 var(--space-2);
+  background: var(--line);
 }
 
 .icon-btn {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: var(--control-size);
+  height: var(--control-size);
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   cursor: pointer;
 }
 
-.icon-btn svg {
-  width: 20px;
-  height: 20px;
+.icon-btn svg,
+.reveal svg,
+.settings-close svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: var(--icon-stroke);
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -383,7 +518,6 @@ button {
 
 .icon-btn.primary svg {
   fill: currentColor;
-  stroke-width: 2.2;
 }
 
 .icon-btn:disabled {
@@ -391,28 +525,242 @@ button {
   opacity: 0.4;
 }
 
-/* ---- Narrow windows and phones: topics become a scrolling strip ---- */
+/* ============ Settings dialog ============ */
+
+.settings {
+  width: min(var(--dialog-width), calc(100vw - 2 * var(--space-6)));
+  max-height: var(--dialog-max-height);
+  padding: 0;
+  overflow: hidden;
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: var(--dialog-shadow);
+}
+
+/* Centred and capped to the window whether opened with showModal() (app) or
+   rendered open (snapshots); the body scrolls inside. */
+.settings[open] {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings::backdrop {
+  background: var(--backdrop);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.settings-head,
+.settings-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-7);
+}
+
+.settings-head {
+  border-bottom: var(--border);
+}
+
+.settings-foot {
+  border-top: var(--border);
+}
+
+.settings-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-strong);
+}
+
+.settings-close {
+  display: grid;
+  place-items: center;
+  width: var(--control-size);
+  height: var(--control-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-7);
+  overflow-y: auto;
+}
+
+.settings-section {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.settings-section h3 {
+  margin: 0;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-strong);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--muted);
+}
+
+.choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice legend {
+  margin-bottom: var(--space-3);
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.choice-option {
+  position: relative;
+}
+
+.choice-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.choice-option span {
+  display: block;
+  padding: var(--space-3) var(--space-5);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.choice-option input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.choice-option input:focus-visible + span {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.field {
+  font-size: var(--text-sm);
+}
+
+.range-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-5);
+  align-items: center;
+}
+
+.range-field input {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.range-field output {
+  grid-row: 1;
+  grid-column: 2;
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.check-field,
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.check-field input {
+  accent-color: var(--accent);
+}
+
+.color-field input {
+  width: calc(var(--control-size) * 1.2);
+  height: var(--control-size);
+  padding: 0;
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.text-btn,
+.primary-btn {
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.text-btn {
+  border: var(--border);
+  background: transparent;
+}
+
+.text-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.primary-btn {
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ============ Narrow windows and phones (docked layouts) ============ */
 
 @media (max-width: 720px) {
-  .app {
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "rail"
+      "viewer";
   }
 
-  .rail {
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .rail {
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-left: 0;
+    border-bottom: var(--border);
+  }
+
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .topic-list {
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    padding: 0 var(--space-5) var(--space-4);
   }
 
   .brand {
-    padding: 12px 16px 6px;
-  }
-
-  .topic-list {
-    display: flex;
-    gap: 4px;
-    overflow-x: auto;
-    padding: 0 12px 10px;
+    padding: var(--space-5) var(--space-6) var(--space-3);
   }
 
   .topic {
@@ -424,17 +772,20 @@ button {
     display: none;
   }
 
+  .caption-settings {
+    display: grid;
+  }
+
   .frame {
-    padding: 12px;
+    padding: min(var(--stage-pad), var(--stage-pad-narrow));
   }
 
   .caption-body {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px 16px;
-    padding: 10px 16px 12px;
+    gap: var(--space-4) var(--space-6);
+    padding: var(--space-4) var(--space-6) var(--space-5);
   }
 
   .meta {
-    grid-column: 1 / -1;
+    flex-basis: 100%;
   }
 }

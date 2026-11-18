@@ -120,6 +120,18 @@ fn slides(topic: String, limit: u32, offset: u32) -> Result<Vec<Slide>, String> 
         .map_err(|e| e.to_string())
 }
 
+/// The Settings panel's saved look and feel (ADR-0012). Opaque JSON; the
+/// UI validates and clamps every value it reads.
+#[tauri::command]
+fn get_ui_settings() -> serde_json::Value {
+    lemuse_core::ui_settings::load(&library_paths())
+}
+
+#[tauri::command]
+fn set_ui_settings(settings: serde_json::Value) -> Result<(), String> {
+    lemuse_core::ui_settings::save(&library_paths(), &settings).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn search(query: String) -> Result<Vec<i64>, String> {
     let catalog = Catalog::open(&library_paths().catalog()).map_err(|e| e.to_string())?;
@@ -163,6 +175,7 @@ fn spawn_refresh(app: AppHandle, flag: Arc<AtomicBool>, trigger: Trigger) {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .manage(Refreshing::default())
         .setup(|app| {
             // The window is already up from the cached catalog; the launch
@@ -181,7 +194,9 @@ pub fn run() {
             topics,
             slides,
             search,
-            refresh_now
+            refresh_now,
+            get_ui_settings,
+            set_ui_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running LeMuse");
