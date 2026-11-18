@@ -14,18 +14,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-  pr-title:
-    # Squash merges use the PR title as the commit message, so lint it (ADR-0006).
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-    steps:
-      - uses: amannn/action-semantic-pull-request@e32d7e603df1aa1ba07e981f2a23455dee596825 # v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# The PR-title check lives in pr-title.yml so it also re-runs when a title is
+# edited, without re-running this whole workflow (review 0011).
 
+jobs:
   security:
     # Security is the first gate (ADR-0011): secrets, then vulnerable dependencies.
     runs-on: ubuntu-latest
@@ -41,10 +33,20 @@ jobs:
           node-version: 20
       - name: Secret + personal-data scan (repo scanner)
         run: node scripts/scan-secrets.mjs --all
+      # The gitleaks binary itself, not gitleaks-action: the action computed
+      # "<first commit>^..HEAD" on the first push of main and scanned nothing
+      # (review 0011 A-52). Pinned version, checked against the checksum
+      # published with that release; scans every commit of the full clone.
       - name: Secret scan (gitleaks, full history)
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.28.0
+          GITLEAKS_SHA256: a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
+        run: |
+          curl -sSLf -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --verbose --no-banner --exit-code 1 .
       - name: npm audit (high and above fails; reviewed, expiring exceptions only)
         run: npm ci --ignore-scripts --prefix app && node scripts/npm-audit-gate.mjs app
       - name: cargo audit (RustSec advisories)
