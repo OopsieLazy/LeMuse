@@ -21,6 +21,7 @@ const VIEWPORTS = [
   [1280, 800],
   [1024, 640],
   [800, 600],
+  [768, 1024],
   [400, 800],
 ];
 
@@ -84,7 +85,7 @@ const measure = String(async function run() {
       const outside = (r) =>
         r.right > win.innerWidth + 1 || r.bottom > win.innerHeight + 1 || r.left < -1 || r.top < -1;
       const controls =
-        ".controls button, .page-select, .reveal, .rail-actions button, .brand .icon-btn, .playlist-menu :is(button, input, select), .mini-bar button, .mini-burger, .mini-menu button";
+        ".controls button, .page-select, .reveal, .rail-actions button, .brand .icon-btn, .playlist-menu :is(button, input, select), .mini-bar button, .mini-burger, .mini-menu button, .compact-burger";
       for (const b of doc.querySelectorAll(controls)) {
         if (!visible(b, win)) continue;
         if (b.closest(".rail") && win.getComputedStyle(b.closest(".rail")).visibility === "hidden") continue;
@@ -94,6 +95,13 @@ const measure = String(async function run() {
       for (const dialog of doc.querySelectorAll("dialog[open]")) {
         if (outside(dialog.getBoundingClientRect()))
           fail(`dialog "${dialog.getAttribute("aria-labelledby")}" doesn't fit the window`);
+      }
+      // Compact windows (tablets, small windows): with the bar tucked away the
+      // image area must fill the window, like the mini player.
+      if ((w <= 1024 || h <= 560) && frameEl && !visible(caption, win) && !doc.querySelector("dialog[open]")) {
+        const f = frameEl.getBoundingClientRect();
+        if (f.width < win.innerWidth * 0.95 || f.height < win.innerHeight * 0.95)
+          fail(`compact: image area is only ${Math.round(f.width)}x${Math.round(f.height)}`);
       }
       for (const menu of doc.querySelectorAll(".playlist-menu")) {
         if (visible(menu, win) && outside(menu.getBoundingClientRect())) fail(`menu "${menu.id}" leaves the window`);

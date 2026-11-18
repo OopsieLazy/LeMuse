@@ -82,6 +82,7 @@ export function App() {
   // Mini player (ADR-0016) and the short "Link copied" note.
   const [mini, setMini] = useState(false);
   const [miniBarOpen, setMiniBarOpen] = useState(false);
+  const [compactBarOpen, setCompactBarOpen] = useState(false);
   const [miniMenuOpen, setMiniMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | undefined>();
   // Per image: how many stored fallback sizes have been tried.
@@ -178,8 +179,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    applyToDocument(settings, { fullscreen, idle, mini });
-  }, [settings, fullscreen, idle, mini]);
+    applyToDocument(settings, { fullscreen, idle, mini, compactBar: compactBarOpen });
+  }, [settings, fullscreen, idle, mini, compactBarOpen]);
 
   useEffect(() => {
     if (!loaded.current) return;
@@ -621,6 +622,12 @@ export function App() {
         onRelated={openRelated}
         mini={mini}
         onToggleMini={toggleMini}
+        compactBarOpen={compactBarOpen}
+        onToggleCompactBar={() => {
+          // A tap with the drawer open just closes the drawer.
+          if (railOpen) setRailOpen(false);
+          else setCompactBarOpen((o) => !o);
+        }}
         miniBarOpen={miniBarOpen}
         miniMenuOpen={miniMenuOpen}
         onToggleMiniBar={() => {

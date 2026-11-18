@@ -1253,60 +1253,6 @@ ul.channel-list {
     max-height: var(--sheet-max-height);
   }
 
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .app {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      "rail"
-      "viewer";
-  }
-
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .rail {
-    border-right: 0;
-    border-left: 0;
-    border-bottom: var(--border);
-  }
-
-  /* Docked rail on a narrow window: one horizontal strip of All, topics and
-     playlists; section headings are dropped. */
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .rail-scroll {
-    display: flex;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0 var(--space-3) var(--space-4);
-  }
-
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .topic-list {
-    display: flex;
-    gap: var(--space-2);
-    padding: 0 var(--space-2);
-  }
-
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) :is(.rail-heading, .rail-hint) {
-    display: none;
-  }
-
-  .brand {
-    padding: var(--space-5) var(--space-6) var(--space-3);
-  }
-
-  .topic {
-    white-space: nowrap;
-    width: auto;
-  }
-
-  .rail-foot {
-    display: none;
-  }
-
-  .caption-settings {
-    display: grid;
-  }
-
-  .frame {
-    padding: min(var(--stage-pad), var(--stage-pad-narrow));
-  }
-
   .caption-body {
     gap: var(--space-4) var(--space-6);
     padding: var(--space-4) var(--space-6) var(--space-5);
@@ -1314,5 +1260,132 @@ ul.channel-list {
 
   .meta {
     flex-basis: 100%;
+  }
+}
+
+/* ============ Compact: tablets and small windows ============
+   Like the mini player as a window shrinks: the image gets the window,
+   topics open as a ☰ drawer, and the control bar stays hidden until the
+   image is tapped. The bar never covers the image (owner rule, D-33);
+   while it's hidden a small credit stays on the image (attribution). */
+
+.compact-tap,
+.compact-burger,
+.compact-credit {
+  display: none;
+}
+
+.compact-tap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.compact-tap:focus-visible {
+  outline-offset: calc(-1 * var(--focus-offset) - 2px);
+}
+
+.compact-burger {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: var(--z-menu);
+  background: var(--panel-fill);
+}
+
+.compact-credit {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 2;
+  max-width: calc(100% - 2 * var(--space-3));
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--panel-fill);
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+:root[data-mini="true"] .compact-credit {
+  display: block;
+}
+
+@media (max-width: 1024px), (max-height: 560px) {
+  :root:not([data-mini="true"]) .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "viewer";
+  }
+
+  :root:not([data-mini="true"]) .rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: var(--z-drawer);
+    width: min(var(--rail-width), 85vw);
+    border-left: 0;
+    border-right: var(--border);
+    box-shadow: var(--dialog-shadow);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform var(--dur-med) var(--ease), visibility var(--dur-med);
+  }
+
+  :root:not([data-mini="true"]) .app[data-rail-open="true"] .rail {
+    transform: none;
+    visibility: visible;
+  }
+
+  :root:not([data-mini="true"]) :is(.compact-burger, .caption-settings) {
+    display: grid;
+  }
+
+  :root:not([data-mini="true"]) .compact-tap {
+    display: block;
+  }
+
+  /* The ☰ button replaces the bar's Topics button; tapping replaces Reveal. */
+  :root:not([data-mini="true"]) :is(.only-overlay:not(.caption-settings), .reveal) {
+    display: none;
+  }
+
+  :root[data-compact-bar="hidden"]:not([data-mini="true"]) .caption {
+    display: none;
+  }
+
+  :root[data-compact-bar="hidden"]:not([data-mini="true"]) .compact-credit {
+    display: block;
+  }
+
+  :root:not([data-mini="true"]) .frame {
+    padding: min(var(--stage-pad), var(--space-2));
+  }
+
+  /* A slimmer bar: title, credit and controls; no specs or tags. */
+  :root:not([data-mini="true"]) :is(.specs, .slide-tags) {
+    display: none;
+  }
+
+  :root:not([data-mini="true"]) .caption-body {
+    gap: var(--space-2) var(--space-5);
+    padding: var(--space-3) var(--space-5);
+  }
+
+  :root:not([data-mini="true"]) .slide-title {
+    font-size: var(--text-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail {
+    transition: none;
   }
 }

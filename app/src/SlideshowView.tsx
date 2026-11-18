@@ -74,6 +74,9 @@ export interface SlideshowViewProps {
   /** The small always-on-top player (ADR-0016). */
   mini?: boolean;
   onToggleMini?: () => void;
+  /** Compact windows: whether the tapped-open bottom bar is showing. */
+  compactBarOpen?: boolean;
+  onToggleCompactBar?: () => void;
   /** Mini player: bottom bar (tap the image) and the ☰ menu. */
   miniBarOpen?: boolean;
   miniMenuOpen?: boolean;
@@ -352,6 +355,36 @@ export function SlideshowView(p: SlideshowViewProps) {
             >
               <Icon d={ICONS.chevronUp} />
             </button>
+            {/* Compact windows (CSS decides when): tap the image for the bar,
+                ☰ for topics, and a small credit while the bar is hidden. */}
+            {!p.mini && (
+              <>
+                <button
+                  type="button"
+                  className="compact-tap"
+                  onClick={p.onToggleCompactBar}
+                  aria-expanded={Boolean(p.compactBarOpen)}
+                  aria-label={p.compactBarOpen ? "Hide controls" : "Show controls"}
+                />
+                <button
+                  type="button"
+                  className="icon-btn compact-burger"
+                  onClick={p.onToggleRail}
+                  aria-expanded={Boolean(p.railOpen)}
+                  aria-controls="topic-rail"
+                  aria-label="Topics and playlists"
+                  title="Topics and playlists (T)"
+                >
+                  <Icon d={ICONS.topics} />
+                </button>
+              </>
+            )}
+            {slide && !(p.mini && p.miniBarOpen) && (
+              <p className="compact-credit">
+                {slide.creator ? `${slide.creator} · ` : ""}
+                {sourceName(slide)}
+              </p>
+            )}
             {p.toast && (
               <p className="toast" role="status">
                 {p.toast}

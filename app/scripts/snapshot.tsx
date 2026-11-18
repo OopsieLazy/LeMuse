@@ -122,6 +122,8 @@ interface State {
   library?: Partial<LibraryPanelProps>;
   discover?: Partial<DiscoverPanelProps>;
   mini?: boolean;
+  /** Compact windows: the tapped-open bar. */
+  compactBar?: boolean;
 }
 
 // A tall portrait image is the case that used to run under the control bar.
@@ -184,6 +186,10 @@ export const STATES: Record<string, State> = {
   "blueprint-technical": { props: base, settings: { preset: "blueprint", font: "technical", uiScale: 1.2 } },
   "millennium-cover": { props: base, settings: { preset: "millennium", font: "millennium", fit: "cover" } },
   "settings-open": { props: base, settings: { accent: "#c2410c" }, panel: true },
+  // ---- Compact windows (tablets, small windows); wide sizes are unaffected ----
+  "compact-bar": { props: { ...base, compactBarOpen: true }, compactBar: true },
+  "compact-drawer": { props: { ...base, railOpen: true } },
+  "compact-bar-menu": { props: { ...base, compactBarOpen: true, playlistMenuOpen: true }, compactBar: true },
   // ---- ADR-0016: mini player, Copy link ----
   mini: { props: { ...base, mini: true }, mini: true },
   "mini-bar": { props: { ...base, mini: true, miniBarOpen: true }, mini: true },
@@ -253,7 +259,11 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").repl
 
 function documentFor(name: string, st: State, extraHead = "") {
   const settings = sanitize({ ...DEFAULTS, ...st.settings });
-  const { attrs, style } = rootAttributes(settings, { fullscreen: st.fullscreen, mini: st.mini });
+  const { attrs, style } = rootAttributes(settings, {
+    fullscreen: st.fullscreen,
+    mini: st.mini,
+    compactBar: st.compactBar,
+  });
   const attrText = Object.entries(attrs)
     .map(([k, v]) => ` ${k}="${esc(v)}"`)
     .join("");

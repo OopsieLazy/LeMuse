@@ -149,7 +149,7 @@ export function inkFor(hex: string): string {
  */
 export function rootAttributes(
   s: UiSettings,
-  state: { fullscreen?: boolean; idle?: boolean; mini?: boolean } = {},
+  state: { fullscreen?: boolean; idle?: boolean; mini?: boolean; compactBar?: boolean } = {},
 ) {
   const attrs: Record<string, string> = {
     "data-preset": s.preset,
@@ -162,6 +162,8 @@ export function rootAttributes(
     "data-specs": String(s.showSpecs),
     "data-creator": String(s.showCreator),
     "data-mini": state.mini ? "true" : "false",
+    // Compact windows (tablets, small windows) hide the bar until a tap.
+    "data-compact-bar": state.compactBar ? "shown" : "hidden",
   };
   if (s.mode !== "system") attrs["data-theme"] = s.mode;
   const style: Record<string, string> = {
@@ -181,7 +183,7 @@ export function rootAttributes(
 /** Apply settings to the live document. */
 export function applyToDocument(
   s: UiSettings,
-  state: { fullscreen?: boolean; idle?: boolean; mini?: boolean } = {},
+  state: { fullscreen?: boolean; idle?: boolean; mini?: boolean; compactBar?: boolean } = {},
 ) {
   const root = document.documentElement;
   const { attrs, style } = rootAttributes(s, state);
