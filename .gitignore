@@ -32,6 +32,7 @@ Thumbs.db
 # UI preview + validation outputs (ADR-0009); regenerate with npm scripts
 app/preview/
 app/dist-preview/
+app/dist-dashboard/
 app/.snapshot/
 
 # Admin-review snapshot of uncommitted work (ADR-0011); never committed

@@ -186,6 +186,8 @@ export const STATES: Record<string, State> = {
   "settings-open": { props: base, settings: { accent: "#c2410c" }, panel: true },
   // ---- ADR-0016: mini player, Copy link ----
   mini: { props: { ...base, mini: true }, mini: true },
+  "mini-bar": { props: { ...base, mini: true, miniBarOpen: true }, mini: true },
+  "mini-menu": { props: { ...base, mini: true, miniMenuOpen: true }, mini: true },
   "mini-tall": { props: { ...base, mini: true, slides: [tall], index: 0 }, mini: true },
   "mini-empty": { props: { ...base, mini: true, slides: [], index: 0, total: 0 }, mini: true },
   "link-copied": { props: { ...base, toast: "Link copied" } },

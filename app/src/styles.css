@@ -1149,23 +1149,62 @@ ul.channel-list {
   padding: 0;
 }
 
+/* Covers the image so a tap or click toggles the bar; transparent. */
+.mini-tap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mini-tap:focus-visible {
+  outline-offset: calc(-1 * var(--focus-offset) - 2px);
+}
+
+.mini-burger {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-menu);
+  background: var(--panel-fill);
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease);
+}
+
+.frame:hover .mini-burger,
+.mini-burger:focus-visible,
+.mini-burger[data-shown="true"] {
+  opacity: 1;
+}
+
+.mini-menu {
+  position: absolute;
+  top: calc(var(--space-2) + var(--control-size) + var(--space-2));
+  left: var(--space-2);
+  bottom: var(--space-2);
+  z-index: var(--z-menu);
+  width: min(var(--menu-width), calc(100% - 2 * var(--space-2)));
+  overflow-y: auto;
+  padding: var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--dialog-shadow);
+}
+
 .mini-bar {
   position: absolute;
-  inset: 0 0 auto;
+  inset: auto 0 0;
   z-index: var(--z-menu);
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--panel-fill);
-  border-bottom: var(--border);
-  opacity: 0;
-  transition: opacity var(--dur-med) var(--ease);
-}
-
-.frame:hover .mini-bar,
-.mini-bar:focus-within {
-  opacity: 1;
+  border-top: var(--border);
 }
 
 .mini-title {
@@ -1194,7 +1233,7 @@ ul.channel-list {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mini-bar {
+  .mini-burger {
     transition: none;
   }
 }
@@ -1214,7 +1253,7 @@ ul.channel-list {
     max-height: var(--sheet-max-height);
   }
 
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .app {
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
@@ -1222,7 +1261,7 @@ ul.channel-list {
       "viewer";
   }
 
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .rail {
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .rail {
     border-right: 0;
     border-left: 0;
     border-bottom: var(--border);
@@ -1230,20 +1269,20 @@ ul.channel-list {
 
   /* Docked rail on a narrow window: one horizontal strip of All, topics and
      playlists; section headings are dropped. */
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .rail-scroll {
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .rail-scroll {
     display: flex;
     overflow-x: auto;
     overflow-y: hidden;
     padding: 0 var(--space-3) var(--space-4);
   }
 
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .topic-list {
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .topic-list {
     display: flex;
     gap: var(--space-2);
     padding: 0 var(--space-2);
   }
 
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) :is(.rail-heading, .rail-hint) {
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) :is(.rail-heading, .rail-hint) {
     display: none;
   }
 

@@ -74,6 +74,11 @@ export interface SlideshowViewProps {
   /** The small always-on-top player (ADR-0016). */
   mini?: boolean;
   onToggleMini?: () => void;
+  /** Mini player: bottom bar (tap the image) and the ☰ menu. */
+  miniBarOpen?: boolean;
+  miniMenuOpen?: boolean;
+  onToggleMiniBar?: () => void;
+  onToggleMiniMenu?: () => void;
   /** Copy the current image's links. */
   onCopyLink?: () => void;
   /** A short confirmation, e.g. "Link copied". */
@@ -353,37 +358,92 @@ export function SlideshowView(p: SlideshowViewProps) {
               </p>
             )}
             {p.mini && (
-              // The bar's background drags the borderless window; buttons stay clickable.
-              <div className="mini-bar" data-tauri-drag-region="true" role="group" aria-label="Mini player">
-                <span className="mini-title" data-tauri-drag-region="true">
-                  {slide ? slide.title || "Untitled" : p.activeLabel}
-                </span>
-                <button type="button" className="icon-btn" onClick={p.onPrev} disabled={!slide} aria-label="Previous image">
-                  <Icon d={ICONS.prev} />
-                </button>
+              <>
+                {/* Tap the image to show or hide the bottom bar (ADR-0016, v2). */}
                 <button
                   type="button"
-                  className="icon-btn"
-                  onClick={p.onTogglePlay}
-                  disabled={!slide}
-                  aria-pressed={p.playing}
-                  aria-label={p.playing ? "Pause slideshow" : "Play slideshow"}
-                >
-                  <Icon d={p.playing ? ICONS.pause : ICONS.play} />
-                </button>
-                <button type="button" className="icon-btn" onClick={p.onNext} disabled={!slide} aria-label="Next image">
-                  <Icon d={ICONS.next} />
-                </button>
+                  className="mini-tap"
+                  onClick={p.onToggleMiniBar}
+                  aria-expanded={Boolean(p.miniBarOpen)}
+                  aria-controls="mini-bar"
+                  aria-label={p.miniBarOpen ? "Hide controls" : "Show controls"}
+                />
                 <button
                   type="button"
-                  className="icon-btn"
-                  onClick={p.onToggleMini}
-                  aria-label="Back to the full window"
-                  title="Full window (M)"
+                  className="icon-btn mini-burger"
+                  onClick={p.onToggleMiniMenu}
+                  aria-expanded={Boolean(p.miniMenuOpen)}
+                  aria-controls="mini-menu"
+                  aria-label="Topics and playlists"
+                  title="Topics and playlists"
+                  data-shown={p.miniBarOpen || p.miniMenuOpen ? "true" : "false"}
                 >
-                  <Icon d={ICONS.expand} />
+                  <Icon d={ICONS.topics} />
                 </button>
-              </div>
+                {p.miniMenuOpen && (
+                  <nav className="mini-menu" id="mini-menu" aria-label="Topics and playlists">
+                    <ul className="topic-list">
+                      <RailItem
+                        label="All"
+                        count={p.allCount}
+                        current={current === "all"}
+                        onClick={() => p.onSelect?.({ kind: "all" })}
+                      />
+                      {p.topics.map((t) => (
+                        <RailItem
+                          key={t.name}
+                          label={t.name}
+                          count={t.slides}
+                          current={current === sourceKey({ kind: "topic", name: t.name })}
+                          onClick={() => p.onSelect?.({ kind: "topic", name: t.name })}
+                        />
+                      ))}
+                      {p.playlists.map((l) => (
+                        <RailItem
+                          key={`p${l.id}`}
+                          label={l.name}
+                          count={l.items}
+                          current={current === sourceKey({ kind: "playlist", id: l.id })}
+                          onClick={() => p.onSelect?.({ kind: "playlist", id: l.id })}
+                        />
+                      ))}
+                    </ul>
+                  </nav>
+                )}
+                {p.miniBarOpen && (
+                  // The bar's background drags the borderless window; buttons stay clickable.
+                  <div className="mini-bar" id="mini-bar" data-tauri-drag-region="true" role="group" aria-label="Mini player">
+                    <span className="mini-title" data-tauri-drag-region="true">
+                      {slide ? slide.title || "Untitled" : p.activeLabel}
+                    </span>
+                    <button type="button" className="icon-btn" onClick={p.onPrev} disabled={!slide} aria-label="Previous image">
+                      <Icon d={ICONS.prev} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      onClick={p.onTogglePlay}
+                      disabled={!slide}
+                      aria-pressed={p.playing}
+                      aria-label={p.playing ? "Pause slideshow" : "Play slideshow"}
+                    >
+                      <Icon d={p.playing ? ICONS.pause : ICONS.play} />
+                    </button>
+                    <button type="button" className="icon-btn" onClick={p.onNext} disabled={!slide} aria-label="Next image">
+                      <Icon d={ICONS.next} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      onClick={p.onToggleMini}
+                      aria-label="Back to the full window"
+                      title="Full window (M)"
+                    >
+                      <Icon d={ICONS.expand} />
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <figcaption className="caption">

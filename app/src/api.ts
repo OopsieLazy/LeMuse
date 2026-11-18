@@ -209,8 +209,24 @@ interface PreviewTopic {
 interface PreviewData {
   blocks: number;
   topics: PreviewTopic[];
+  /** Playlists from the catalog (`lemuse serve`, `lemuse preview-data`). */
+  playlists?: { id: number; name: string; slides: Slide[] }[];
   vocabulary?: Vocabulary;
 }
+
+/**
+ * The dashboard token from the page address (`#token=…`, ADR-0019). The
+ * fragment never leaves the browser; the token goes only in an
+ * Authorization header to the same origin.
+ */
+function dashboardToken(): string | null {
+  if (typeof location === "undefined") return null;
+  const t = new URLSearchParams(location.hash.slice(1)).get("token");
+  return t && /^[A-Za-z0-9_-]{32,128}$/.test(t) ? t : null;
+}
+
+/** How often the dashboard checks for new images (ms). */
+const DASHBOARD_POLL_MS = 5 * 60 * 1000;
 
 const SETTINGS_KEY = "lemuse.ui-settings";
 
@@ -239,8 +255,8 @@ export function isOpenable(url: string): boolean {
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /** Mini player sizes (logical px). MAIN_MIN mirrors tauri.conf.json. */
-const MINI_DEFAULT = { width: 480, height: 300 };
-const MINI_MIN = { width: 240, height: 150 };
+const MINI_DEFAULT = { width: 360, height: 225 };
+const MINI_MIN = { width: 200, height: 125 };
 const MAIN_MIN = { width: 720, height: 480 };
 let restore: (MiniBounds & { maximized: boolean }) | null = null;
 
@@ -351,21 +367,35 @@ function tauriBackend(): Backend {
 
 /** Preview data: inline `<script id="preview-data">` (artifact) or a JSON file next to the page. */
 export function previewBackend(load?: () => Promise<PreviewData>): Backend {
-  let cache: Promise<PreviewData> | undefined;
-  const data = () =>
-    (cache ??= load
-      ? load()
-      : (async () => {
-          const inline = document.getElementById("preview-data");
-          if (inline?.textContent) return JSON.parse(inline.textContent) as PreviewData;
-          const r = await fetch("./preview-data.json");
-          if (!r.ok) throw new Error("No preview data. Run `npm run preview:data` first.");
-          return (await r.json()) as PreviewData;
-        })());
-  // Preview playlists live in memory for this page view only; the desktop
-  // app keeps them in the catalog.
+  const token = load ? null : dashboardToken();
+  const auth = token ? { Authorization: `Bearer ${token}` } : undefined;
+  // Preview playlists live in memory for this page view; they start from the
+  // catalog's when the data carries them (the desktop app keeps the real ones).
   const lists = new Map<number, { name: string; ids: number[] }>();
   let nextId = 1;
+  let cache: Promise<PreviewData> | undefined;
+  const fetchData = async (): Promise<PreviewData> => {
+    if (load) return load();
+    if (token) {
+      const r = await fetch("./api/v1/preview-data?per_topic=300", { headers: auth });
+      if (!r.ok) throw new Error(r.status === 401 ? "The dashboard address has an old token: copy the new one from lemuse serve." : `Dashboard error ${r.status}`);
+      return (await r.json()) as PreviewData;
+    }
+    const inline = document.getElementById("preview-data");
+    if (inline?.textContent) return JSON.parse(inline.textContent) as PreviewData;
+    const r = await fetch("./preview-data.json");
+    if (!r.ok) throw new Error("No preview data. Run `npm run preview:data` first.");
+    return (await r.json()) as PreviewData;
+  };
+  const data = () =>
+    (cache ??= fetchData().then((d) => {
+      lists.clear();
+      for (const p of d.playlists ?? []) {
+        lists.set(p.id, { name: p.name, ids: p.slides.map((s) => s.block_id) });
+        nextId = Math.max(nextId, p.id + 1);
+      }
+      return d;
+    }));
   const allSlides = async () => {
     const seen = new Set<number>();
     return (await data()).topics
@@ -377,7 +407,9 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     if (source.kind === "all") list = await allSlides();
     else if (source.kind === "topic") list = (await data()).topics.find((t) => t.name === source.name)?.slides ?? [];
     else {
-      const byId = new Map((await allSlides()).map((s) => [s.block_id, s]));
+      const d = await data();
+      const known = [...(await allSlides()), ...(d.playlists ?? []).flatMap((p) => p.slides)];
+      const byId = new Map(known.map((s) => [s.block_id, s]));
       list = (lists.get(source.id)?.ids ?? []).flatMap((id) => byId.get(id) ?? []);
     }
     return list.filter((s) => {
@@ -396,7 +428,7 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
   return {
     kind: "preview",
     libraryStatus: async () => ({
-      root: "Preview (exported catalog metadata)",
+      root: token ? "Dashboard (live from lemuse serve)" : "Preview (exported catalog metadata)",
       blocks: (await data()).blocks,
       schema_version: 2,
       refreshing: false,
@@ -431,6 +463,7 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
       throw new Error("Removing channels works in the desktop app.");
     },
     playlists: async () =>
+      (await data()) &&
       [...lists]
         .map(([id, l]) => ({ id, name: l.name, items: l.ids.length }))
         .sort((a, b) => a.name.localeCompare(b.name)),
@@ -454,6 +487,7 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
       if (present) l.ids.unshift(blockId);
     },
     playlistsWith: async (blockId) =>
+      (await data()) &&
       [...lists].filter(([, l]) => l.ids.includes(blockId)).map(([id]) => id),
     refreshNow: async () => {
       throw new Error("Refresh runs in the desktop app; the preview shows a saved snapshot.");
@@ -491,7 +525,29 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     copyText: async (text) => {
       await navigator.clipboard.writeText(text);
     },
-    onRefresh: () => () => {},
+    // The dashboard checks the image count now and then; when it changes it
+    // drops the cached data and reports a finished refresh, so the page
+    // reloads what's playing.
+    onRefresh(cb) {
+      if (!token) return () => {};
+      let last = -1;
+      const tick = async () => {
+        try {
+          const r = await fetch("./api/v1/status", { headers: auth });
+          const blocks = ((await r.json()) as { data?: { blocks?: number } }).data?.blocks ?? -1;
+          if (last >= 0 && blocks !== last) {
+            cache = undefined;
+            cb({ state: "done", trigger: "dashboard", blocks_upserted: Math.abs(blocks - last), errors: 0 });
+          }
+          last = blocks;
+        } catch {
+          /* offline for a moment; try again next time */
+        }
+      };
+      tick();
+      const id = window.setInterval(tick, DASHBOARD_POLL_MS);
+      return () => window.clearInterval(id);
+    },
   };
 }
 

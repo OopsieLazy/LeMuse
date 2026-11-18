@@ -81,6 +81,8 @@ export function App() {
   const [fullscreen, setFullscreen] = useState(false);
   // Mini player (ADR-0016) and the short "Link copied" note.
   const [mini, setMini] = useState(false);
+  const [miniBarOpen, setMiniBarOpen] = useState(false);
+  const [miniMenuOpen, setMiniMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | undefined>();
   // Per image: how many stored fallback sizes have been tried.
   const [attempts, setAttempts] = useState<Map<number, number>>(new Map());
@@ -383,6 +385,8 @@ export function App() {
         setMini(next);
         setMenuOpen(false);
         setFilterOpen(false);
+        setMiniBarOpen(false);
+        setMiniMenuOpen(false);
         if (left) patch({ miniBounds: left });
       })
       .catch((e) => setNotice(`Mini player: ${message(e)}`));
@@ -412,9 +416,10 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "Escape" && (menuOpen || filterOpen)) {
+      if (e.key === "Escape" && (menuOpen || filterOpen || miniMenuOpen)) {
         setMenuOpen(false);
         setFilterOpen(false);
+        setMiniMenuOpen(false);
         return;
       }
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, dialog")) return;
@@ -440,7 +445,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, slide, fullscreen]);
+  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, slide, fullscreen]);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
@@ -616,6 +621,13 @@ export function App() {
         onRelated={openRelated}
         mini={mini}
         onToggleMini={toggleMini}
+        miniBarOpen={miniBarOpen}
+        miniMenuOpen={miniMenuOpen}
+        onToggleMiniBar={() => {
+          setMiniMenuOpen(false);
+          setMiniBarOpen((o) => !o);
+        }}
+        onToggleMiniMenu={() => setMiniMenuOpen((o) => !o)}
         onCopyLink={copyLink}
         toast={toast}
         onSelect={(next) => {
@@ -623,6 +635,7 @@ export function App() {
           setAttempts(new Map());
           setNotice(undefined);
           setMenuOpen(false);
+          setMiniMenuOpen(false);
           setActive(next);
           setPage(0);
           setIndex(0);
