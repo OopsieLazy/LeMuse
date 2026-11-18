@@ -87,6 +87,10 @@ export interface SlideshowViewProps {
   /** Save the current image's original (desktop app). */
   onSave?: () => void;
   saving?: boolean;
+  /** Right-click menu on the image, at window coordinates (ADR-0022). */
+  contextMenu?: { x: number; y: number } | null;
+  onContextMenu?: (x: number, y: number) => void;
+  onCloseContextMenu?: () => void;
   /** A short confirmation, e.g. "Link copied". */
   toast?: string;
   onSelect?: (source: SlideSource) => void;
@@ -331,7 +335,14 @@ export function SlideshowView(p: SlideshowViewProps) {
 
       <main className="viewer">
         <figure className="stage">
-          <div className="frame">
+          <div
+            className="frame"
+            onContextMenu={(e) => {
+              if (!slide || (e.target instanceof HTMLButtonElement && !e.target.matches(".compact-tap, .mini-tap"))) return;
+              e.preventDefault();
+              p.onContextMenu?.(e.clientX, e.clientY);
+            }}
+          >
             {slide ? (
               <img
                 key={slide.block_id}
@@ -387,6 +398,70 @@ export function SlideshowView(p: SlideshowViewProps) {
                 {slide.creator ? `${slide.creator} · ` : ""}
                 {sourceName(slide)}
               </p>
+            )}
+            {p.contextMenu && slide && (
+              <div
+                className="context-menu"
+                role="menu"
+                aria-label="Image"
+                // Opens at the pointer, kept inside the window by the clamps.
+                style={{
+                  left: `min(${p.contextMenu.x}px, calc(100vw - var(--context-menu-width) - var(--space-3)))`,
+                  top: `min(${p.contextMenu.y}px, calc(100vh - var(--context-menu-height)))`,
+                }}
+                onKeyDown={(e) => e.key === "Escape" && p.onCloseContextMenu?.()}
+              >
+                {p.mode === "app" ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    autoFocus
+                    disabled={p.saving}
+                    onClick={() => {
+                      p.onCloseContextMenu?.();
+                      p.onSave?.();
+                    }}
+                  >
+                    {slide.saved ? "Save original to this folder too" : "Save original"}
+                  </button>
+                ) : (
+                  isHttps(slide.original_url ?? slide.display_url) && (
+                    <a
+                      role="menuitem"
+                      href={slide.original_url ?? slide.display_url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      onClick={() => p.onCloseContextMenu?.()}
+                    >
+                      Open full-size image
+                    </a>
+                  )
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    p.onCloseContextMenu?.();
+                    p.onCopyLink?.();
+                  }}
+                >
+                  Copy link
+                </button>
+                {slide.page_url && isHttps(slide.page_url) && (
+                  <a
+                    role="menuitem"
+                    href={slide.page_url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    onClick={(e) => {
+                      p.onCloseContextMenu?.();
+                      if (slide.page_url) p.onOpenLink?.(e, slide.page_url);
+                    }}
+                  >
+                    Open source page
+                  </a>
+                )}
+              </div>
             )}
             {p.toast && (
               <p className="toast" role="status">

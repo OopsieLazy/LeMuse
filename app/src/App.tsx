@@ -84,6 +84,7 @@ export function App() {
   const [miniBarOpen, setMiniBarOpen] = useState(false);
   const [compactBarOpen, setCompactBarOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [miniMenuOpen, setMiniMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | undefined>();
   // Per image: how many stored fallback sizes have been tried.
@@ -306,14 +307,43 @@ export function App() {
     };
   }, [slide?.block_id, playlists]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // At the last image of a page, move on to the next page instead of
+  // starting the same 500 again.
+  const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
   const go = useCallback(
     (delta: number) => {
       if (!visible.length) return;
+      if (delta > 0 && safeIndex === visible.length - 1 && page < lastPage) {
+        setPage(page + 1);
+        return;
+      }
       setIndex((i) => (i + delta + visible.length) % visible.length);
       setTick((n) => n + 1);
     },
-    [visible.length],
+    [visible.length, safeIndex, page, lastPage],
   );
+
+  // The right-click menu closes on any click elsewhere, a key, a scroll or a
+  // new image; it opens inside the window.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest(".context-menu")) return;
+      setContextMenu(null);
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setContextMenu(null);
+    window.addEventListener("mousedown", close);
+    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("wheel", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", key);
+    };
+  }, [contextMenu]);
+  useEffect(() => setContextMenu(null), [slide?.block_id]);
 
   // Auto-advance (paused while a menu is open).
   const seconds = settings.slideSeconds ?? topic?.slide_seconds ?? 8;
@@ -656,6 +686,9 @@ export function App() {
         onCopyLink={copyLink}
         onSave={saveCurrent}
         saving={saving}
+        contextMenu={contextMenu}
+        onContextMenu={(x, y) => setContextMenu({ x, y })}
+        onCloseContextMenu={() => setContextMenu(null)}
         toast={toast}
         onSelect={(next) => {
           setFailed(new Set());

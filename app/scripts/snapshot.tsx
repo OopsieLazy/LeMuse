@@ -197,6 +197,8 @@ export const STATES: Record<string, State> = {
   "mini-tall": { props: { ...base, mini: true, slides: [tall], index: 0 }, mini: true },
   "mini-empty": { props: { ...base, mini: true, slides: [], index: 0, total: 0 }, mini: true },
   "link-copied": { props: { ...base, toast: "Link copied" } },
+  "context-menu": { props: { ...base, contextMenu: { x: 300, y: 200 } } },
+  "context-menu-preview": { props: { ...base, mode: "preview", contextMenu: { x: 300, y: 200 } } },
   saved: {
     props: { ...base, slides: base.slides.map((s) => ({ ...s, saved: true })), toast: "Saved to LeMuse › views › Wood objects" },
   },

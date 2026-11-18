@@ -1134,6 +1134,44 @@ ul.channel-list {
   background: var(--stage);
 }
 
+/* ============ Right-click menu on the image (ADR-0022) ============ */
+
+.context-menu {
+  position: fixed;
+  z-index: var(--z-drawer);
+  display: grid;
+  width: var(--context-menu-width);
+  padding: var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--dialog-shadow);
+  font-size: var(--text-sm);
+}
+
+.context-menu :is(button, a) {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.context-menu :is(button, a):is(:hover, :focus-visible) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.context-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ============ Mini player and Copy link (ADR-0016) ============ */
 
 /* Image only; the bar appears when the pointer is over the window or a
