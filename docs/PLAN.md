@@ -14,18 +14,19 @@ Images stream from the source; only Save writes files.
   test installer) and clicks **Squash and merge**.
 - `main` is locked, so changes reach it only through a reviewed PR.
 
-## Now (session 10, owner's request of 2026-11-18)
+## Now (session 11, owner's request of 2026-11-18)
 
-Merge order: **#11 → #10 → #12 → #13** (press "Update branch" on each after the one before merges).
+Merge order: **#11 → #10 → #12 → #13 → #14** (press "Update branch" on each after the one before merges).
 
 | # | Work | Branch | Status |
 |---|---|---|---|
-| 1 | CI fix: gitleaks binary over full history; PR-title check re-runs on edit | `ci/0011-fix-security-checks` | ✅ pushed |
-| 2 | Roadmap, review flow, ADR-0016, this plan | `docs/0010-roadmap-review-flow` | ✅ pushed |
-| 3 | Mini player (M), Copy link (L), image fallbacks, `export-links` | `feat/0012-mini-player-links` | ✅ pushed |
-| 4 | **Whole channels** (resume across refreshes; no more 200 cap), **auto refresh** every 60 min, **`--json`** on every CLI command (ADR-0017) | `feat/0013-full-channels-refresh-json` | ✅ pushed |
-| 5 | Plans: sources beyond Are.na incl. Pinterest (ADR-0018), dashboard architecture (ADR-0019), audiences tracker, caching explained | same branch | ✅ |
-| 6 | Owner: enable Dependency graph; lock `main`; answer Q18 (iPhone web app on GitHub Pages), Q19 ($99 native), Q20 (Pinterest developer app) | — | ⏳ owner |
+| 1 | Earlier work: CI fix, roadmap, mini player + links, whole channels + auto refresh + JSON | #11, #10, #12, #13 | ✅ pushed, awaiting review |
+| 2 | **Mini player v2:** smaller; image fills the window; tap the image for the bottom bar; ☰ menu on the left to switch All / topics / playlists | `feat/0014-dashboard-sheets-mini` | ⏳ |
+| 3 | **Dashboard, first build** (ADR-0019): `lemuse serve`, read-only, 127.0.0.1 + token, JSON API + the LeMuse page for OBS, Home Assistant, a wall screen | same | ⏳ |
+| 4 | **Reference sheet:** `lemuse sheet`, a printable page of N images with attribution (Print → PDF); a daily pick by date | same | ⏳ |
+| 5 | **Whole channel now:** `lemuse sync --full`; a just-added channel reads up to 10,000 items | same | ⏳ |
+| 6 | Plans: hosted web app on a domain (ADR-0020), daily mailer and pin automation (ADR-0021); Q19 = no, Q20 = no recorded | same + this branch | ⏳ |
+| 7 | Owner: Dependency graph; lock `main`; Q18 and the new Q21–Q23 | — | ⏳ owner |
 
 ## Roadmap
 
@@ -80,8 +81,7 @@ Claude's recommendation; the owner can reorder.
       screen
 - [ ] **Webhook on refresh** (Discord, Slack, Home Assistant); JSON from every CLI command
 - [ ] **New sources, one per PR (ADR-0018):** local folders, Wikimedia Commons, The Met, Smithsonian Open
-      Access, Poly Haven; Pinterest via the official API if Q20 is yes
-- [ ] Later: native iOS via a GitHub macOS runner + Apple Developer Program (Q19, $99/year)
+      Access, Poly Haven (Pinterest: Q20 = no; clip pins into Are.na)
 
 ### v1.0: Ambient and release (M4)
 
@@ -137,8 +137,8 @@ Claude's recommendation; the owner can reorder.
 | Q16 | Copy playlists to Are.na channels? | ✅ **Not needed for now** (2026-11-17) |
 | Q17 | How should work reach `main`? | ✅ (2026-11-17) Claude pushes branches (never `main`); the owner opens and reviews PRs on github.com (no `gh`) and squash-merges there; `main` locked by a ruleset |
 | Q18 | Publish the iPhone web app on GitHub Pages (a public page under your account)? | **Open** (ADR-0016) |
-| Q19 | Native iPhone app later (Apple Developer Program, $99/year)? | **Open**, not needed for the web app |
-| Q20 | Register a Pinterest developer app (free; uses your Pinterest account) for an official Pinterest source? | **Open** (ADR-0018). Meanwhile: clip pins into an Are.na channel |
+| Q19 | Native iPhone app later (Apple Developer Program, $99/year)? | ✅ **No** (2026-11-18). The iPhone gets the web app |
+| Q20 | Register a Pinterest developer app (free; uses your Pinterest account) for an official Pinterest source? | ✅ **No** (2026-11-18). Pinterest finds go through Are.na (clip with the Are.na extension) |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register
