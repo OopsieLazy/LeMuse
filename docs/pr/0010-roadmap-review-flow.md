@@ -19,6 +19,8 @@ GitHub, so GitHub numbers it #1; the local work-item number is 10.
   - `main` gets locked by a ruleset;
   - CLAUDE.md and the handoff template are updated to match.
 - ADR-0002…0015 marked accepted (Q9: accepted on merge).
+- **ADR-0016 (round 2):** mini player, kept links, iPhone as a Home Screen web app first, automation, and who LeMuse
+  is for; roadmap gains v0.7 (mini player + links) and v0.11 (iPhone + automation). Open: Q18, Q19.
 
 ## Why
 

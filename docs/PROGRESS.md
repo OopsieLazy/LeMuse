@@ -5,6 +5,19 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-18 (session 9): CI fix; ADR-0016; mini player and kept links
+
+**Branches:** `ci/0011-fix-security-checks`, `docs/0010-roadmap-review-flow`, `feat/0012-mini-player-links`
+(all pushed) · **Status:** awaiting owner review on GitHub (merge #11 → #10 → #12)
+
+- **CI:** the failure on `main` was gitleaks-action scanning nothing (no leak). It now runs the pinned binary
+  over the full history; the PR-title check re-runs on edit.
+- **ADR-0016:** mini player; links kept and exported; iPhone as a Home Screen web app first (APIs allow CORS;
+  native needs a Mac runner + $99/year); automation (CLI JSON, local dashboard page, webhooks); audiences.
+- **Owner:** enable Dependency graph, lock `main`, answer Q18/Q19.
+
+---
+
 ## 2026-11-17 (session 8): v0.6.0 released; roadmap; GitHub review flow (work item 10)
 
 **Branch:** `docs/0010-roadmap-review-flow` (pushed) · **Status:** awaiting owner review on GitHub

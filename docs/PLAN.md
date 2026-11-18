@@ -14,21 +14,29 @@ Images stream from the source; only Save writes files.
   test installer) and clicks **Squash and merge**.
 - `main` is locked, so changes reach it only through a reviewed PR.
 
-## Now: PR #10 `docs/0010-roadmap-review-flow` (owner's session-8 request)
+## Now (session 9, owner's request of 2026-11-18)
 
-| # | Scope | Status |
-|---|---|---|
-| 1 | Roadmap to 1.0 and a list of feature ideas (below) | ✅ |
-| 2 | Review flow: push branches, review and merge on GitHub, lock `main` (CLAUDE.md, handoff template) | ✅ |
-| 3 | ADRs merged in v0.6.0 marked accepted (Q9) | ✅ |
-| 4 | CI's gitleaks job failed on the first push of `main`: find the finding (values hidden), then fix or rotate | ⏳ needs the owner (see handoff) |
+Merge order: **#11 → #10 → #12** (press "Update branch" on each after the one before merges).
+
+| # | Work | Branch | Status |
+|---|---|---|---|
+| 1 | CI fix: gitleaks binary over full history (the action scanned nothing); PR-title check re-runs on edit | `ci/0011-fix-security-checks` | ✅ pushed |
+| 2 | Roadmap, feature ideas, review flow; ADR-0016 (mini player, iPhone, links, automation, audiences) | `docs/0010-roadmap-review-flow` | ✅ pushed |
+| 3 | **Mini player** (M): small, borderless, always-on-top, movable to any monitor, remembers its place | `feat/0012-mini-player-links` | ⏳ |
+| 4 | **Kept links:** fallback to other stored sizes before skipping; Copy link; `lemuse export-links` (CSV, JSON, text) | `feat/0012-mini-player-links` | ⏳ |
+| 5 | Owner: enable Dependency graph; lock `main` (ruleset); answer Q18 (publish the iPhone web app on GitHub Pages?) | — | ⏳ owner |
 
 ## Roadmap
 
 Each release is one or two PRs and goes through the review loop ([CLAUDE.md](../CLAUDE.md)). The order is
 Claude's recommendation; the owner can reorder.
 
-### v0.7: Save and sign in (finishes M1). Recommended next
+### v0.7: Mini player and kept links (PR #12, ADR-0016)
+
+- [ ] Mini player: borderless, always-on-top, any monitor, remembered size and place
+- [ ] Image link fallbacks; Copy link; `lemuse export-links`
+
+### v0.8: Save and sign in (finishes M1)
 
 - [ ] **Save** the original of the current image: download → content store → `views/<topic>/`, with a "saved"
       mark. Includes streaming download with hash-on-write (D-1) and a download host allow-list per source
@@ -39,7 +47,7 @@ Claude's recommendation; the owner can reorder.
 - [ ] **Load more:** fetch a channel's next pages when a slideshow runs low (ADR-0007 #3, D-23)
 - [ ] Retries on 5xx and network errors (D-2); single-instance app (a second launch focuses the first window)
 
-### v0.8: Browse and organize (M2)
+### v0.9: Browse and organize (M2)
 
 - [ ] **Grid view** of any view or playlist (virtualized contact sheet); click an image to play from there
 - [ ] **Search box** over titles and descriptions (the FTS index already exists)
@@ -48,7 +56,7 @@ Claude's recommendation; the owner can reorder.
 - [ ] **Smart playlists:** a saved filter (topic + categories), kept up to date automatically
 - [ ] Fix a wrong category by hand (D-54); shuffle across all pages (D-53); consistent "newest first" (D-15)
 
-### v0.9: Practice tools (drawing-focused)
+### v0.10: Practice tools (drawing-focused)
 
 - [ ] **Timed sessions:** for example 10 × 30 s, then 5 × 2 min, then 1 × 10 min, with a session summary.
       Pauses, skips and a final count
@@ -57,6 +65,16 @@ Claude's recommendation; the owner can reorder.
 - [ ] **Compare:** two to four images side by side
 - [ ] **Seen and favorite:** remember what you've seen to avoid repeats; a ♥ that feeds a Favorites playlist
 - [ ] **Daily set:** a fresh 20 from your topics each day
+
+### v0.11: iPhone and automation (ADR-0016)
+
+- [ ] **iPhone web app** (Home Screen, Safari; same UI, direct Are.na and museum calls; library file or QR
+      code from the desktop). Hosting on GitHub Pages needs the owner's OK (Q18)
+- [ ] **Local dashboard page** `lemuse serve` (127.0.0.1 + token, read-only) for OBS, Home Assistant, a wall
+      screen
+- [ ] **Webhook on refresh** (Discord, Slack, Home Assistant); JSON from every CLI command
+- [ ] **Local folder source:** your own reference folders as topics
+- [ ] Later: native iOS via a GitHub macOS runner + Apple Developer Program (Q19, $99/year)
 
 ### v1.0: Ambient and release (M4)
 
@@ -111,6 +129,8 @@ Claude's recommendation; the owner can reorder.
 | Q15 | Allow read-only git for the admin-review agent hook? | ✅ **No** (2026-11-17); it reads the snapshot file |
 | Q16 | Copy playlists to Are.na channels? | ✅ **Not needed for now** (2026-11-17) |
 | Q17 | How should work reach `main`? | ✅ (2026-11-17) Claude pushes branches (never `main`); the owner opens and reviews PRs on github.com (no `gh`) and squash-merges there; `main` locked by a ruleset |
+| Q18 | Publish the iPhone web app on GitHub Pages (a public page under your account)? | **Open** (ADR-0016) |
+| Q19 | Native iPhone app later (Apple Developer Program, $99/year)? | **Open**, not needed for the web app |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register

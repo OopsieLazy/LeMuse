@@ -23,3 +23,12 @@
 
 - [x] Markdown only; no code, dependency or capability change.
 - [x] Secret scan of `main...HEAD` clean before the push.
+
+## Round 2 (2026-11-18): ADR-0016
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| A-55 | med | The iPhone web app would be a public page under the owner's GitHub account | Owner decision Q18; nothing is published until then |
+| A-56 | med | Loading original-source URLs as images needs `img-src https:` (any host): IP leaks to third parties and breaks the host allow-list | Not done: originals are shown as links only; fallbacks use stored sizes on CSP hosts |
+| A-57 | info | A local dashboard server and webhooks add listening ports and outbound calls | Each gets its own ADR entry and security review when built (127.0.0.1, token, read-only) |
+| D-63 | info | A browser backend duplicates core logic | ADR-0016 consequence: share fixtures between backends |
