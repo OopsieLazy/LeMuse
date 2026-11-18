@@ -30,4 +30,5 @@
 - [x] 85 core tests (3 new): channels completing over refreshes with the request count checked, new items during
   a backfill, the one-time config upgrade (comments kept, never repeats, other values untouched).
 - [x] CLI `--json` checked for success and failure (exit 1, `"ok": false`).
-- [ ] Real refresh on a copy of the owner's library: see the PR description for the numbers.
+- [x] Real refreshes on a copy of the owner's library: 4,489 → 6,450 → 8,108 images over two refreshes, 0 errors;
+  big channels resume page by page; the config upgrade applied once with its comment.
