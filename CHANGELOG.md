@@ -8,6 +8,12 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Dashboard, reference sheets, mini player v2 (work item 14, ADR-0019, ADR-0021):
+  - `lemuse serve`: a read-only dashboard on `127.0.0.1` with a token, a JSON API and the LeMuse page for OBS,
+    Home Assistant or a wall screen (`npm run build:dashboard`);
+  - `lemuse sheet`: a printable reference sheet (Print → PDF), a fresh pick each day;
+  - `lemuse sync --full` reads every channel to its end; a just-added channel reads up to 10,000 items;
+  - mini player v2: smaller, the image fills it, tap for the bottom bar, ☰ to switch topics and playlists.
 - Whole channels, auto refresh and JSON (work item 13, ADR-0017):
   - big channels load in full: each refresh resumes where the last one stopped; a just-added channel reads up
     to 5,000 items at once;

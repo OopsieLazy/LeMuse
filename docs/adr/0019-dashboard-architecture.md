@@ -75,3 +75,29 @@ sharing the catalog with everything else.
 - rate limit per client;
 - a fuzz test of the query parsing;
 - no path traversal: only the built bundle is served, by an exact path list.
+
+## Status: first build (work item 14, 2026-11-18)
+
+**Built:**
+- `lemuse serve [--port 47555] [--lan] [--ui DIR]`, a standard-library HTTP/1.1 server with no new framework.
+- It answers GET and HEAD only, one response per connection, at most 32 connections, with 5 s read timeouts.
+- Endpoints, each needing the token:
+  - `/api/v1/status`, `/topics`, `/playlists`;
+  - `/slides?source=all|topic:<name>|playlist:<id>&page=N&include=…&exclude=…`;
+  - `/preview-data`, which the page uses.
+- The page is the React UI built with `npm run build:dashboard`. It is served from an in-memory allow-list with
+  the CSP above, and it checks for new images every 5 minutes.
+- The token is 256 random bits from the OS for each run, or a stable `LEMUSE_SERVE_TOKEN`. It's compared in
+  constant time.
+- The `Host` check applies on loopback. Error messages never include file paths.
+
+**Not yet:**
+- Server-Sent Events and `/api/v1/now`;
+- webhooks;
+- a Settings switch that starts it from the app;
+- keeping the token in Credential Manager (with the v0.8 token work);
+- the installer shipping `lemuse.exe` and the page (D-75).
+
+The page can be framed (OBS, Home Assistant iframe cards). Because it is read-only, framing it gives an
+attacker nothing to click.
+

@@ -11,9 +11,9 @@ or is planned (CLAUDE.md). The reasoning behind the table is in ADR-0016 and ADR
 |---|---|---|---|
 | **Architects, interior designers** | Precedent and material boards; facades, stairs, joinery, interiors | ✅ Categories (architecture, materials) · ✅ Mini player on a 2nd screen · ✅ Find channels · 🗺 Grid view · 🗺 Local folders | Are.na, Wikimedia Commons, museums (architecture, furniture), local folders |
 | **Product and industrial designers** | CMF and form studies; mechanisms; exploded views | ✅ Material categories (plastic, rubber, metal) · ✅ Search words (CAD & making) · 🗺 CAD attachments (STEP, DXF) · 💡 3D previews | Are.na, Smithsonian 3D, Poly Haven, local CAD folders |
-| **Artists, illustrators** | Daily practice; gesture and figure; master studies | ✅ Slideshow + timer · 🗺 Timed sessions · 🗺 Mirror, greyscale, value view, grid · 🗺 Daily set | Museums (CC0), Are.na, local folders |
-| **Creators, streamers, studios** | Mood and B-roll on stream; a studio wall screen | ✅ Mini player · ✅ JSON CLI · 🗺 Dashboard page (OBS, Home Assistant) · 🗺 Webhooks | Are.na, local folders |
-| **Teachers, schools** | Classroom slideshows of public-domain objects, with attribution | ✅ Topics from museum keywords · ✅ Attribution always shown · 🗺 Dashboard page on a projector | Museums, Wikimedia Commons |
+| **Artists, illustrators** | Daily practice; gesture and figure; master studies | ✅ Slideshow + timer · ✅ Daily reference sheet (print to PDF) · 🗺 Timed sessions · 🗺 Mirror, greyscale, value view, grid · 🗺 Daily set | Museums (CC0), Are.na, local folders |
+| **Creators, streamers, studios** | Mood and B-roll on stream; a studio wall screen | ✅ Mini player · ✅ JSON CLI · ✅ Dashboard page `lemuse serve` (OBS, Home Assistant) · 🗺 Webhooks | Are.na, local folders |
+| **Teachers, schools** | Classroom slideshows of public-domain objects, with attribution | ✅ Topics from museum keywords · ✅ Attribution always shown · ✅ Dashboard page on a projector · ✅ Printable sheets · 🗺 LeMuse Web (ADR-0020) | Museums, Wikimedia Commons |
 | **Game, film, 3D artists** | Concept, material and texture reference | ✅ Categories · 🗺 Poly Haven · 💡 3D previews | Poly Haven, Are.na, museums |
 | **Researchers, archivists** | Keeping links to things that vanish | ✅ Links kept after removal · ✅ `export-links` (CSV, JSON) · 🗺 Archive view | Are.na, museums |
 
@@ -29,7 +29,7 @@ or is planned (CLAUDE.md). The reasoning behind the table is in ADR-0016 and ADR
 | The Met | 🗺 3rd | Artists, designers | CC0 open-access objects |
 | Smithsonian Open Access | 🗺 4th | Designers, teachers | CC0; free API key |
 | Poly Haven | 🗺 5th | 3D artists, designers | CC0 textures and HDRIs |
-| Pinterest | 💡 owner's call (Q20) | Everyone | Official API only, the owner's own boards; for now clip pins into Are.na |
+| Pinterest | ✖ no own app (Q20 = no) | Everyone | Clip pins into Are.na (extension, or the Zapier "new pin → Are.na block" template, ADR-0021) |
 | Instagram, Behance, Dribbble, Google Images | ✖ | — | No suitable API, or their terms forbid it |
 
 ## What sets LeMuse apart
