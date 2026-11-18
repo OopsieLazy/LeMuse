@@ -13,6 +13,8 @@
   - The topic list becomes a **☰ drawer** on the left, with everything the rail has.
   - The bottom bar stays hidden until you **tap the image**, and it is slimmer when it shows.
   - A small credit stays on the image while the bar is hidden.
+  - **Smooth:** the bar slides open and closed, and the side panel and image ease when the window crosses into or
+    out of compact size (off with Windows reduce-motion).
   - Wide windows are unchanged.
 - **CI fix**, carried over because its own PR was never opened:
   - gitleaks runs as a pinned, checksum-verified program over the full history;

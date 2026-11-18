@@ -20,6 +20,7 @@
 | D-86 | low | The old ≤ 720 px rules (rail as a horizontal strip) conflicted with the drawer | Removed; compact rules replace them. The filter sheet at ≤ 720 px stays |
 | D-87 | info | Compact starts at 1,024 px, so a 1024 × 640 window is compact too | Intended ("smaller window"); above it the docked layouts are unchanged |
 | D-88 | info | `rail-right` opens its drawer from the left in compact mode | The ☰ button is on the left; one place to look |
+| D-89 | low | Owner: make the change smoother. The bar snapped open, and the layout jumped when crossing the compact size | **Fixed:** the bar slides (max-height; W3C CSS has no `interpolate-size` yet), the rail column eases to 0, the rail slides out and back, and the image padding eases. All off with reduce-motion. The layout test now treats `visibility: hidden` as hidden |
 
 - [x] W3C 50 files, 0 errors · layout 48 states × 6 sizes (new: 768 × 1024) = 288 renders passed, including the
   new "image fills a compact window" check · typecheck.

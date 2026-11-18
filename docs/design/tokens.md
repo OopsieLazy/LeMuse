@@ -12,7 +12,7 @@ at the bottom.
 | Colour (semantic) | `--bg --panel --panel-fill --stage --fg --muted --line --accent --accent-ink --ok --error --backdrop --shadow-rgb` | Theme preset; light/dark mode; accent picker (ink computed for contrast) |
 | Typography | `--font-ui --font-display --font-data`, `--text-2xs…xl`, weights, leading, tracking | Typeface set; **Interface size** scales every size |
 | Space | `--space-1…8` (4 px rhythm × scale) | Interface size |
-| Layout | `--rail-width --stage-pad --stage-pad-narrow --control-size --icon-size --icon-stroke --timer-height --dialog-width --dialog-max-height --measure --menu-width --menu-max-height --field-min --status-min --filter-menu-width --chip-radius --thumb-size --pager-width --sheet-max-height` | Topic list width slider; Space around the image slider; Cinema sets stage padding to 0 |
+| Layout | `--rail-width --stage-pad --stage-pad-narrow --control-size --icon-size --icon-stroke --timer-height --dialog-width --dialog-max-height --measure --menu-width --menu-max-height --field-min --status-min --filter-menu-width --chip-radius --thumb-size --pager-width --sheet-max-height --compact-bar-max` | Topic list width slider; Space around the image slider; Cinema sets stage padding to 0 |
 | Shape | `--radius-base` → `--radius-sm/md/lg`, `--border`, `--focus-ring --focus-offset` | Corner rounding slider |
 | Elevation | `--image-shadow-strength` → `--image-shadow`, `--dialog-shadow` | Image shadow slider |
 | Motion | `--dur-fast --dur-med --ease` | Also turned off by `prefers-reduced-motion` |

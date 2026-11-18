@@ -7,6 +7,7 @@ the CI fix had no PR of its own.
 
 ✅ Compact below 1,024 px wide or 560 px tall; wide windows unchanged
 ✅ ☰ drawer with the full rail; tap image for the bar; credit always shown
+✅ Smooth: bar slides; rail and padding ease at the compact size
 ✅ Bar never covers the image; layout test adds 768x1024 + fill check
 ✅ CI: pinned, checksum-verified gitleaks over all commits; title check
 ⬜ Auto-hide the tapped-open bar after a few seconds (if wanted)

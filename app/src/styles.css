@@ -39,7 +39,10 @@ input {
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
   grid-template-areas: "rail viewer";
   height: 100%;
+  /* The rail column eases to 0 when the window turns compact, and back. */
+  transition: grid-template-columns var(--dur-med) var(--ease);
 }
+
 
 :root[data-layout="rail-right"] .app {
   grid-template-columns: minmax(0, 1fr) var(--rail-width);
@@ -110,6 +113,7 @@ input {
   min-height: 0;
   background: var(--panel-fill);
   border-right: var(--border);
+  transition: transform var(--dur-med) var(--ease), visibility var(--dur-med);
 }
 
 .brand {
@@ -1320,10 +1324,12 @@ ul.channel-list {
 }
 
 @media (max-width: 1024px), (max-height: 560px) {
-  :root:not([data-mini="true"]) .app {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    grid-template-areas: "viewer";
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .app {
+    grid-template-columns: 0px minmax(0, 1fr);
+  }
+
+  :root[data-layout="rail-right"]:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .app {
+    grid-template-columns: minmax(0, 1fr) 0px;
   }
 
   :root:not([data-mini="true"]) .rail {
@@ -1357,8 +1363,22 @@ ul.channel-list {
     display: none;
   }
 
+  /* max-height (not display:none) so the bar slides open and closed. */
+  :root:not([data-mini="true"]) .caption {
+    max-height: var(--compact-bar-max);
+    transition: max-height var(--dur-med) var(--ease), visibility var(--dur-med);
+  }
+
   :root[data-compact-bar="hidden"]:not([data-mini="true"]) .caption {
-    display: none;
+    max-height: 0;
+    overflow: hidden;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    visibility: hidden;
+  }
+
+  :root:not([data-mini="true"]) .frame {
+    transition: padding var(--dur-med) var(--ease);
   }
 
   :root[data-compact-bar="hidden"]:not([data-mini="true"]) .compact-credit {
@@ -1385,7 +1405,10 @@ ul.channel-list {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rail {
+  .app,
+  .rail,
+  .caption,
+  .frame {
     transition: none;
   }
 }

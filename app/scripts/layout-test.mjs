@@ -47,7 +47,13 @@ const measure = String(async function run() {
   const viewports = JSON.parse(document.getElementById("viewports").textContent);
   const failures = [];
   let checks = 0;
-  const visible = (el, win) => el && win.getComputedStyle(el).display !== "none" && el.getClientRects().length > 0;
+  // Hidden means display:none or visibility:hidden (the compact bar collapses
+  // with visibility:hidden so it can animate).
+  const visible = (el, win) => {
+    if (!el) return false;
+    const cs = win.getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && el.getClientRects().length > 0;
+  };
   const overlap = (a, b) =>
     Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
     Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));

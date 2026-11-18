@@ -103,6 +103,8 @@
   --thumb-size: calc(96px * var(--ui-scale));
   --pager-width: calc(132px * var(--ui-scale));
   --sheet-max-height: 70vh;
+  /* Compact windows: the tapped-open bar is never taller than this. */
+  --compact-bar-max: min(45vh, calc(260px * var(--ui-scale)));
 }
 
 /* Studio dark: follows the system unless light is chosen... */
