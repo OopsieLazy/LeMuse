@@ -5,6 +5,19 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-18 (session 11): dashboard, reference sheets, mini player v2; web app plan
+
+**Branch:** `feat/0014-dashboard-sheets-mini` (pushed, stacked on #13) · **Status:** awaiting owner review
+
+- **Built:** `lemuse serve` (read-only page + JSON API, 127.0.0.1 + token; proven against attacks live),
+  `lemuse sheet` (print to PDF, daily pick), `sync --full`, mini player v2 (tap for bar, ☰ menu).
+- **Plans:** ADR-0020 LeMuse Web in stages on the friend's domain (desktop stays first); ADR-0021 mailer and pin
+  automation (Zapier template, Are.na extension).
+- **Checks:** 94 tests; W3C 47; layout 225; cargo audit 0 vulnerabilities; secret scan clean.
+- **Owner decisions:** Q19 no, Q20 no. Open: Q21 (host), Q22 (mail account), Q23 (talk to Are.na).
+
+---
+
 ## 2026-11-18 (session 10): whole channels, auto refresh, JSON; sources and dashboard plans
 
 **Branch:** `feat/0013-full-channels-refresh-json` (pushed, stacked on #12) · **Status:** awaiting owner review

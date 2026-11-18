@@ -21,11 +21,11 @@ Merge order: **#11 → #10 → #12 → #13 → #14** (press "Update branch" on e
 | # | Work | Branch | Status |
 |---|---|---|---|
 | 1 | Earlier work: CI fix, roadmap, mini player + links, whole channels + auto refresh + JSON | #11, #10, #12, #13 | ✅ pushed, awaiting review |
-| 2 | **Mini player v2:** smaller; image fills the window; tap the image for the bottom bar; ☰ menu on the left to switch All / topics / playlists | `feat/0014-dashboard-sheets-mini` | ⏳ |
-| 3 | **Dashboard, first build** (ADR-0019): `lemuse serve`, read-only, 127.0.0.1 + token, JSON API + the LeMuse page for OBS, Home Assistant, a wall screen | same | ⏳ |
-| 4 | **Reference sheet:** `lemuse sheet`, a printable page of N images with attribution (Print → PDF); a daily pick by date | same | ⏳ |
-| 5 | **Whole channel now:** `lemuse sync --full`; a just-added channel reads up to 10,000 items | same | ⏳ |
-| 6 | Plans: hosted web app on a domain (ADR-0020), daily mailer and pin automation (ADR-0021); Q19 = no, Q20 = no recorded | same + this branch | ⏳ |
+| 2 | **Mini player v2:** smaller; image fills the window; tap the image for the bottom bar; ☰ menu on the left to switch All / topics / playlists | `feat/0014-dashboard-sheets-mini` | ✅ pushed |
+| 3 | **Dashboard, first build** (ADR-0019): `lemuse serve`, read-only, 127.0.0.1 + token, JSON API + the LeMuse page for OBS, Home Assistant, a wall screen | same | ✅ |
+| 4 | **Reference sheet:** `lemuse sheet`, a printable page of N images with attribution (Print → PDF); a daily pick by date | same | ✅ |
+| 5 | **Whole channel now:** `lemuse sync --full`; a just-added channel reads up to 10,000 items | same | ✅ |
+| 6 | Plans: hosted web app on a domain (ADR-0020), daily mailer and pin automation (ADR-0021); Q19 = no, Q20 = no recorded | same + this branch | ✅ |
 | 7 | Owner: Dependency graph; lock `main`; Q18 and the new Q21–Q23 | — | ⏳ owner |
 
 ## Roadmap
@@ -42,6 +42,12 @@ Claude's recommendation; the owner can reorder.
 
 - [x] Channels load in full across refreshes; a just-added channel reads up to 5,000 items at once
 - [x] Auto refresh while the app runs (60 min); `--json` on every CLI command (docs/automation.md)
+
+### v0.7.2: Dashboard, sheets, mini player v2 (PR #14, ADR-0019, ADR-0021)
+
+- [x] `lemuse serve` (read-only page + JSON API, 127.0.0.1 + token); `lemuse sheet` (print to PDF); `sync --full`
+- [x] Mini player v2: image fills it, tap for the bar, ☰ menu
+- [ ] Next: start the dashboard from Settings; webhooks; live events; a Sheet button in the app
 
 ### v0.8: Save and sign in (finishes M1)
 
@@ -82,6 +88,12 @@ Claude's recommendation; the owner can reorder.
 - [ ] **Webhook on refresh** (Discord, Slack, Home Assistant); JSON from every CLI command
 - [ ] **New sources, one per PR (ADR-0018):** local folders, Wikimedia Commons, The Met, Smithsonian Open
       Access, Poly Haven (Pinterest: Q20 = no; clip pins into Are.na)
+
+### v0.12: Web and mail (ADR-0020, ADR-0021)
+
+- [ ] **LeMuse Web, stage 1:** the static, local-first web app on the friend's domain (Q21); also the iPhone app
+- [ ] **Daily mailer:** `lemuse mail` via your own mail provider (Q22); optional PDF attachment
+- [ ] Later stages (accounts and sync, hosted features) only after talking to Are.na (Q23)
 
 ### v1.0: Ambient and release (M4)
 
@@ -139,6 +151,9 @@ Claude's recommendation; the owner can reorder.
 | Q18 | Publish the iPhone web app on GitHub Pages (a public page under your account)? | **Open** (ADR-0016) |
 | Q19 | Native iPhone app later (Apple Developer Program, $99/year)? | ✅ **No** (2026-11-18). The iPhone gets the web app |
 | Q20 | Register a Pinterest developer app (free; uses your Pinterest account) for an official Pinterest source? | ✅ **No** (2026-11-18). Pinterest finds go through Are.na (clip with the Are.na extension) |
+| Q21 | Host LeMuse Web (stage 1, static, no user data) on the friend's domain? Which name, and who runs the server? | **Open** (ADR-0020); supersedes Q18 if yes |
+| Q22 | Which email account sends the daily mailer (app password in Credential Manager)? | **Open** (ADR-0021) |
+| Q23 | Contact Are.na before a public stage 2 or any paid tier? | **Open**, recommended yes (ADR-0020) |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register
@@ -167,5 +182,7 @@ Claude's recommendation; the owner can reorder.
 | D-54 | Review 0009 | Word-based categories mislabel some images; untitled images rely on channel names | M2: manual corrections; later maybe a local image model (ADR-0015 option B) |
 | D-74 | Review 0013 | Add channel and Find channels are refused during a long refresh | v0.8: queue them |
 | D-75 | Review 0013 | The installer doesn't ship `lemuse.exe` (needed for Task Scheduler) | v0.8: bundle the CLI as a sidecar |
+| D-78 | Review 0014 | The dashboard page loads the newest 300 per topic | Page through `/api/v1/slides` |
+| D-80 | Review 0014 | The app doesn't start the dashboard; the token isn't kept between runs | Settings switch; token in Credential Manager (v0.8) |
 | A-50 | Review 0010 | CI actions pinned to Node 20 releases (deprecated); ubuntu-latest moving to Ubuntu 26 | Next CI touch: bump pinned SHAs (14-day cooldown) |
 | A-39 | Review 0009 | In-app Are.na search needs Premium | Only if the owner buys Premium (Q10 = no) |
