@@ -1,56 +1,65 @@
-# feat: dashboard, reference sheets and mini player v2 (work item 14)
+# feat: mini player, whole channels, dashboard and reference sheets (GitHub PR #2)
 
-**Branch:** `feat/0014-dashboard-sheets-mini` → `main` · **Stacked on:** #13 (open this PR against
-`feat/0013-full-channels-refresh-json`; GitHub retargets it when #13 merges) · **Merge:** Squash and merge, last
+**Branch:** `feat/0014-dashboard-sheets-mini` → `main` · **Merge:** Squash and merge, after the CI fix and the
+roadmap PR (#1). This PR holds four work items, because their branches were stacked:
+[12](0012-mini-player-links.md), [13](0013-full-channels-refresh-json.md), 14 (below) and
+[15](0015-public-repo-hygiene.md).
+
+**PR title (must start with a type):** `feat: mini player, whole channels, dashboard and reference sheets`
 
 ## What
 
+- **Mini player** (M):
+  - a small, borderless window that stays on top, on any monitor, and remembers where it was;
+  - v2: the image fills it, tap the image for the bottom bar, ☰ at the top left to switch topics and
+    playlists.
+- **Kept links:** Copy link (L); a broken image tries its other stored sizes before it's skipped;
+  `lemuse export-links` (CSV, JSON, text).
+- **Whole channels:**
+  - no more 200 cap: each refresh resumes where the last one stopped;
+  - a just-added channel reads up to 10,000 items at once;
+  - `lemuse sync --full` reads every channel to its end now.
+- **Auto refresh** every 60 minutes while the app runs; **`--json`** on every CLI command (docs/automation.md).
 - **Dashboard (`lemuse serve`):** a read-only page and JSON API on `http://127.0.0.1:47555`, protected by a
-  token. It runs the LeMuse slideshow in any browser, an OBS browser source, a Home Assistant webpage card or on
-  a wall screen, and picks up new images on its own. Build the page once with `npm run build:dashboard`.
-- **Reference sheets (`lemuse sheet`):** a printable page of images with credits (Print → Save as PDF). The pick
-  changes daily and stays the same all day.
-- **Mini player v2:**
-  - smaller (360 × 225) and the image fills it;
-  - tap the image to show or hide the bottom bar;
-  - ☰ at the top left switches between All, topics and playlists;
-  - drag it by the bottom bar.
-- **Whole channels now:** `lemuse sync --full` reads every channel to its end; a just-added channel reads up to
-  10,000 items at once.
-- **Plans:** a hosted web app on a domain, in stages (ADR-0020), and a daily mailer plus ways to add pins to
-  channels automatically (ADR-0021). Q19 and Q20 recorded as no.
+  token. It runs in a browser, an OBS browser source, a Home Assistant webpage card or on a wall screen.
+- **Reference sheets (`lemuse sheet`):** a printable page of images with credits (Print → PDF), a new pick each
+  day.
+- **Public-repo hygiene:** `.gitignore` and the secret scanner keep LeMuse outputs and tokens out of git, and
+  CLAUDE.md has a standing rule for it.
+- **Plans (ADRs):**
+  - ADR-0016: beyond the desktop;
+  - ADR-0017: whole channels;
+  - ADR-0018: sources and Pinterest;
+  - ADR-0019: dashboard;
+  - ADR-0020: a hosted web app in stages;
+  - ADR-0021: mailer and pin automation.
+
+  Plus the audiences tracker and the caching table in ARCHITECTURE.
 
 ## Why
 
-The owner's session-11 request: start the dashboard; a daily reference sheet; can it become a web app on a
-friend's domain while the desktop app stays; pin automation; whole channels; a smaller, cleaner mini player.
+The owner's requests in sessions 9–12: a portable mini player, keeping image links, whole channels instead of
+200, auto refresh, JSON for automation, a dashboard, daily reference sheets, a path to a web app, and keeping
+the public repo clean.
 
 ## How
 
-- **Core:**
-  - `serve` module: std-only HTTP/1.1, GET and HEAD only, a token and Host check, static files from an
-    allow-list;
-  - `serve::preview_data` is shared with the CLI;
-  - `export::{to_sheet_html, pick, esc, today_utc}`;
-  - `ADD_CHANNEL_PAGES` 100.
-- **CLI:** `serve`, `sheet`, `sync --full`; the scope helper is shared with `export-links`.
-- **UI:**
-  - the preview backend reads live data with the token from the page address and polls for changes;
-  - it starts playlists from the catalog;
-  - `vite --mode dashboard` (no snapshot data);
-  - mini v2 in `SlideshowView`;
-  - 2 new snapshot states.
-- **Dependency:** `getrandom` 0.2.17, already in `Cargo.lock`.
+The per-item details are in the linked PR docs and in reviews
+[0012](../reviews/0012-mini-player-links.md), [0013](../reviews/0013-full-channels-refresh-json.md),
+[0014](../reviews/0014-dashboard-sheets-mini.md) and [0015](../reviews/0015-public-repo-hygiene.md).
+Migrations 0005–0006 are additive. The only new dependency is `getrandom` 0.2.17, which was already in
+`Cargo.lock`.
 
 ## Checklist
 
-- [x] Secret scan clean
-- [x] 94 tests (9 new) · fmt · clippy `-D warnings` (core, CLI, app) · typecheck
-- [x] W3C 47 files, 0 errors · layout 225 renders passed
+- [x] Secret scan clean (the scanner's new rules caught their test cases)
+- [x] 94 tests · fmt · clippy `-D warnings` (core, CLI, app) · typecheck
+- [x] W3C 47 files, 0 errors · layout 45 states × 5 sizes = 225 renders passed
 - [x] `cargo audit`: 0 vulnerabilities
-- [x] Live checks: API, the page in headless Edge, a W3C-valid sheet
-- [x] Admin and developer passes: [review 0014](../reviews/0014-dashboard-sheets-mini.md)
-- [x] Design artifact republished (same link) · app rebuilt and launched for review
-- [ ] Owner: try the mini player (M, tap, ☰), `lemuse serve`, and `lemuse sheet`
+- [x] Real data: whole channels (4,489 → 8,108 images over two refreshes); live dashboard checks; a W3C-valid
+  sheet
+- [x] Admin and developer passes for each item (reviews 0012–0015)
+- [x] Design artifact republished · app rebuilt and launched for review
+- [ ] Owner: try the mini player (M, tap, ☰), `lemuse serve` and `lemuse sheet`
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
