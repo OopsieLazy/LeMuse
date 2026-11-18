@@ -16,7 +16,8 @@ Images stream from the source; only Save writes files.
 
 ## Now (session 11, owner's request of 2026-11-18)
 
-Merge order: **#11 → #10 → #12 → #13 → #14** (press "Update branch" on each after the one before merges).
+Merge order on GitHub (session 12): **CI fix (`ci/0011`, new PR) → #1 roadmap → #2** (`feat/0014`, which holds work
+items 12–15). Press "Update branch" before each merge; PR titles must start with a type (`ci:`, `docs:`, `feat:`).
 
 | # | Work | Branch | Status |
 |---|---|---|---|
