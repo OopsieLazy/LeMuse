@@ -2,8 +2,9 @@
 
 ## Reporting
 
-Report vulnerabilities privately to the repository owner (GitHub private vulnerability reporting, once the repo
-is on GitHub). Please don't open public issues for security problems.
+Report vulnerabilities privately through GitHub's **private vulnerability reporting** on
+<https://github.com/OopsieLazy/LeMuse/security> (Security → Report a vulnerability). Please don't open public issues
+for security problems.
 
 ## Design commitments
 
@@ -15,3 +16,12 @@ is on GitHub). Please don't open public issues for security problems.
   before touching the file system (`store::views`). Extensions are allow-listed (`store::blobs`). FTS queries are
   escaped (`store::catalog::fts_query`).
 - **Local scope:** no localhost server. The asset protocol is scoped to the library folder.
+
+## Gates (ADR-0011)
+
+- Every commit: `scripts/scan-secrets.mjs --staged` (git pre-commit), which checks secrets and personal emails
+  and never prints the value.
+- Every commit by the coding agent: an admin-review agent hook on the staged diff.
+- Before the agent finishes: the Stop gate (`scripts/hooks/stop-gate.mjs`).
+- Every PR: gitleaks, `npm audit`, `cargo audit`, dependency review, and the 10 MiB installer budget.
+- If a secret is ever committed, **rotate it first**, then remove it from history.

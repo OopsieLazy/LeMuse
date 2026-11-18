@@ -1,10 +1,16 @@
 #!/bin/sh
-# LeMuse pre-commit gate (ADR-0009). Enable once per clone:
+# LeMuse pre-commit gate (ADR-0009, ADR-0011). Enable once per clone:
 #   git config core.hooksPath .githooks
 #
-# When a commit touches the UI (app/ markup, styles or scripts), run the W3C
-# Nu HTML Checker over the built UI and its rendered states. Rust-only
-# commits skip it. Never bypass with --no-verify; fix the markup instead.
+# 1. Every commit: secret and personal-data scan of the staged lines.
+# 2. Commits that touch the UI: W3C Nu HTML Checker over the built UI and its
+#    rendered states.
+# Never bypass with --no-verify; fix the finding instead.
+
+if ! node scripts/scan-secrets.mjs --staged; then
+  echo "pre-commit: secret scan failed; commit stopped." >&2
+  exit 1
+fi
 
 ui_changes=$(git diff --cached --name-only --diff-filter=ACMR -- \
   'app/index.html' 'app/src/*' 'app/scripts/*' 'app/vite.config.ts' 'app/package.json')

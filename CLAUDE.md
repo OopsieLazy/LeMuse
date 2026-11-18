@@ -34,6 +34,33 @@ Fix findings between passes. Every finding is either fixed in the PR or deferred
 cheaply: product scope, licensing, spending money, contacting third parties (e.g. emailing Are.na), publishing,
 anything touching the owner's accounts. Otherwise decide, document the reasoning in the ADR/review, and proceed.
 
+## Security first (ADR-0011): the utmost concern
+
+Before every commit and before finishing, check what could leak or be abused. **Always run the checks**; don't
+assume.
+
+- **Secrets and personal data:** `node scripts/scan-secrets.mjs --staged` (pre-commit runs it) and `--range
+  main...HEAD` before finishing. Never commit tokens, keys, `.env`, databases or personal emails, and never print
+  them. Findings name the file and line, never the value. If a real secret ever lands, **rotate it**; deleting it
+  isn't enough.
+- **Validators:** fmt, clippy `-D warnings`, tests, `npm run typecheck`, `npm run validate:w3c` (UI), and
+  `npm audit` / `cargo audit` when dependencies change. Report failures as they are.
+- **Review each change for:**
+  - Tauri capabilities, plugins and CSP hosts (least privilege; justify each in the ADR);
+  - network access only via `HttpClient`;
+  - tokens only in Credential Manager;
+  - input from remote APIs treated as untrusted (render as text, never `innerHTML`);
+  - no bot-protection workarounds;
+  - dependencies pinned and audited.
+- **Hooks enforce it:**
+  - git `pre-commit` runs the secret scan (plus W3C for UI commits);
+  - the Claude Code `PreToolUse` agent hook reviews each staged commit as admin;
+  - the `Stop` hook (`scripts/hooks/stop-gate.mjs`) blocks finishing until the scan is clean and the branch has
+    an admin review;
+  - CI runs gitleaks, `npm audit`, `cargo audit` and dependency review.
+
+  Never bypass a hook (`--no-verify` is denied in `.claude/settings.json`).
+
 ## See it, don't guess it (ADR-0009)
 
 - Every PR that touches the UI ships it three ways:
@@ -57,16 +84,26 @@ anything touching the owner's accounts. Otherwise decide, document the reasoning
   `arena`, `store`, `sync`, `adr`, `docs`, `ci`, `process`. Breaking changes use `!` + `BREAKING CHANGE:` footer.
   End every commit with the `Co-Authored-By:` trailer given in the session.
 - Commits are small and logical (one concern each); the PR is squash-merged with a Conventional-Commit title.
-- PR description: fill [.github/pull_request_template.md](.github/pull_request_template.md). Save a copy to
-  `docs/pr/NNNN-<slug>.md` while there's no GitHub remote (`gh` is not installed on this machine).
+- PR description: fill [.github/pull_request_template.md](.github/pull_request_template.md) (What / Why / How +
+  checklist) and save a copy to `docs/pr/NNNN-<slug>.md`. Remote: `origin` = github.com/OopsieLazy/LeMuse.
+  `gh` isn't installed here, so the owner pushes and opens PRs.
 - Never force-push shared branches, never rewrite `main`, never skip hooks.
 
 ## End of every conversation (required)
 
 Finish with a handoff using [docs/templates/session-handoff.md](docs/templates/session-handoff.md):
-append an entry to `docs/PROGRESS.md`, then give the owner **every command** they need — review, merge
-(squash, with the ✅-checklist merge description), tag if releasing, and branch cleanup
-(`git branch -D`, `git push origin --delete`, `git fetch --prune`).
+append a **short** entry to `docs/PROGRESS.md`, then give the owner **every command** they need:
+
+- review;
+- merge (squash, with the ✅-checklist merge description);
+- tag if releasing;
+- branch cleanup (`git branch -D`, `git push origin --delete`, `git fetch --prune`).
+
+**Command format:** each comment on its own line *above* its command, never trailing (owner, Q13).
+PR descriptions use What / Why / How + checklist (`.github/pull_request_template.md`).
+
+**Keep notes slim and tidy:** PROGRESS entries ≤ ~15 lines, PLAN holds only open work and the findings register,
+details live in ADRs and reviews. Plan before executing: put multi-part requests into PLAN § Now first.
 
 ## Commands
 

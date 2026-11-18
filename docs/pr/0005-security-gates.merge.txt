@@ -1,0 +1,19 @@
+ci: security gates on commits, before the agent finishes, and in CI (#5)
+
+What: secret/personal-data scan (pre-commit, Stop gate, CI), admin-review
+agent hook on commits, gitleaks + npm/cargo audit + dependency review,
+installer size budget, Vite 6.4.5, What/Why/How PR template.
+Why: security is the owner's top concern; the repo is public (ADR-0011).
+
+✅ scan-secrets.mjs: keys, tokens, JWTs, credentials, personal emails; never prints values
+✅ Claude Code PreToolUse agent hook reviews each commit as admin
+✅ Stop gate blocks finishing until the scan is clean and a review exists
+✅ Deny rules: force push, push/merge to main, --no-verify, reading keys
+✅ CI security job: gitleaks, npm audit, cargo audit, dependency review
+✅ npm audit 0 (Vite 6.4.5); 10 MiB installer budget
+✅ PR template What/Why/How; handoff commands with comments above lines
+⬜ Owner: Q15 read-only git for the review agent (default no)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0005-security-gates.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -21,6 +21,36 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  security:
+    # Security is the first gate (ADR-0011): secrets, then vulnerable dependencies.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Secret + personal-data scan (repo scanner)
+        run: node scripts/scan-secrets.mjs --all
+      - name: Secret scan (gitleaks, full history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: npm audit (high and above fails)
+        working-directory: app
+        run: npm ci --ignore-scripts && npm audit --audit-level=high
+      - name: cargo audit (RustSec advisories)
+        run: cargo install cargo-audit --locked && cargo audit
+      - name: Dependency review (new deps in this PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
   rust:
     runs-on: windows-latest
     steps:
@@ -69,7 +99,7 @@ jobs:
     # A downloadable Windows test build on every PR, so the owner can run the
     # real app without a toolchain (ADR-0009). Unsigned; for review only.
     if: github.event_name == 'pull_request'
-    needs: app
+    needs: [app, security]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +115,13 @@ jobs:
       - name: Build installer
         working-directory: app
         run: npm run tauri build -- --bundles nsis
+      - name: Installer size budget (keep it slim, ADR-0011)
+        shell: pwsh
+        run: |
+          $f = Get-Item target/release/bundle/nsis/*.exe
+          $mb = [math]::Round($f.Length / 1MB, 2)
+          Write-Host "installer: $mb MiB (budget 10 MiB)"
+          if ($f.Length -gt 10MB) { throw "Installer is $mb MiB, over the 10 MiB budget" }
       - uses: actions/upload-artifact@v4
         with:
           name: lemuse-test-build-${{ github.event.pull_request.number }}

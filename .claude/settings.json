@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push origin main*)",
+      "Bash(git commit --no-verify*)",
+      "Bash(git commit -n *)",
+      "Bash(git merge * main*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(git commit*)",
+            "model": "sonnet",
+            "timeout": 180,
+            "statusMessage": "Admin review of staged changes",
+            "prompt": "You are LeMuse's admin/architect reviewer (CLAUDE.md, ADR-0011). A git commit is about to run: $ARGUMENTS\n\nRun `git diff --cached --stat` and `git diff --cached` in the repository and review ONLY the staged changes. Block (ok=false) if any of these appear:\n1. A secret: token, API key, password, private key, bearer value, or a credential/.env/key file.\n2. Personal data: an email address (other than noreply), real name, or other private detail of the owner or anyone else. The public repo URL https://github.com/OopsieLazy/LeMuse and the handle in CODEOWNERS are allowed.\n3. A token stored anywhere except Windows Credential Manager, or printed to logs.\n4. The Tauri CSP widened, or new Tauri capabilities/permissions/plugins, without a matching ADR or review note in the same commit series.\n5. Network calls that bypass connectors::http::HttpClient, crawling beyond channels the user listed, or any workaround for bot protection (ADR-0004).\n6. An edit to an existing migration file under crates/lemuse-core/migrations/.\n7. Disabled checks: --no-verify, removed hooks, or weakened CI gates.\nOtherwise ok=true. Be quick: read only what the diff touches. In the reason, name the file and rule; never quote a secret value."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/stop-gate.mjs\"",
+            "timeout": 60,
+            "statusMessage": "Admin gate: secret scan + review check"
+          }
+        ]
+      }
+    ]
+  }
+}

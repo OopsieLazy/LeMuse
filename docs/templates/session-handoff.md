@@ -30,30 +30,43 @@ Use at the end of **every** conversation. Part A is appended to `docs/PROGRESS.m
 
 Replace `<branch>`, `<NNNN>` and the title. Give *all* of these every time, even if some don't apply yet.
 
-```sh
-# 1. Review
-git switch <branch>
-git log --oneline main..<branch>
-git diff --stat main...<branch>
-cargo test && cargo clippy --all-targets -- -D warnings
+**Format rule (owner, Q13):** a comment goes on its **own line above** its command, never after it, so a whole
+line copies cleanly. One command per line; no `&&` chains unless the steps must run together.
 
-# 2a. Merge on GitHub (preferred, once a remote exists)
+```sh
+# Review: switch to the branch
+git switch <branch>
+# Review: list its commits
+git log --oneline main..<branch>
+# Review: which files changed
+git diff --stat main...<branch>
+# Review: security first, then tests and lint
+node scripts/scan-secrets.mjs --range main...<branch>
+cargo test
+cargo clippy --all-targets -- -D warnings
+
+# Merge on GitHub: push the branch
 git push -u origin <branch>
+# Merge on GitHub: open the PR (or use the web page GitHub prints after the push)
 gh pr create --base main --head <branch> --title "<type(scope): title>" --body-file docs/pr/<NNNN>-<slug>.md
+# Merge on GitHub: squash-merge it once CI is green
 gh pr merge <NNNN> --squash --delete-branch
 
-# 2b. Merge locally (no remote yet): squash with the checklist message
+# Merge locally instead: squash with the checklist message
 git switch main
 git merge --squash <branch>
 git commit -F docs/pr/<NNNN>-<slug>.merge.txt
+git push origin main
 
-# 3. Tag (only when releasing)
+# Tag (only when releasing)
 git tag -a vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 
-# 4. Cleanup (-D is required after a squash merge)
+# Cleanup: -D is required after a squash merge
 git branch -D <branch>
-git push origin --delete <branch>   # if it was pushed
+# Cleanup: delete the remote branch if it was pushed
+git push origin --delete <branch>
+# Cleanup: forget deleted remote branches
 git fetch --prune
 ```
 
@@ -62,7 +75,8 @@ git fetch --prune
 ```
 <type(scope)>: <title> (#NNNN)
 
-<one-paragraph summary>
+What: <one line>
+Why: <one line>
 
 ✅ <done item>
 ✅ <done item>
