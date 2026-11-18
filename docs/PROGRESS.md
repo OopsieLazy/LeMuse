@@ -5,6 +5,19 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-18 (session 10): whole channels, auto refresh, JSON; sources and dashboard plans
+
+**Branch:** `feat/0013-full-channels-refresh-json` (pushed, stacked on #12) · **Status:** awaiting owner review
+
+- **Fixed the 200 cap:** channels resume across refreshes (migration 0006). On a copy of the owner's library, one
+  refresh took 4,489 → 6,450 images in 2 min 13 s with 0 errors; big channels continue each refresh.
+- **Auto refresh** every 60 min while the app runs; **`--json`** envelope on every CLI command.
+- **Plans:** ADR-0018 (sources; Pinterest only via the official API or clipping to Are.na), ADR-0019 (read-only
+  dashboard server); `docs/product/audiences.md`; caching table in ARCHITECTURE.
+- **Owner:** Q18–Q20 open; Dependency graph; lock `main`.
+
+---
+
 ## 2026-11-18 (session 9): CI fix; ADR-0016; mini player and kept links
 
 **Branches:** `ci/0011-fix-security-checks`, `docs/0010-roadmap-review-flow`, `feat/0012-mini-player-links`

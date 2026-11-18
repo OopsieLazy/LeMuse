@@ -14,17 +14,18 @@ Images stream from the source; only Save writes files.
   test installer) and clicks **Squash and merge**.
 - `main` is locked, so changes reach it only through a reviewed PR.
 
-## Now (session 9, owner's request of 2026-11-18)
+## Now (session 10, owner's request of 2026-11-18)
 
-Merge order: **#11 → #10 → #12** (press "Update branch" on each after the one before merges).
+Merge order: **#11 → #10 → #12 → #13** (press "Update branch" on each after the one before merges).
 
 | # | Work | Branch | Status |
 |---|---|---|---|
-| 1 | CI fix: gitleaks binary over full history (the action scanned nothing); PR-title check re-runs on edit | `ci/0011-fix-security-checks` | ✅ pushed |
-| 2 | Roadmap, feature ideas, review flow; ADR-0016 (mini player, iPhone, links, automation, audiences) | `docs/0010-roadmap-review-flow` | ✅ pushed |
-| 3 | **Mini player** (M): small, borderless, always-on-top, movable to any monitor, remembers its place | `feat/0012-mini-player-links` | ⏳ |
-| 4 | **Kept links:** fallback to other stored sizes before skipping; Copy link; `lemuse export-links` (CSV, JSON, text) | `feat/0012-mini-player-links` | ⏳ |
-| 5 | Owner: enable Dependency graph; lock `main` (ruleset); answer Q18 (publish the iPhone web app on GitHub Pages?) | — | ⏳ owner |
+| 1 | CI fix: gitleaks binary over full history; PR-title check re-runs on edit | `ci/0011-fix-security-checks` | ✅ pushed |
+| 2 | Roadmap, review flow, ADR-0016, this plan | `docs/0010-roadmap-review-flow` | ✅ pushed |
+| 3 | Mini player (M), Copy link (L), image fallbacks, `export-links` | `feat/0012-mini-player-links` | ✅ pushed |
+| 4 | **Whole channels** (resume across refreshes; no more 200 cap), **auto refresh** every 60 min, **`--json`** on every CLI command (ADR-0017) | `feat/0013-full-channels-refresh-json` | ✅ pushed |
+| 5 | Plans: sources beyond Are.na incl. Pinterest (ADR-0018), dashboard architecture (ADR-0019), audiences tracker, caching explained | same branch | ✅ |
+| 6 | Owner: enable Dependency graph; lock `main`; answer Q18 (iPhone web app on GitHub Pages), Q19 ($99 native), Q20 (Pinterest developer app) | — | ⏳ owner |
 
 ## Roadmap
 
@@ -35,6 +36,11 @@ Claude's recommendation; the owner can reorder.
 
 - [ ] Mini player: borderless, always-on-top, any monitor, remembered size and place
 - [ ] Image link fallbacks; Copy link; `lemuse export-links`
+
+### v0.7.1: Whole channels, auto refresh, JSON (PR #13, ADR-0017)
+
+- [x] Channels load in full across refreshes; a just-added channel reads up to 5,000 items at once
+- [x] Auto refresh while the app runs (60 min); `--json` on every CLI command (docs/automation.md)
 
 ### v0.8: Save and sign in (finishes M1)
 
@@ -73,7 +79,8 @@ Claude's recommendation; the owner can reorder.
 - [ ] **Local dashboard page** `lemuse serve` (127.0.0.1 + token, read-only) for OBS, Home Assistant, a wall
       screen
 - [ ] **Webhook on refresh** (Discord, Slack, Home Assistant); JSON from every CLI command
-- [ ] **Local folder source:** your own reference folders as topics
+- [ ] **New sources, one per PR (ADR-0018):** local folders, Wikimedia Commons, The Met, Smithsonian Open
+      Access, Poly Haven; Pinterest via the official API if Q20 is yes
 - [ ] Later: native iOS via a GitHub macOS runner + Apple Developer Program (Q19, $99/year)
 
 ### v1.0: Ambient and release (M4)
@@ -131,6 +138,7 @@ Claude's recommendation; the owner can reorder.
 | Q17 | How should work reach `main`? | ✅ (2026-11-17) Claude pushes branches (never `main`); the owner opens and reviews PRs on github.com (no `gh`) and squash-merges there; `main` locked by a ruleset |
 | Q18 | Publish the iPhone web app on GitHub Pages (a public page under your account)? | **Open** (ADR-0016) |
 | Q19 | Native iPhone app later (Apple Developer Program, $99/year)? | **Open**, not needed for the web app |
+| Q20 | Register a Pinterest developer app (free; uses your Pinterest account) for an official Pinterest source? | **Open** (ADR-0018). Meanwhile: clip pins into an Are.na channel |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register
@@ -145,7 +153,6 @@ Claude's recommendation; the owner can reorder.
 | A-4 | Review 0001 r1 | Review gates are procedural until the ruleset, bot account and deny rules exist | M1 |
 | A-5 | Review 0001 r1 | Asset scope hardcoded to `$PICTURE/LeMuse/**` | M2 |
 | A-6 | Review 0001 r1 | Removed remote items are invisible to the watermark walk | M3 |
-| A-7 | Review 0001 r2 | A watermark held by the page budget means big channels re-fetch pages 1–2 each launch (cheap, bounded) | Accepted; revisit in M3 |
 | D-15 | Review 0002 | `slides()` "newest first" is loose across sources (mixed timestamp formats) | M2 (normalize to UTC) |
 | D-18 | Review 0002 | AIC images sit behind a Cloudflare challenge for non-browser clients; unverified in WebView2 | M1 (verify; enable `aic` only if it works) |
 | A-17 | Review 0003 | InPrivate WebView loses `localStorage`; UI prefs must persist via the core | M2 |
@@ -158,5 +165,7 @@ Claude's recommendation; the owner can reorder.
 | D-42 | Review 0008 | npm audit exception for picomatch GHSA-fc5q-39xc-vjpf (dev-only, no fixed release) | Re-check by 2026-12-15; the gate fails on expiry |
 | D-53 | Review 0009 | Shuffle mixes the current page only | M2: shuffle across pages (random order in SQL) |
 | D-54 | Review 0009 | Word-based categories mislabel some images; untitled images rely on channel names | M2: manual corrections; later maybe a local image model (ADR-0015 option B) |
+| D-74 | Review 0013 | Add channel and Find channels are refused during a long refresh | v0.8: queue them |
+| D-75 | Review 0013 | The installer doesn't ship `lemuse.exe` (needed for Task Scheduler) | v0.8: bundle the CLI as a sidecar |
 | A-50 | Review 0010 | CI actions pinned to Node 20 releases (deprecated); ubuntu-latest moving to Ubuntu 26 | Next CI touch: bump pinned SHAs (14-day cooldown) |
 | A-39 | Review 0009 | In-app Are.na search needs Premium | Only if the owner buys Premium (Q10 = no) |
