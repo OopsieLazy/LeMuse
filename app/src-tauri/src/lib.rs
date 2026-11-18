@@ -470,6 +470,30 @@ fn spawn_refresh(app: AppHandle, flag: Arc<AtomicBool>, trigger: Trigger) {
     });
 }
 
+/// Refresh again every `sync.interval_minutes` while the app runs
+/// (ADR-0017; default 60, 0 = off). Checked once a minute, so a changed
+/// setting applies without a restart. Uses the same path as every other
+/// refresh, and skips a tick if one is already running.
+fn spawn_auto_refresh(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut minutes_waited: u32 = 0;
+        loop {
+            std::thread::sleep(Duration::from_secs(60));
+            minutes_waited = minutes_waited.saturating_add(1);
+            let every = load_config(&library_paths())
+                .ok()
+                .and_then(|c| c.sync.interval_minutes)
+                .unwrap_or(0);
+            if every == 0 || minutes_waited < every {
+                continue;
+            }
+            minutes_waited = 0;
+            let flag = app.state::<Refreshing>().0.clone();
+            spawn_refresh(app.clone(), flag, Trigger::Schedule);
+        }
+    });
+}
+
 fn done_event(
     trigger: &'static str,
     result: Result<lemuse_core::sync::RunSummary, String>,
@@ -506,6 +530,7 @@ pub fn run() {
                 let flag = app.state::<Refreshing>().0.clone();
                 spawn_refresh(app.handle().clone(), flag, Trigger::Launch);
             }
+            spawn_auto_refresh(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

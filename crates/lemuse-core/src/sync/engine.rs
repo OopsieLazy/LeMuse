@@ -13,6 +13,12 @@
 //! 6. advance the watermark only if the pass was complete (reached the
 //!    watermark or the last page) and had no errors, so nothing is skipped.
 //!
+//! Whole channels (ADR-0017): when the page budget stops a pass early, the
+//! next page's cursor is saved. The next refresh first walks the head down
+//! to the newest item of that unfinished pass (catching new items), then
+//! resumes at the saved cursor, so a 1,200-item channel completes over a few
+//! refreshes instead of being stuck at its newest pages.
+//!
 //! Known gap (tracked in docs/PLAN.md): items *removed* from a remote
 //! channel don't show up in an updated_at walk — a periodic full reconcile
 //! pass is planned for M3.
@@ -77,6 +83,30 @@ pub struct RunSummary {
 struct PassOptions {
     mode: FileMode,
     max_pages: u32,
+}
+
+/// Why a walk over pages ended.
+#[derive(Debug, PartialEq, Eq)]
+enum WalkEnd {
+    /// No more pages.
+    LastPage,
+    /// Reached an item strictly older than the stop timestamp.
+    ReachedStop,
+    /// Out of page budget; the cursor of the next unfetched page.
+    Budget(Option<String>),
+}
+
+struct Walk {
+    pages: u32,
+    newest: Option<String>,
+    end: WalkEnd,
+}
+
+fn newer(a: Option<String>, b: Option<String>) -> Option<String> {
+    match (a, b) {
+        (Some(x), Some(y)) => Some(if x > y { x } else { y }),
+        (x, y) => x.or(y),
+    }
 }
 
 pub struct SyncEngine<'a> {
@@ -208,35 +238,141 @@ impl<'a> SyncEngine<'a> {
             None
         };
         let errors_before = summary.errors.len();
-        let mut newest_seen: Option<String> = None;
-        let mut cursor: Option<String> = None;
-        let mut pages_fetched = 0u32;
-        // False if we stop because of the page budget rather than reaching
-        // the watermark or the last page.
-        let mut complete = true;
 
-        'pages: loop {
-            if pages_fetched == max_pages {
-                complete = false;
-                break;
+        if !ordered {
+            // Search results: the first page(s) are the point; mark the
+            // collection fresh so `min_refresh_hours` applies.
+            self.walk(
+                conn,
+                topic,
+                target,
+                collection_id,
+                opts,
+                throttle,
+                summary,
+                None,
+                None,
+                max_pages,
+            )?;
+            if summary.errors.len() == errors_before {
+                self.catalog.touch_synced(collection_id)?;
+            }
+            return Ok(());
+        }
+
+        // 1. Head: newest items down to where we stopped last time (the
+        //    unfinished pass's newest item) or to the watermark.
+        let resume = self.catalog.resume_state(collection_id)?;
+        let head_stop = resume
+            .as_ref()
+            .and_then(|(_, newest)| newest.clone())
+            .or_else(|| watermark.clone());
+        let head = self.walk(
+            conn,
+            topic,
+            target,
+            collection_id,
+            opts,
+            throttle,
+            summary,
+            None,
+            head_stop.as_deref(),
+            max_pages,
+        )?;
+        let mut pass_newest = newer(head.newest, resume.as_ref().and_then(|(_, n)| n.clone()));
+        let mut end = head.end;
+        // 2. Backfill: continue the unfinished pass at its saved cursor, down
+        //    to the old watermark or the last page. Always at least one page,
+        //    so every refresh makes progress.
+        if end == WalkEnd::ReachedStop {
+            if let Some((cursor, _)) = resume {
+                let budget = max_pages.saturating_sub(head.pages).max(1);
+                let back = self.walk(
+                    conn,
+                    topic,
+                    target,
+                    collection_id,
+                    opts,
+                    throttle,
+                    summary,
+                    Some(cursor),
+                    watermark.as_deref(),
+                    budget,
+                )?;
+                pass_newest = newer(pass_newest, back.newest);
+                end = back.end;
+            }
+        }
+
+        if summary.errors.len() != errors_before {
+            return Ok(()); // retry from the same state next time
+        }
+        match end {
+            WalkEnd::Budget(next) => match next {
+                Some(cursor) => {
+                    self.catalog
+                        .set_resume(collection_id, &cursor, pass_newest.as_deref())?
+                }
+                None => self.catalog.clear_resume(collection_id)?,
+            },
+            WalkEnd::LastPage | WalkEnd::ReachedStop => {
+                let new_wm = newer(pass_newest, watermark);
+                self.catalog
+                    .set_watermark(collection_id, new_wm.as_deref())?;
+                self.catalog.clear_resume(collection_id)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Fetch pages from `start` (None = first page) until the last page, an
+    /// item strictly older than `stop_at`, or `budget` pages.
+    #[allow(clippy::too_many_arguments)] // one call site per phase; a struct would only rename them
+    fn walk(
+        &mut self,
+        conn: &mut dyn Connector,
+        topic: &str,
+        target: &TopicSource,
+        collection_id: i64,
+        opts: PassOptions,
+        throttle: &mut Throttle,
+        summary: &mut RunSummary,
+        start: Option<String>,
+        stop_at: Option<&str>,
+        budget: u32,
+    ) -> Result<Walk> {
+        let mut cursor = start;
+        let mut pages = 0u32;
+        let mut newest: Option<String> = None;
+        loop {
+            if pages == budget {
+                return Ok(Walk {
+                    pages,
+                    newest,
+                    end: WalkEnd::Budget(cursor),
+                });
             }
             self.pace(throttle);
             let page = self.with_retry(|| conn.fetch_page(target, cursor.as_deref()))?;
-            pages_fetched += 1;
+            pages += 1;
 
             for item in page.items {
                 let updated = item.block.remote_updated_at.clone();
-                if let (Some(wm), Some(u)) = (&watermark, &updated) {
+                if let (Some(stop), Some(u)) = (stop_at, &updated) {
                     // RFC 3339 UTC strings compare lexicographically. Strictly
-                    // older only: items *at* the watermark fall through to the
-                    // unchanged-check below, so a block sharing the watermark's
-                    // timestamp is never silently skipped (review A-3).
-                    if u.as_str() < wm.as_str() {
-                        break 'pages;
+                    // older only: items *at* the stop fall through to the
+                    // unchanged-check below, so a block sharing its timestamp
+                    // is never silently skipped (review A-3).
+                    if u.as_str() < stop {
+                        return Ok(Walk {
+                            pages,
+                            newest,
+                            end: WalkEnd::ReachedStop,
+                        });
                     }
                 }
-                if newest_seen.is_none() {
-                    newest_seen = updated.clone();
+                if newest.is_none() {
+                    newest = updated.clone();
                 }
 
                 let src = &item.block.source;
@@ -286,24 +422,15 @@ impl<'a> SyncEngine<'a> {
 
             match page.next {
                 Some(next) => cursor = Some(next),
-                None => break,
+                None => {
+                    return Ok(Walk {
+                        pages,
+                        newest,
+                        end: WalkEnd::LastPage,
+                    })
+                }
             }
         }
-
-        let clean = summary.errors.len() == errors_before;
-        if ordered && complete && clean {
-            let new_wm = match (newest_seen, watermark) {
-                (Some(n), Some(o)) => Some(if n > o { n } else { o }),
-                (n, o) => n.or(o),
-            };
-            self.catalog
-                .set_watermark(collection_id, new_wm.as_deref())?;
-        } else if !ordered && clean {
-            // Search results: the first page(s) are the point; mark the
-            // collection fresh so `min_refresh_hours` applies.
-            self.catalog.touch_synced(collection_id)?;
-        }
-        Ok(())
     }
 
     fn download_all(
@@ -657,5 +784,121 @@ mod tests {
     fn ext_from_url_handles_queries_and_missing_ext() {
         assert_eq!(ext_from_url("https://x/a/b.JPG?123"), "jpg");
         assert_eq!(ext_from_url("https://x/a/b"), "bin");
+    }
+
+    /// A page of image blocks `(id, updated_at)`; `next` is the next page.
+    fn image_page(items: &[(u64, &str)], next: Option<u32>) -> String {
+        let data: Vec<String> = items
+            .iter()
+            .map(|(id, at)| {
+                format!(
+                    r#"{{"id":{id},"type":"Image","state":"available","updated_at":"{at}","title":"img {id}",
+                    "image":{{"src":"https://d2w9rnfcy7mm78.cloudfront.net/{id}/o.jpg",
+                    "large":{{"src":"https://images.are.na/{id}/l.jpg"}}}}}}"#
+                )
+            })
+            .collect();
+        let meta = match next {
+            Some(n) => format!(r#"{{"has_more_pages":true,"next_page":{n}}}"#),
+            None => r#"{"has_more_pages":false}"#.to_string(),
+        };
+        format!(r#"{{"data":[{}],"meta":{meta}}}"#, data.join(","))
+    }
+
+    #[test]
+    fn large_channels_complete_over_several_refreshes() {
+        let (dir, http, mut cfg) = setup(FileMode::Stream);
+        cfg.sync.pages_per_refresh = 1;
+        http.push(
+            &format!("{API_BASE}/channels/refs"),
+            200,
+            r#"{"title":"CAD refs"}"#,
+        );
+        let p1 = image_page(
+            &[(5, "2026-11-05T00:00:00Z"), (4, "2026-11-04T00:00:00Z")],
+            Some(2),
+        );
+        let p2 = image_page(
+            &[(3, "2026-11-03T00:00:00Z"), (2, "2026-11-02T00:00:00Z")],
+            Some(3),
+        );
+        let p3 = image_page(&[(1, "2026-11-01T00:00:00Z")], None);
+        for _ in 0..4 {
+            http.push(&contents_url(1), 200, p1.clone());
+        }
+        http.push(&contents_url(2), 200, p2);
+        http.push(&contents_url(3), 200, p3);
+        let mut catalog = Catalog::open_in_memory().unwrap();
+        let mut engine = SyncEngine::new(LibraryPaths::new(dir.path()), &mut catalog, http.clone());
+        engine.sleep_enabled = false;
+        let mut conns = arena(&http);
+        for _ in 0..3 {
+            let s = engine.run(&cfg, &mut conns, Trigger::Launch).unwrap();
+            assert!(s.errors.is_empty(), "{:?}", s.errors);
+        }
+        // A fourth refresh: only the head page, nothing new.
+        let s4 = engine.run(&cfg, &mut conns, Trigger::Launch).unwrap();
+        assert_eq!(s4.blocks_upserted, 0);
+        drop(engine);
+        assert_eq!(catalog.block_count().unwrap(), 5, "every page reached");
+        assert_eq!(
+            catalog.watermark(1).unwrap().as_deref(),
+            Some("2026-11-05T00:00:00Z")
+        );
+        assert_eq!(catalog.resume_state(1).unwrap(), None);
+        let reqs = http.requests.lock().unwrap().clone();
+        let pages: Vec<&String> = reqs.iter().filter(|u| u.contains("/contents")).collect();
+        assert_eq!(pages.len(), 6, "p1, p1+p2, p1+p3, p1: {pages:?}");
+    }
+
+    #[test]
+    fn new_items_during_a_backfill_are_caught_by_the_head() {
+        let (dir, http, mut cfg) = setup(FileMode::Stream);
+        cfg.sync.pages_per_refresh = 1;
+        http.push(
+            &format!("{API_BASE}/channels/refs"),
+            200,
+            r#"{"title":"CAD refs"}"#,
+        );
+        http.push(
+            &contents_url(1),
+            200,
+            image_page(
+                &[(5, "2026-11-05T00:00:00Z"), (4, "2026-11-04T00:00:00Z")],
+                Some(2),
+            ),
+        );
+        // Before the second refresh, block 6 is added at the top.
+        for _ in 0..2 {
+            http.push(
+                &contents_url(1),
+                200,
+                image_page(
+                    &[(6, "2026-11-06T00:00:00Z"), (5, "2026-11-05T00:00:00Z")],
+                    Some(2),
+                ),
+            );
+        }
+        http.push(
+            &contents_url(2),
+            200,
+            image_page(
+                &[(4, "2026-11-04T00:00:00Z"), (3, "2026-11-03T00:00:00Z")],
+                None,
+            ),
+        );
+        let mut catalog = Catalog::open_in_memory().unwrap();
+        let mut engine = SyncEngine::new(LibraryPaths::new(dir.path()), &mut catalog, http.clone());
+        engine.sleep_enabled = false;
+        let mut conns = arena(&http);
+        for _ in 0..3 {
+            engine.run(&cfg, &mut conns, Trigger::Launch).unwrap();
+        }
+        drop(engine);
+        assert_eq!(catalog.block_count().unwrap(), 4, "blocks 3 to 6");
+        assert_eq!(
+            catalog.watermark(1).unwrap().as_deref(),
+            Some("2026-11-06T00:00:00Z")
+        );
     }
 }

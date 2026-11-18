@@ -18,6 +18,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0003_playlists.sql"),
     include_str!("../../migrations/0004_playlist_block_index.sql"),
     include_str!("../../migrations/0005_categories.sql"),
+    include_str!("../../migrations/0006_resume_cursor.sql"),
 ];
 
 /// Caps that keep a scripted or runaway UI from growing local state without
@@ -391,6 +392,56 @@ impl Catalog {
     }
 
     /// The stored remote `updated_at` for a block, if we have it.
+    /// Where an unfinished pass over a collection stopped: the next page's
+    /// cursor and the newest `updated_at` that pass saw (ADR-0017).
+    pub fn resume_state(&self, collection_id: i64) -> Result<Option<(String, Option<String>)>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT resume_cursor, pass_newest FROM collections
+                 WHERE id = ?1 AND resume_cursor IS NOT NULL",
+                params![collection_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?)
+    }
+
+    pub fn set_resume(
+        &self,
+        collection_id: i64,
+        cursor: &str,
+        pass_newest: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE collections SET resume_cursor = ?2, pass_newest = ?3,
+                 last_synced_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+             WHERE id = ?1",
+            params![collection_id, cursor, pass_newest],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_resume(&self, collection_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE collections SET resume_cursor = NULL, pass_newest = NULL WHERE id = ?1",
+            params![collection_id],
+        )?;
+        Ok(())
+    }
+
+    /// Collections with an unfinished pass, and how many items they hold
+    /// locally so far (for `lemuse status`).
+    pub fn unfinished(&self) -> Result<Vec<(String, u64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT c.title, (SELECT COUNT(*) FROM collection_blocks cb WHERE cb.collection_id = c.id)
+             FROM collections c WHERE c.resume_cursor IS NOT NULL ORDER BY c.title",
+        )?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     pub fn remote_updated_at(&self, connector: &str, remote_id: &str) -> Result<Option<String>> {
         Ok(self
             .conn
