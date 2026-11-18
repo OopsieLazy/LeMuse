@@ -19,6 +19,7 @@ pub mod config;
 pub mod config_edit;
 pub mod connectors;
 pub mod error;
+pub mod export;
 pub mod import;
 pub mod model;
 pub mod store;

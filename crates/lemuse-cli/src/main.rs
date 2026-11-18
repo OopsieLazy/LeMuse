@@ -77,6 +77,16 @@ enum Command {
     },
     /// Show an Are.na channel's first images without adding it (2 reads).
     PreviewChannel { link: String },
+    /// Every stored link of a topic, a playlist, or All (default), to stdout.
+    /// Links only; no image is downloaded.
+    ExportLinks {
+        #[arg(long, conflicts_with = "playlist")]
+        topic: Option<String>,
+        #[arg(long)]
+        playlist: Option<String>,
+        #[arg(long, value_enum, default_value_t = LinkFormat::Csv)]
+        format: LinkFormat,
+    },
     /// Public Are.na channels a block is also in (1 read per page).
     Related {
         /// Are.na block id (the number in are.na/block/<id>).
@@ -84,6 +94,13 @@ enum Command {
         #[arg(long, default_value_t = 1)]
         page: u32,
     },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum LinkFormat {
+    Csv,
+    Json,
+    Txt,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -110,6 +127,46 @@ fn main() -> ExitCode {
 
 fn run(cmd: Command, paths: &LibraryPaths) -> lemuse_core::Result<()> {
     match cmd {
+        Command::ExportLinks {
+            topic,
+            playlist,
+            format,
+        } => {
+            use lemuse_core::store::catalog::Scope;
+            let cfg = Config::load(&paths.config())?;
+            let catalog = Catalog::open(&paths.catalog())?;
+            let rows = if let Some(name) = playlist {
+                let id = catalog.playlist_id(&name)?.ok_or_else(|| {
+                    lemuse_core::Error::Config(format!("no playlist named `{name}`"))
+                })?;
+                catalog.links(&Scope::Playlist(id))?
+            } else {
+                let keys: Vec<(String, String)> = match topic {
+                    Some(name) => cfg
+                        .topic(&name)
+                        .ok_or_else(|| {
+                            lemuse_core::Error::Config(format!("no topic named `{name}`"))
+                        })?
+                        .collection_keys(),
+                    None => cfg
+                        .topics
+                        .iter()
+                        .flat_map(|t| t.collection_keys())
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .into_iter()
+                        .collect(),
+                };
+                catalog.links(&Scope::collections(&keys))?
+            };
+            let out = match format {
+                LinkFormat::Csv => lemuse_core::export::to_csv(&rows),
+                LinkFormat::Txt => lemuse_core::export::to_text(&rows),
+                LinkFormat::Json => serde_json::to_string_pretty(&rows).unwrap_or_default(),
+            };
+            print!("{out}");
+            eprintln!("{} image(s)", rows.len());
+            Ok(())
+        }
         Command::PreviewChannel { link } => {
             let cfg = ensure_library(paths)?;
             let slug = lemuse_core::connectors::arena::parse_channel_ref(&link)
