@@ -83,6 +83,7 @@ export function App() {
   const [mini, setMini] = useState(false);
   const [miniBarOpen, setMiniBarOpen] = useState(false);
   const [compactBarOpen, setCompactBarOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [miniMenuOpen, setMiniMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | undefined>();
   // Per image: how many stored fallback sizes have been tried.
@@ -413,6 +414,23 @@ export function App() {
       .catch(() => say("Couldn't reach the clipboard"));
   }, [slide, say]);
 
+  // ---- Save the original (ADR-0022) ----
+  const saveCurrent = useCallback(async () => {
+    if (!slide || !active) return;
+    const id = slide.block_id;
+    setSaving(true);
+    try {
+      const r = await api.saveImage(id, active);
+      setSource((list) => list.map((s) => (s.block_id === id ? { ...s, saved: true } : s)));
+      const folder = r.view.split("/").slice(0, -1).join(" › ");
+      say(`Saved to LeMuse › ${folder}`);
+    } catch (e) {
+      say(message(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [slide, active, say]);
+
   // Keyboard: ← → Space S F H T P C R D M L A , Esc. Ignored while typing or in a dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -636,6 +654,8 @@ export function App() {
         }}
         onToggleMiniMenu={() => setMiniMenuOpen((o) => !o)}
         onCopyLink={copyLink}
+        onSave={saveCurrent}
+        saving={saving}
         toast={toast}
         onSelect={(next) => {
           setFailed(new Set());

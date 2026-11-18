@@ -85,6 +85,13 @@ enum RefreshEvent {
 #[derive(Default)]
 struct Refreshing(Arc<AtomicBool>);
 
+/// Spacing between saves, so a script in a compromised page can't fill the
+/// disk quickly (at most 120 saves a minute; review 0017).
+const SAVE_SPACING: Duration = Duration::from_millis(500);
+
+#[derive(Default)]
+struct SaveGate(Mutex<Option<Instant>>);
+
 /// Serialises edits to lemuse.toml and holds the time the next UI-started
 /// Are.na read is allowed (shared by Add channel, Preview and Related).
 #[derive(Default)]
@@ -261,6 +268,55 @@ fn category_counts(
 #[tauri::command]
 fn vocabulary() -> categories::UiVocabulary {
     categories::ui_vocabulary(categories::vocabulary())
+}
+
+// ── Save (ADR-0022) ─────────────────────────────────────────────────────
+
+/// Save the current image's original into `views/<topic or playlist>/`
+/// (`views/Saved/` from All). The folder comes from the source the core
+/// resolves, never from a path the page sends.
+#[tauri::command]
+async fn save_image(
+    app: AppHandle,
+    block_id: i64,
+    source: SlideSource,
+) -> Result<lemuse_core::save::Saved, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        {
+            let gate = app.state::<SaveGate>();
+            let mut next = gate
+                .0
+                .lock()
+                .map_err(|_| "save lock poisoned".to_string())?;
+            let now = Instant::now();
+            if next.is_some_and(|at| now < at) {
+                return Err("One moment: the last save is still finishing.".to_string());
+            }
+            *next = Some(now + SAVE_SPACING);
+        }
+        let paths = library_paths();
+        let cfg = load_config(&paths)?;
+        let catalog = catalog()?;
+        let folder = match &source {
+            SlideSource::All => lemuse_core::save::DEFAULT_FOLDER.to_string(),
+            SlideSource::Topic { name } => cfg
+                .topic(name)
+                .map(|t| t.name.clone())
+                .ok_or_else(|| format!("no topic named `{name}`"))?,
+            SlideSource::Playlist { id } => catalog
+                .playlists()
+                .map_err(|e| e.to_string())?
+                .into_iter()
+                .find(|p| p.id == *id)
+                .map(|p| p.name)
+                .ok_or("That playlist no longer exists.")?,
+        };
+        let http = lemuse_core::sync::production_client(&cfg);
+        lemuse_core::save::save_original(&paths, &catalog, http.as_ref(), block_id, &folder, true)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ── Discover (ADR-0015) ─────────────────────────────────────────────────
@@ -513,6 +569,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(Refreshing::default())
         .manage(ConfigEdits::default())
+        .manage(SaveGate::default())
         .setup(|app| {
             // Sort images into categories if this build's vocabulary hasn't
             // yet (first launch after an update). Never blocks the window.
@@ -547,6 +604,7 @@ pub fn run() {
             vocabulary,
             preview_channel,
             related_channels,
+            save_image,
             add_channel,
             remove_channel,
             playlists,

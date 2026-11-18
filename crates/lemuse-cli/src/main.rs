@@ -130,6 +130,15 @@ enum Command {
         #[arg(long)]
         seed: Option<String>,
     },
+    /// Save an image's full-size original into views/<topic or playlist>/
+    /// (views/Saved/ by default). The block id is in `slides` output.
+    Save {
+        block_id: i64,
+        #[arg(long, conflicts_with = "playlist")]
+        topic: Option<String>,
+        #[arg(long)]
+        playlist: Option<String>,
+    },
     /// Public Are.na channels a block is also in (1 read per page).
     Related {
         /// Are.na block id (the number in are.na/block/<id>).
@@ -155,6 +164,7 @@ impl Command {
             Command::Related { .. } => "related",
             Command::Serve { .. } => "serve",
             Command::Sheet { .. } => "sheet",
+            Command::Save { .. } => "save",
         }
     }
 }
@@ -554,6 +564,43 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
                 json!({ "heading": heading, "seed": seed, "count": picked.len(), "html": html }),
                 html,
             ))
+        }
+        Command::Save {
+            block_id,
+            topic,
+            playlist,
+        } => {
+            let cfg = ensure_library(paths)?;
+            let catalog = Catalog::open(&paths.catalog())?;
+            let folder = match (topic, playlist) {
+                (Some(t), _) => cfg.topic(&t).ok_or_else(|| no_topic(&t))?.name.clone(),
+                (_, Some(p)) => {
+                    catalog.playlist_id(&p)?.ok_or_else(|| {
+                        lemuse_core::Error::Config(format!("no playlist named `{p}`"))
+                    })?;
+                    p
+                }
+                _ => lemuse_core::save::DEFAULT_FOLDER.to_string(),
+            };
+            let http = lemuse_core::sync::production_client(&cfg);
+            let saved = lemuse_core::save::save_original(
+                paths,
+                &catalog,
+                http.as_ref(),
+                block_id,
+                &folder,
+                true,
+            )?;
+            let text = format!(
+                "{} {}\n",
+                if saved.already_stored {
+                    "already stored; linked to"
+                } else {
+                    "saved to"
+                },
+                saved.view
+            );
+            Ok(out(to_value!(&saved), text))
         }
         Command::Related { block_id, page } => {
             let cfg = ensure_library(paths)?;

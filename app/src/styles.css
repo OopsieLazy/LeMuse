@@ -366,7 +366,8 @@ input {
 }
 
 /* Marks the playlist button when the current image is in a playlist. */
-.icon-btn[data-in-playlist="true"] {
+.icon-btn[data-in-playlist="true"],
+.icon-btn[data-saved="true"] {
   color: var(--accent);
 }
 

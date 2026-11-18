@@ -197,6 +197,9 @@ export const STATES: Record<string, State> = {
   "mini-tall": { props: { ...base, mini: true, slides: [tall], index: 0 }, mini: true },
   "mini-empty": { props: { ...base, mini: true, slides: [], index: 0, total: 0 }, mini: true },
   "link-copied": { props: { ...base, toast: "Link copied" } },
+  saved: {
+    props: { ...base, slides: base.slides.map((s) => ({ ...s, saved: true })), toast: "Saved to LeMuse › views › Wood objects" },
+  },
   // ---- ADR-0015: pages, categories, Find channels ----
   pages: { props: { ...base, active: { kind: "all" }, activeLabel: "All", total: 4489, page: 1 } },
   "pages-cinema": {

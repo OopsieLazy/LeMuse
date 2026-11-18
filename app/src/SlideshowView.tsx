@@ -84,6 +84,9 @@ export interface SlideshowViewProps {
   onToggleMiniMenu?: () => void;
   /** Copy the current image's links. */
   onCopyLink?: () => void;
+  /** Save the current image's original (desktop app). */
+  onSave?: () => void;
+  saving?: boolean;
   /** A short confirmation, e.g. "Link copied". */
   toast?: string;
   onSelect?: (source: SlideSource) => void;
@@ -625,7 +628,19 @@ export function SlideshowView(p: SlideshowViewProps) {
                 >
                   <Icon d={ICONS.link} />
                 </button>
-                <button type="button" className="icon-btn" disabled aria-label="Save original" title="Save arrives in a later build">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onSave}
+                  disabled={!slide || p.mode !== "app" || p.saving}
+                  data-saved={slide?.saved ? "true" : "false"}
+                  aria-label={slide?.saved ? "Saved: save into this folder too" : "Save original"}
+                  title={
+                    p.mode === "app"
+                      ? "Save the full-size original into your LeMuse folder"
+                      : "Saving works in the desktop app"
+                  }
+                >
                   <Icon d={ICONS.save} />
                 </button>
                 <span className="controls-sep" aria-hidden="true" />

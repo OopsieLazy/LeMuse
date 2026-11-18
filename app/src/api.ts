@@ -73,6 +73,14 @@ export interface Slide {
   fallback_urls?: string[];
 }
 
+/** Result of Save (ADR-0022). `view` is relative to the library folder. */
+export interface Saved {
+  block_id: number;
+  view: string;
+  bytes: number;
+  already_stored: boolean;
+}
+
 /** Where the mini player sat last time, in physical pixels. */
 export interface MiniBounds {
   x: number;
@@ -167,6 +175,8 @@ export interface Backend {
   setMini(on: boolean, saved: MiniBounds | null): Promise<MiniBounds | null>;
   /** Put text on the clipboard. */
   copyText(text: string): Promise<void>;
+  /** Save the image's original into the library folder for this source. */
+  saveImage(blockId: number, source: SlideSource): Promise<Saved>;
   /** Open an https link outside the app (system browser). */
   openExternal(url: string): Promise<void>;
   libraryStatus(): Promise<LibraryStatus>;
@@ -343,6 +353,7 @@ function tauriBackend(): Backend {
       return now;
     },
     copyText: (text) => navigator.clipboard.writeText(text),
+    saveImage: (blockId, source) => invoke<Saved>("save_image", { blockId, source }),
     async openExternal(url) {
       if (!isOpenable(url)) throw new Error("LeMuse only opens Are.na and museum pages.");
       const { openUrl } = await import("@tauri-apps/plugin-opener");
@@ -519,6 +530,9 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     },
     openExternal: async (url) => {
       if (isHttps(url)) window.open(url, "_blank", "noopener,noreferrer");
+    },
+    saveImage: async () => {
+      throw new Error("Saving works in the desktop app; it writes into your LeMuse folder.");
     },
     // The browser can't resize itself: the preview shows the mini layout only.
     setMini: async () => null,
