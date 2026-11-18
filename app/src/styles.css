@@ -140,13 +140,40 @@ input {
   padding: var(--space-1) var(--space-3);
 }
 
-.topic-list {
+.brand-add {
+  margin-left: auto;
+  align-self: center;
+}
+
+/* All, Topics and Playlists scroll together. */
+.rail-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding-bottom: var(--space-4);
+}
+
+.topic-list {
   list-style: none;
   margin: 0;
   padding: var(--space-2) var(--space-4);
+}
+
+.rail-heading {
+  margin: var(--space-5) 0 0;
+  padding: 0 var(--space-7);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-strong);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--muted);
+}
+
+.rail-hint {
+  margin: var(--space-3) 0 0;
+  padding: 0 var(--space-7);
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 
 .topic {
@@ -328,9 +355,122 @@ input {
 /* ============ Control bar ============ */
 
 .caption {
+  position: relative;
   flex: none;
   background: var(--panel-fill);
   border-top: var(--border);
+}
+
+/* Marks the playlist button when the current image is in a playlist. */
+.icon-btn[data-in-playlist="true"] {
+  color: var(--accent);
+}
+
+/* ============ Add-to-playlist menu (ADR-0014) ============ */
+
+.playlist-menu {
+  position: absolute;
+  right: var(--space-6);
+  bottom: calc(100% + var(--space-3));
+  z-index: var(--z-menu);
+  display: grid;
+  /* minmax(0, 1fr): a long nowrap name must ellipsize, not widen the menu. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  width: min(var(--menu-width), calc(100vw - 2 * var(--space-6)));
+  max-height: var(--menu-max-height);
+  overflow-y: auto;
+  padding: var(--space-5);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--dialog-shadow);
+  font-size: var(--text-sm);
+}
+
+:root[data-layout="caption-top"] .playlist-menu {
+  top: calc(100% + var(--space-3));
+  bottom: auto;
+}
+
+.playlist-menu p {
+  margin: 0;
+}
+
+.menu-title {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-strong);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--muted);
+}
+
+.menu-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  cursor: pointer;
+}
+
+.menu-check input {
+  accent-color: var(--accent);
+}
+
+.menu-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-empty,
+.list-label {
+  color: var(--muted);
+}
+
+.menu-error {
+  color: var(--error);
+}
+
+.menu-new,
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.menu-new input,
+.form-row input,
+.text-field input,
+.text-field select {
+  flex: 1 1 var(--field-min);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Hidden but read by screen readers (labels for compact fields). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .timer {
@@ -735,6 +875,87 @@ input {
   color: var(--accent-ink);
 }
 
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.text-btn.danger {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* ============ Channels and playlists dialog (ADR-0014) ============ */
+
+.stack-form {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.text-field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.form-status {
+  flex: 1 1 var(--status-min);
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.form-status.tone-ok {
+  color: var(--ok);
+}
+
+.form-status.tone-error {
+  color: var(--error);
+}
+
+.channel-list ul,
+ul.channel-list {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.channel-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border);
+}
+
+.channel-list .list-label {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.channel-slug {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-data);
+  font-size: var(--text-sm);
+}
+
+.playlist-admin .channel-slug {
+  font-family: inherit;
+}
+
+.playlist-admin .form-row {
+  flex: 1;
+}
+
+.row-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
 /* ============ Narrow windows and phones (docked layouts) ============ */
 
 @media (max-width: 720px) {
@@ -752,11 +973,23 @@ input {
     border-bottom: var(--border);
   }
 
+  /* Docked rail on a narrow window: one horizontal strip of All, topics and
+     playlists; section headings are dropped. */
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .rail-scroll {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 var(--space-3) var(--space-4);
+  }
+
   :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) .topic-list {
     display: flex;
     gap: var(--space-2);
-    overflow-x: auto;
-    padding: 0 var(--space-5) var(--space-4);
+    padding: 0 var(--space-2);
+  }
+
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]) :is(.rail-heading, .rail-hint) {
+    display: none;
   }
 
   .brand {

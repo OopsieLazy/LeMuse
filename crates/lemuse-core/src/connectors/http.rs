@@ -106,6 +106,11 @@ impl UreqClient {
             .timeout_connect(std::time::Duration::from_secs(15))
             .timeout_read(std::time::Duration::from_secs(60))
             .redirects(5)
+            // Review 0008: never follow a redirect down to plain http, and
+            // never carry an Authorization header across a redirect (also
+            // ureq's default, stated here so an upgrade can't change it).
+            .https_only(true)
+            .redirect_auth_headers(ureq::RedirectAuthHeaders::Never)
             .build();
         Self {
             agent,
@@ -123,7 +128,7 @@ impl HttpClient for UreqClient {
             .set("User-Agent", &self.user_agent)
             .set("Accept", "application/json, image/*;q=0.9, */*;q=0.5");
         if let Some(token) = &self.arena_token {
-            if url.starts_with("https://api.are.na/") {
+            if is_arena_api(url) {
                 req = req.set("Authorization", &format!("Bearer {token}"));
             }
         }
@@ -171,9 +176,40 @@ impl HttpClient for UreqClient {
     }
 }
 
+/// True only for `https://api.are.na/...` on the default port: the one host
+/// an Are.na token may ever be sent to (parsed, not prefix-matched).
+pub fn is_arena_api(url: &str) -> bool {
+    match url::Url::parse(url) {
+        Ok(u) => {
+            u.scheme() == "https"
+                && u.host_str() == Some("api.are.na")
+                && u.port().is_none()
+                && u.username().is_empty()
+                && u.password().is_none()
+        }
+        Err(_) => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn token_host_check_is_exact() {
+        assert!(is_arena_api("https://api.are.na/v3/channels/x"));
+        for bad in [
+            "http://api.are.na/v3",
+            "https://api.are.na.evil.example/v3",
+            "https://api.are.na:8443/v3",
+            "https://user@api.are.na/v3", // secret-scan: allow URL user-info test case, not an address
+            "https://evil.example/https://api.are.na/",
+            "https://images.are.na/x.jpg",
+            "not a url",
+        ] {
+            assert!(!is_arena_api(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn user_agent_names_product_and_contact() {

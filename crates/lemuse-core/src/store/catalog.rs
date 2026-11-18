@@ -7,13 +7,22 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 
 use crate::model::{Block, Collection};
-use crate::Result;
+use crate::{Error, Result};
 
 /// Ordered migrations; index + 1 == schema version (`PRAGMA user_version`).
 const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0001_init.sql"),
     include_str!("../../migrations/0002_stream_media.sql"),
+    include_str!("../../migrations/0003_playlists.sql"),
+    include_str!("../../migrations/0004_playlist_block_index.sql"),
 ];
+
+/// Caps that keep a scripted or runaway UI from growing local state without
+/// limit (review 0008).
+pub const MAX_PLAYLISTS: i64 = 500;
+pub const MAX_PLAYLIST_ITEMS: i64 = 20_000;
+/// Across all playlists (review 0008 A-33).
+pub const MAX_TOTAL_PLAYLIST_ITEMS: i64 = 200_000;
 
 /// One slideshow frame (ADR-0007). `display_url` is streamed from the source
 /// CDN; `saved` says whether an original is already in the local store.
@@ -30,8 +39,76 @@ pub struct Slide {
     pub saved: bool,
 }
 
+/// A playlist as the rail shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Playlist {
+    pub id: i64,
+    pub name: String,
+    pub items: u64,
+}
+
 pub struct Catalog {
     conn: Connection,
+}
+
+/// Picks the best display image per block (large → medium → original) and
+/// selects one [`Slide`] row per block. `{blocks}` is a CTE body yielding
+/// `(block_id, ord)`; `{order}` the ORDER BY. Both are fixed strings from
+/// this file, never user input; all values are bound parameters.
+const SLIDES_SQL: &str = "WITH topic_blocks AS ({blocks}),
+     display AS (
+         SELECT block_id, url, width, height,
+                ROW_NUMBER() OVER (PARTITION BY block_id ORDER BY
+                    CASE role WHEN 'large' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END) AS pick
+         FROM block_media WHERE role IN ('large', 'medium', 'original')
+     )
+     SELECT b.id, b.title, d.url, d.width, d.height, b.page_url, b.creator,
+            b.attribution_text,
+            EXISTS (SELECT 1 FROM block_files f WHERE f.block_id = b.id) AS saved
+     FROM topic_blocks tb
+     JOIN blocks b ON b.id = tb.block_id
+     JOIN display d ON d.block_id = b.id AND d.pick = 1
+     ORDER BY {order}
+     LIMIT ?1 OFFSET ?2";
+
+/// Same selection as [`SLIDES_SQL`], counted. `?1`/`?2` are unused
+/// placeholders so collection parameters keep their `?3..` numbering.
+const COUNT_SQL: &str = "WITH topic_blocks AS ({blocks})
+     SELECT COUNT(*) FROM topic_blocks tb
+     WHERE EXISTS (SELECT 1 FROM block_media m WHERE m.block_id = tb.block_id
+                   AND m.role IN ('large', 'medium', 'original'))
+       AND ?1 IS NOT NULL AND ?2 IS NOT NULL";
+
+const BY_UPDATED: &str = "b.remote_updated_at DESC, b.id DESC";
+const BY_ADDED: &str = "tb.ord DESC";
+const PLAYLIST_BLOCKS: &str =
+    "SELECT block_id, seq AS ord FROM playlist_items WHERE playlist_id = ?3";
+
+/// CTE body for blocks in `n` collections; parameters start at `?3`.
+fn collection_blocks(n: usize) -> String {
+    let keys = (0..n)
+        .map(|i| format!("(?{}, ?{})", i * 2 + 3, i * 2 + 4))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "SELECT DISTINCT cb.block_id, NULL AS ord FROM collection_blocks cb
+         JOIN collections c ON c.id = cb.collection_id
+         WHERE (c.connector, c.remote_key) IN (VALUES {keys})"
+    )
+}
+
+fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
+    Ok(Slide {
+        block_id: r.get(0)?,
+        title: r.get(1)?,
+        display_url: r.get(2)?,
+        width: r.get(3)?,
+        height: r.get(4)?,
+        page_url: r.get(5)?,
+        creator: r.get(6)?,
+        attribution: r.get(7)?,
+        saved: r.get(8)?,
+    })
 }
 
 impl Catalog {
@@ -287,31 +364,9 @@ impl Catalog {
         if collections.is_empty() {
             return Ok(Vec::new());
         }
-        let keys = (0..collections.len())
-            .map(|i| format!("(?{}, ?{})", i * 2 + 3, i * 2 + 4))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let sql = format!(
-            "WITH topic_blocks AS (
-                 SELECT DISTINCT cb.block_id FROM collection_blocks cb
-                 JOIN collections c ON c.id = cb.collection_id
-                 WHERE (c.connector, c.remote_key) IN (VALUES {keys})
-             ),
-             display AS (
-                 SELECT block_id, url, width, height,
-                        ROW_NUMBER() OVER (PARTITION BY block_id ORDER BY
-                            CASE role WHEN 'large' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END) AS pick
-                 FROM block_media WHERE role IN ('large', 'medium', 'original')
-             )
-             SELECT b.id, b.title, d.url, d.width, d.height, b.page_url, b.creator,
-                    b.attribution_text,
-                    EXISTS (SELECT 1 FROM block_files f WHERE f.block_id = b.id) AS saved
-             FROM topic_blocks tb
-             JOIN blocks b ON b.id = tb.block_id
-             JOIN display d ON d.block_id = b.id AND d.pick = 1
-             ORDER BY b.remote_updated_at DESC, b.id DESC
-             LIMIT ?1 OFFSET ?2"
-        );
+        let sql = SLIDES_SQL
+            .replace("{blocks}", &collection_blocks(collections.len()))
+            .replace("{order}", BY_UPDATED);
         let flat: Vec<&str> = collections
             .iter()
             .flat_map(|(connector, key)| [connector.as_ref(), key.as_ref()])
@@ -322,19 +377,156 @@ impl Catalog {
         }
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(args.as_slice(), |r| {
-                Ok(Slide {
-                    block_id: r.get(0)?,
-                    title: r.get(1)?,
-                    display_url: r.get(2)?,
-                    width: r.get(3)?,
-                    height: r.get(4)?,
-                    page_url: r.get(5)?,
-                    creator: r.get(6)?,
-                    attribution: r.get(7)?,
-                    saved: r.get(8)?,
+            .query_map(args.as_slice(), map_slide)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// How many slides [`Catalog::slides`] would return, without loading
+    /// them (review 0003 D-19).
+    pub fn count_slides<S: AsRef<str>>(&self, collections: &[(S, S)]) -> Result<u64> {
+        if collections.is_empty() {
+            return Ok(0);
+        }
+        let sql = COUNT_SQL.replace("{blocks}", &collection_blocks(collections.len()));
+        let flat: Vec<&str> = collections
+            .iter()
+            .flat_map(|(connector, key)| [connector.as_ref(), key.as_ref()])
+            .collect();
+        let mut args: Vec<&dyn rusqlite::ToSql> = vec![&0, &0];
+        for s in &flat {
+            args.push(s);
+        }
+        Ok(self
+            .conn
+            .query_row(&sql, args.as_slice(), |r| r.get::<_, i64>(0))? as u64)
+    }
+
+    // ── Playlists: local state (ADR-0014) ───────────────────────────────
+
+    pub fn playlists(&self) -> Result<Vec<Playlist>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT p.id, p.name,
+                    (SELECT COUNT(*) FROM playlist_items i WHERE i.playlist_id = p.id)
+             FROM playlists p ORDER BY p.name COLLATE NOCASE, p.id",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(Playlist {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    items: r.get::<_, i64>(2)? as u64,
                 })
             })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    fn check_playlist_name(&self, name: &str, except: Option<i64>) -> Result<()> {
+        crate::config::check_name("playlist", name)?;
+        let taken: bool = self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM playlists
+                            WHERE name = ?1 COLLATE NOCASE AND id IS NOT ?2)",
+            params![name, except],
+            |r| r.get(0),
+        )?;
+        if taken {
+            return Err(Error::Config(format!(
+                "there's already a playlist named `{name}`"
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn create_playlist(&self, name: &str) -> Result<Playlist> {
+        self.check_playlist_name(name, None)?;
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM playlists", [], |r| r.get(0))?;
+        if n >= MAX_PLAYLISTS {
+            return Err(Error::Config(format!("at most {MAX_PLAYLISTS} playlists")));
+        }
+        self.conn
+            .execute("INSERT INTO playlists (name) VALUES (?1)", [name])?;
+        Ok(Playlist {
+            id: self.conn.last_insert_rowid(),
+            name: name.to_string(),
+            items: 0,
+        })
+    }
+
+    pub fn rename_playlist(&self, id: i64, name: &str) -> Result<bool> {
+        self.check_playlist_name(name, Some(id))?;
+        Ok(self.conn.execute(
+            "UPDATE playlists SET name = ?2 WHERE id = ?1",
+            params![id, name],
+        )? > 0)
+    }
+
+    /// Delete a playlist and its item rows. The images stay in the catalog.
+    pub fn delete_playlist(&self, id: i64) -> Result<bool> {
+        Ok(self
+            .conn
+            .execute("DELETE FROM playlists WHERE id = ?1", [id])?
+            > 0)
+    }
+
+    /// Put a block in a playlist (it goes to the front) or take it out.
+    /// Idempotent. Unknown playlist or block ids are refused by foreign keys.
+    pub fn set_in_playlist(&self, playlist_id: i64, block_id: i64, present: bool) -> Result<()> {
+        if !present {
+            self.conn.execute(
+                "DELETE FROM playlist_items WHERE playlist_id = ?1 AND block_id = ?2",
+                params![playlist_id, block_id],
+            )?;
+            return Ok(());
+        }
+        let (count, next): (i64, i64) = self.conn.query_row(
+            "SELECT COUNT(*), COALESCE(MAX(seq), 0) + 1 FROM playlist_items
+             WHERE playlist_id = ?1",
+            [playlist_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        let total: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM playlist_items", [], |r| r.get(0))?;
+        if total >= MAX_TOTAL_PLAYLIST_ITEMS {
+            return Err(Error::Config(format!(
+                "playlists hold at most {MAX_TOTAL_PLAYLIST_ITEMS} images in all"
+            )));
+        }
+        if count >= MAX_PLAYLIST_ITEMS {
+            return Err(Error::Config(format!(
+                "a playlist holds at most {MAX_PLAYLIST_ITEMS} images"
+            )));
+        }
+        self.conn.execute(
+            "INSERT OR IGNORE INTO playlist_items (playlist_id, block_id, seq)
+             VALUES (?1, ?2, ?3)",
+            params![playlist_id, block_id, next],
+        )?;
+        Ok(())
+    }
+
+    /// Ids of the playlists that contain `block_id`.
+    pub fn playlists_with(&self, block_id: i64) -> Result<Vec<i64>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT playlist_id FROM playlist_items WHERE block_id = ?1 ORDER BY playlist_id",
+        )?;
+        let ids = stmt
+            .query_map([block_id], |r| r.get(0))?
+            .collect::<std::result::Result<Vec<i64>, _>>()?;
+        Ok(ids)
+    }
+
+    /// A playlist's slides, most recently added first.
+    pub fn playlist_slides(&self, playlist_id: i64, limit: u32, offset: u32) -> Result<Vec<Slide>> {
+        let sql = SLIDES_SQL
+            .replace("{blocks}", PLAYLIST_BLOCKS)
+            .replace("{order}", BY_ADDED);
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(params![limit, offset, playlist_id], map_slide)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
     }
@@ -588,5 +780,84 @@ mod tests {
         };
         assert_eq!(status(orphan), "interrupted");
         assert_eq!(status(next), "running");
+    }
+
+    /// Review 0008: the bundled SQLite must include the 2026 fixes
+    /// (FTS5 CVE-2026-11822/11824 in 3.53.2; RUSTSEC-2026-0459 in 3.54.0).
+    #[test]
+    fn bundled_sqlite_has_the_2026_fixes() {
+        let c = Catalog::open_in_memory().unwrap();
+        let v: String = c
+            .conn
+            .query_row("SELECT sqlite_version()", [], |r| r.get(0))
+            .unwrap();
+        let parts: Vec<u32> = v.split('.').map(|p| p.parse().unwrap()).collect();
+        assert!(parts >= vec![3, 54, 0], "bundled SQLite {v} is too old");
+    }
+
+    #[test]
+    fn counts_match_slides() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let a = collection(&c, "a");
+        let mut text = sample("3", "Text block");
+        text.media.clear();
+        for b in [sample("1", "x"), sample("2", "y"), text] {
+            let id = c.upsert_block(&b).unwrap();
+            c.link_block(a, id, None).unwrap();
+        }
+        assert_eq!(c.count_slides(&[("arena", "a")]).unwrap(), 2);
+        assert_eq!(c.slides(&[("arena", "a")], 100, 0).unwrap().len(), 2);
+        assert_eq!(c.count_slides::<&str>(&[]).unwrap(), 0);
+    }
+
+    #[test]
+    fn playlists_keep_order_and_survive_refresh() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let id1 = c.upsert_block(&sample("1", "Chair")).unwrap();
+        let id2 = c.upsert_block(&sample("2", "Lamp")).unwrap();
+        let p = c.create_playlist("Studio picks").unwrap();
+        c.set_in_playlist(p.id, id1, true).unwrap();
+        c.set_in_playlist(p.id, id2, true).unwrap();
+        c.set_in_playlist(p.id, id1, true).unwrap(); // idempotent
+        let order: Vec<i64> = c
+            .playlist_slides(p.id, 10, 0)
+            .unwrap()
+            .iter()
+            .map(|s| s.block_id)
+            .collect();
+        assert_eq!(order, [id2, id1]); // newest addition first
+                                       // A refresh rewrites the block's remote state; the playlist is untouched.
+        let mut refreshed = sample("1", "Chair, retitled");
+        refreshed.files.clear();
+        c.upsert_block(&refreshed).unwrap();
+        assert_eq!(c.playlist_slides(p.id, 10, 0).unwrap().len(), 2);
+        assert_eq!(c.playlists_with(id1).unwrap(), [p.id]);
+        assert_eq!(c.playlists().unwrap()[0].items, 2);
+        c.set_in_playlist(p.id, id1, false).unwrap();
+        assert_eq!(c.playlists_with(id1).unwrap(), Vec::<i64>::new());
+        assert!(c.delete_playlist(p.id).unwrap());
+        assert!(c.playlists().unwrap().is_empty());
+        assert_eq!(c.block_count().unwrap(), 2); // images stay in the catalog
+    }
+
+    #[test]
+    fn playlist_names_and_ids_are_validated() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let p = c.create_playlist("Lamps").unwrap();
+        assert!(c.create_playlist("lamps").is_err()); // case-insensitive unique
+        for bad in ["", " Lamps", "a\nb", &"n".repeat(61)] {
+            assert!(c.create_playlist(bad).is_err(), "{bad:?}");
+        }
+        // Markup is just a name; the UI renders it as text.
+        assert!(c
+            .create_playlist("<b>bold</b>'; DROP TABLE blocks;--")
+            .is_ok());
+        assert!(c.rename_playlist(p.id, "Lights").unwrap());
+        assert!(!c.rename_playlist(9999, "Other").unwrap());
+        // Unknown ids are refused by foreign keys, not silently stored.
+        assert!(c.set_in_playlist(p.id, 424242, true).is_err());
+        let id = c.upsert_block(&sample("1", "x")).unwrap();
+        assert!(c.set_in_playlist(9999, id, true).is_err());
+        assert_eq!(c.block_count().unwrap(), 1);
     }
 }

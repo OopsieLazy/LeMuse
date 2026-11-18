@@ -88,7 +88,14 @@
 
   /* ---- Layers ---- */
   --z-reveal: 5;
+  --z-menu: 10;
   --z-drawer: 20;
+
+  /* ---- Playlist menu (ADR-0014) ---- */
+  --menu-width: calc(280px * var(--ui-scale));
+  --menu-max-height: min(60vh, calc(360px * var(--ui-scale)));
+  --field-min: calc(120px * var(--ui-scale));
+  --status-min: calc(200px * var(--ui-scale));
 }
 
 /* Studio dark: follows the system unless light is chosen... */

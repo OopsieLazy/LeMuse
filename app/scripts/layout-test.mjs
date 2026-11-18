@@ -81,19 +81,21 @@ const measure = String(async function run() {
         if (r.height < 40 || r.width < 40) fail(`image too small to see (${Math.round(r.width)}x${Math.round(r.height)})`);
         if (visible(caption, win) && overlap(r, caption.getBoundingClientRect()) > 1) fail("image overlaps the control bar");
       }
-      for (const b of doc.querySelectorAll(".controls button, .reveal, .rail-actions button")) {
+      const outside = (r) =>
+        r.right > win.innerWidth + 1 || r.bottom > win.innerHeight + 1 || r.left < -1 || r.top < -1;
+      const controls = ".controls button, .reveal, .rail-actions button, .brand-add, .playlist-menu :is(button, input)";
+      for (const b of doc.querySelectorAll(controls)) {
         if (!visible(b, win)) continue;
         if (b.closest(".rail") && win.getComputedStyle(b.closest(".rail")).visibility === "hidden") continue;
-        const r = b.getBoundingClientRect();
-        if (r.right > win.innerWidth + 1 || r.bottom > win.innerHeight + 1 || r.left < -1 || r.top < -1)
+        if (outside(b.getBoundingClientRect()))
           fail(`control "${b.getAttribute("aria-label") || b.textContent.trim()}" is outside the window`);
       }
-      const dialog = doc.querySelector("dialog[open]");
-      if (dialog) {
-        const r = dialog.getBoundingClientRect();
-        if (r.right > win.innerWidth + 1 || r.bottom > win.innerHeight + 1 || r.left < -1 || r.top < -1)
-          fail("settings dialog doesn't fit the window");
+      for (const dialog of doc.querySelectorAll("dialog[open]")) {
+        if (outside(dialog.getBoundingClientRect()))
+          fail(`dialog "${dialog.getAttribute("aria-labelledby")}" doesn't fit the window`);
       }
+      const menu = doc.querySelector(".playlist-menu");
+      if (menu && visible(menu, win) && outside(menu.getBoundingClientRect())) fail("playlist menu leaves the window");
       frame.remove();
     }
   }

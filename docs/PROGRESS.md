@@ -5,6 +5,25 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-17 (session 6): Playlists, All, Add channel; security upkeep (PR #8)
+
+**Branch:** `feat/0008-playlists-import` (stacked on #7) · **Status:** awaiting owner review (app launched)
+
+- **Done:** local playlists (P), All view, paste-a-link Add channel with a security analysis of the import
+  path (ADR-0014); CLI `add-channel`.
+- **Security:**
+  - rusqlite 0.41.1 (RUSTSEC-2026-0459, SQLite FTS5 CVEs);
+  - https-only HTTP;
+  - config can't steer requests;
+  - npm `--ignore-scripts` (2026 worms);
+  - npm audit gate with an expiring picomatch exception.
+- **Checks:** 66 tests; W3C 32 files; layout 150 renders; cargo audit 0 vulnerabilities; secret scan clean.
+- **Admin review** (agent): A-30…A-37. A-30…A-36 fixed; A-37 (download host allow-list) goes to the Save PR.
+- **Owner decisions:** Q14 matches are right (add the rest via Add channel); Q15 no.
+- **Next:** owner reviews the running app and merges #1–#8; then Save + Are.na token + `load_more`.
+
+---
+
 ## 2026-11-17 (session 5): LeMuse; security gates; Settings and fullscreen; followed channels (PRs #4–#7)
 
 **Branches:** `refactor/0004-rename-lemuse` → `ci/0005-security-gates` → `feat/0006-design-tokens-settings` →

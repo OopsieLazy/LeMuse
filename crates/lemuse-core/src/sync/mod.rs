@@ -28,12 +28,39 @@ pub fn refresh_library(
     trigger: Trigger,
 ) -> crate::Result<RunSummary> {
     paths.ensure()?;
-    let client: Arc<dyn http::HttpClient> = Arc::new(http::UreqClient::new(
-        http::user_agent(cfg.sync.contact.as_deref()),
-        None,
-    ));
+    let client = production_client(cfg);
     let mut conns = connectors::all(client.clone(), arena::Tier::Guest);
     let mut catalog = Catalog::open(&paths.catalog())?;
     let mut engine = SyncEngine::new(paths.clone(), &mut catalog, client);
     engine.run(cfg, &mut conns, trigger)
+}
+
+/// The production HTTP client every front-end shares: rustls, `https_only`,
+/// the descriptive User-Agent. No Are.na token yet (guest budget).
+pub fn production_client(cfg: &Config) -> Arc<dyn http::HttpClient> {
+    Arc::new(http::UreqClient::new(
+        http::user_agent(cfg.sync.contact.as_deref()),
+        None,
+    ))
+}
+
+/// Refresh one channel of one topic, right after "Add channel", instead of
+/// every source (keeps the first look fast and inside the read budget).
+/// Same engine, lock, throttle and policies as a full refresh.
+pub fn refresh_channel(
+    paths: &LibraryPaths,
+    cfg: &Config,
+    topic: &str,
+    channel: &str,
+    trigger: Trigger,
+) -> crate::Result<RunSummary> {
+    let Some(t) = cfg.topic(topic) else {
+        return Err(crate::Error::Config(format!("no topic named `{topic}`")));
+    };
+    let mut one = cfg.clone();
+    let mut t = t.clone();
+    t.sources
+        .retain(|s| s.source == arena::ID && s.channel.as_deref() == Some(channel));
+    one.topics = vec![t];
+    refresh_library(paths, &one, trigger)
 }

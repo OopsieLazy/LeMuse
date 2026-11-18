@@ -4,22 +4,23 @@
 topic is fed by Are.na channels you choose (later by open museum and 3D sources). Images stream from the
 source; anything you like, you can save locally with one click. Topics refresh automatically on launch.
 
-**Current milestone:** PRs #1–#3 in owner review. Batch #4–#7 planned below (2026-11-17).
+**Current milestone:** PRs #1–#7 in owner review. PR #8 planned below (2026-11-17, session 6).
 
-## Now: batch planned 2026-11-17 (owner's session-5 request)
+## Now: PR #8 `feat/0008-playlists-import` (owner's session-6 request)
 
-Planned before executing. Each row is one PR, stacked in this order. ✅ = built.
+Planned before executing. One PR, one commit per concern. ADR-0014.
 
-| PR | Branch | Scope | ADR |
-|---|---|---|---|
-| ✅ #4 | `refactor/0004-rename-lemuse` | Rename ServeNSurf → **LeMuse** everywhere (crates, binary `lemuse`, config `lemuse.toml`, `Pictures\LeMuse`, `LEMUSE_LIBRARY`, app id). GitHub remote + CODEOWNERS. Record Q4/Q8/Q10–Q13 | 0010 |
-| ✅ #5 | `ci/0005-security-gates` | Security first: secret scan (pre-commit + CI), dependency audit (cargo, npm), a Claude Code **admin-review hook** before the agent finishes, a security checklist in CLAUDE.md. PR template: What / Why / How + checklist. Command format rule | 0011 |
-| ✅ #6 | `feat/0006-design-tokens-settings` | Token pass (everything visual in one tokens file; an inventory of what is and isn't tokenized, and why). Image never runs under the control bar; bar hideable (H). Fullscreen (F). **Settings** panel: themes, layout presets, sliders, toggles; saved via the core (InPrivate has no lasting storage). Links open in the system browser. Layout test in headless Edge (DOM measurements, no screenshots) | 0012 |
-| ✅ #7 | `feat/0007-followed-channels-archive` | Q11 channels verified via the API and added to topics. Archive policy: a refresh never deletes posts or blanks known links/attribution; only Save keeps pixels. Source plan for "other sources" | 0013 |
+| # | Scope | Status |
+|---|---|---|
+| 1 | **Security upkeep:** rusqlite 0.32 → 0.41.1 (bundled SQLite 3.54: RUSTSEC-2026-0459, FTS5 CVE-2026-11822/11824); `https_only` + no auth on redirects; CI installs npm deps with `--ignore-scripts` (npm worm wave); 14-day dependency cooldown rule | ✅ |
+| 2 | **Hardening "what if the fetch target changes":** channel slugs, `contact` and queries validated in `Config::validate`; hosts stay compile-time constants | ✅ |
+| 3 | **Add channel:** paste an Are.na link or slug → strict parse (exact host, slug charset) → one lookup via `HttpClient` → written to `lemuse.toml` with `toml_edit` (no string building) → refresh just that channel. Remove a channel. Rate-limited IPC | ✅ |
+| 4 | **Playlists:** local lists of images (migration 0003, local state, never touched by refresh); add/remove the current image; create, rename, delete | ✅ |
+| 5 | **All:** every topic's images in one slideshow; slide counts via `COUNT(*)` (D-19) | ✅ |
+| 6 | UI states in snapshot (W3C + layout test); preview backend; run the real app for the owner before merge | ✅ |
 
-**Next (after this batch is merged):** finish M1 on `feat/0008-save-and-import`: Save, paste-a-link channel
-import, an Are.na token in Credential Manager (unlocks private channels and 120 reads/min), and `load_more`. Then
-the next sources (ADR-0013): The Met, then Wikimedia Commons.
+**Next:** Save, Are.na token in Credential Manager (private channels, 120 reads/min), `load_more`; then The Met and
+Wikimedia Commons (ADR-0013).
 
 **Thoughts recorded, not built yet** (ADR-0012 § Later):
 
@@ -87,7 +88,8 @@ images play full-window. Save puts the original in `views/<topic>/`.
 
 ### M2: Topic management and browsing
 
-- [ ] Add, remove and rename topics and channels in the UI (paste an Are.na channel URL → slug)
+- [x] Add and remove channels in the UI by pasting an Are.na link; new topics on the fly (PR #8)
+- [ ] Rename and remove topics in the UI
 - [ ] Grid view of a topic (virtualized), click to open the slideshow at that image
 - [ ] Saved-items view; local search (FTS)
 - [ ] `lemuse rebuild-views` and stale view cleanup (D-5). Runtime asset scope (A-5)
@@ -127,8 +129,8 @@ images play full-window. Save puts the original in `views/<topic>/`.
 | Q10 | Are.na Premium? | ✅ **No** (2026-11-17). Free sources only |
 | Q11 | Channels the owner follows? | ✅ The owner listed 16 by name (2026-11-17, "best guesses"). The 10 public matches are in the starter topics; the names aren't repeated in public notes (A-28) |
 | Q12 | Layout of PR #3 | ✅ **Liked** (2026-11-17): rail left, stage, caption strip. Keep as the default "Studio" layout |
-| Q14 | **Open:** (a) are the generic-name matches right: Resonance, Metal, sitting, Woodworking? (b) Paste links for the 6 that weren't added (4 private, 2 not found). (c) Is it OK that the repo is public, so these channels are visible in the config? | Keep; no labels saying they're yours |
-| Q15 | **Open:** allow read-only git (`diff/status/log/show`) for the admin-review agent hook? | No; it reads the snapshot file |
+| Q14 | Are the generic-name channel matches right; links for the 6 not added; OK to have them in the public config? | ✅ **Right** (2026-11-17). The owner adds the rest with the Add-channel feature (PR #8) |
+| Q15 | Allow read-only git for the admin-review agent hook? | ✅ **No** (2026-11-17); it reads the snapshot file |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register
@@ -149,9 +151,12 @@ images play full-window. Save puts the original in `views/<topic>/`.
 | D-15 | Review 0002 | `slides()` "newest first" is loose across sources (mixed timestamp formats) | M2 (normalize to UTC) |
 | D-18 | Review 0002 | AIC images sit behind a Cloudflare challenge for non-browser clients; unverified in WebView2 | M1 (verify; enable `aic` only if it works) |
 | A-17 | Review 0003 | InPrivate WebView loses `localStorage`; UI prefs must persist via the core | M2 |
-| D-19 | Review 0003 | Topic slide counts use a full `slides()` query | M2 (`COUNT(*)`) |
+| D-19 | Review 0003 | Topic slide counts use a full `slides()` query | ✅ PR #8 (`count_slides`) |
 | D-23 | Review 0003 | A refresh reloads the active topic from slide 1 | M1 (`load_more` appends) |
 | A-19 | Review 0004 | Trademark check of "LeMuse" | Before a public release |
 | D-30 | Review 0005 | The review snapshot refreshes asynchronously after edits, so it can lag by one tool call | Mitigated: run `review-snapshot.mjs` before commits; the agent blocks on a stale snapshot |
 | D-33 | Review 0006 | Auto-hide in docked layouts re-fits the image when the bar hides (the bar never overlays, by owner rule) | Accepted |
 | A-11 | Review 0002 | Starter Are.na channels are third-party curated and may change | Owner review; M2 topic editor |
+| A-37 | Review 0008 | Download mode (and Save) fetch image URLs from any https host the API names | Save PR: allow-list download hosts per connector, matching the CSP |
+| D-42 | Review 0008 | npm audit exception for picomatch GHSA-fc5q-39xc-vjpf (dev-only, no fixed release) | Re-check by 2026-12-15; the gate fails on expiry |
+| D-45 | Review 0008 | Copy a playlist to an Are.na channel (needs the owner's token and write access) | Owner decision; after the token work |

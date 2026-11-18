@@ -8,19 +8,32 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Slide, TopicInfo } from "../src/api";
+import type { Playlist, Slide, TopicInfo } from "../src/api";
+import { LibraryPanel, type LibraryPanelProps } from "../src/LibraryPanel";
 import { SettingsPanel } from "../src/SettingsPanel";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
 import { SlideshowView, type SlideshowViewProps } from "../src/SlideshowView";
 import sample from "./sample-data.json";
 
-const topics: TopicInfo[] = sample.topics.map(({ slides, ...t }) => ({ ...t, slides: slides.length }));
+const topics: TopicInfo[] = sample.topics.map(({ slides, ...t }, i) => ({
+  ...t,
+  slides: slides.length,
+  channels: i === 0 ? ["objects-26", "poetry-in-objects", "gesture-incense"] : [],
+}));
+const playlists: Playlist[] = [
+  { id: 1, name: "Chair studies", items: 24 },
+  { id: 2, name: "A deliberately long playlist name that has to wrap", items: 3 },
+];
 const slides = sample.topics[0].slides as Slide[];
 
 const base: SlideshowViewProps = {
   mode: "app",
   topics,
-  active: topics[0].name,
+  playlists,
+  allCount: 4484,
+  active: { kind: "topic", name: topics[0].name },
+  activeLabel: topics[0].name,
+  inPlaylists: [1],
   slides,
   index: 1,
   playing: true,
@@ -41,6 +54,7 @@ interface State {
   settings?: Partial<UiSettings>;
   fullscreen?: boolean;
   panel?: boolean;
+  library?: Partial<LibraryPanelProps>;
 }
 
 // A tall portrait image is the case that used to run under the control bar.
@@ -51,7 +65,44 @@ export const STATES: Record<string, State> = {
   playing: { props: base },
   paused: { props: { ...base, playing: false, index: 0 } },
   refreshing: { props: { ...base, refresh: { label: "Refreshing topics", busy: true, tone: "idle" } } },
-  "empty-topic": { props: { ...base, active: "Molds", slides: [], index: 0 } },
+  "empty-topic": { props: { ...base, active: { kind: "topic", name: "Molds" }, activeLabel: "Molds", slides: [], index: 0 } },
+  all: { props: { ...base, active: { kind: "all" }, activeLabel: "All" } },
+  playlist: { props: { ...base, active: { kind: "playlist", id: 1 }, activeLabel: "Chair studies", shuffle: false } },
+  "playlist-empty": {
+    props: { ...base, active: { kind: "playlist", id: 1 }, activeLabel: "Chair studies", slides: [], index: 0 },
+  },
+  "no-playlists": { props: { ...base, playlists: [], inPlaylists: [] } },
+  "playlist-menu": { props: { ...base, slides: [tall], index: 0, playlistMenuOpen: true } },
+  "playlist-menu-empty": {
+    props: {
+      ...base,
+      playlists: [],
+      inPlaylists: [],
+      playlistMenuOpen: true,
+      playlistMenuError: "Give the playlist a name.",
+    },
+  },
+  "playlist-menu-top": {
+    props: { ...base, slides: [tall], index: 0, playlistMenuOpen: true },
+    settings: { layout: "caption-top" },
+  },
+  "playlist-menu-cinema": { props: { ...base, playlistMenuOpen: true }, settings: { layout: "cinema" } },
+  "library-open": { props: base, library: {} },
+  "library-added": {
+    props: base,
+    library: { status: { tone: "ok", text: "Added Woodworking (4 items) to Objects. Its images are loading now." } },
+  },
+  "library-error": {
+    props: base,
+    library: {
+      status: { tone: "error", text: "Only are.na channel links can be added." },
+      playlistStatus: { tone: "error", text: "There's already a playlist named Chair studies." },
+    },
+  },
+  "library-busy-empty": {
+    props: { ...base, playlists: [] },
+    library: { busy: true, playlists: [], status: { tone: "idle", text: "Checking the channel with Are.na" } },
+  },
   "refresh-error": { props: { ...base, refresh: { label: "Refresh failed: offline", busy: false, tone: "error" } } },
   preview: { props: { ...base, mode: "preview" } },
   "tall-image": { props: { ...base, slides: [tall], index: 0 } },
@@ -81,7 +132,18 @@ function documentFor(name: string, st: State, extraHead = "") {
     .join("; ");
   const body =
     renderToStaticMarkup(<SlideshowView {...st.props} controlsHidden={settings.controlsHidden} />) +
-    (st.panel ? renderToStaticMarkup(<SettingsPanel settings={settings} staticOpen />) : "");
+    (st.panel ? renderToStaticMarkup(<SettingsPanel settings={settings} staticOpen />) : "") +
+    (st.library
+      ? renderToStaticMarkup(
+          <LibraryPanel
+            mode={st.props.mode}
+            topics={st.props.topics}
+            playlists={st.props.playlists}
+            staticOpen
+            {...st.library}
+          />,
+        )
+      : "");
   return `<!doctype html>
 <html lang="en"${attrText} style="${esc(styleText)}">
 <head>

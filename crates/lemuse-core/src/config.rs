@@ -157,6 +157,54 @@ impl TopicSource {
     }
 }
 
+/// Longest topic name (it becomes a folder name under `views/` on Save).
+pub const MAX_TOPIC_NAME: usize = 60;
+/// Longest keyword, query or contact string.
+pub const MAX_TEXT: usize = 200;
+/// Upper bounds that keep a refresh within the Are.na read budget and stop a
+/// runaway or scripted import from growing the config without limit.
+pub const MAX_TOPICS: usize = 200;
+pub const MAX_SOURCES: usize = 100;
+/// Total sources across all topics, and keywords per topic (review 0008 A-33).
+pub const MAX_TOTAL_SOURCES: usize = 500;
+pub const MAX_KEYWORDS: usize = 50;
+
+/// Invisible formatting characters that can disguise a name in the UI:
+/// bidi overrides and isolates, zero-width characters, the BOM, the soft
+/// hyphen (review 0008 A-34). `char::is_control` only covers Cc.
+pub fn is_invisible(c: char) -> bool {
+    matches!(c,
+        '\u{00AD}' | '\u{061C}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}'
+        | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}' | '\u{FFF9}'..='\u{FFFB}')
+}
+
+/// One line of visible text: no control or invisible formatting characters.
+pub fn is_plain_line(s: &str) -> bool {
+    !s.chars().any(|c| c.is_control() || is_invisible(c))
+}
+
+/// A topic name is one line of 1–60 characters with no control characters.
+/// It is shown as text and sanitised again before any use as a file name
+/// (`store::views::sanitize_name`).
+pub fn check_topic_name(name: &str) -> Result<()> {
+    check_name("topic", name)
+}
+
+/// Shared rule for names the user types (topics, playlists).
+pub fn check_name(what: &str, name: &str) -> Result<()> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || trimmed != name
+        || name.chars().count() > MAX_TOPIC_NAME
+        || !is_plain_line(name)
+    {
+        return Err(Error::Config(format!(
+            "{what} names are 1–{MAX_TOPIC_NAME} visible characters on one line, without leading or trailing spaces"
+        )));
+    }
+    Ok(())
+}
+
 fn default_true() -> bool {
     true
 }
@@ -199,7 +247,16 @@ impl Config {
     }
 
     pub fn from_toml_str(s: &str) -> Result<Self> {
-        let cfg: Config = toml::from_str(s).map_err(|e| Error::Config(e.to_string()))?;
+        let mut cfg: Config = toml::from_str(s).map_err(|e| Error::Config(e.to_string()))?;
+        // Slugs are lowercase on Are.na; accept a hand-typed `Woodworking`
+        // rather than refusing the whole config (review 0008 A-35).
+        for t in &mut cfg.topics {
+            for src in &mut t.sources {
+                if let Some(ch) = &mut src.channel {
+                    *ch = ch.trim().to_ascii_lowercase();
+                }
+            }
+        }
         cfg.validate()?;
         Ok(cfg)
     }
@@ -230,12 +287,70 @@ impl Config {
         if self.sync.pages_per_refresh == 0 {
             return Err(Error::Config("sync.pages_per_refresh must be >= 1".into()));
         }
+        // Review 0008 ("what if someone changes what we fetch"): every value
+        // that reaches a URL or a header is checked here, so a hand-edited or
+        // tampered lemuse.toml can't steer requests. Hosts are compile-time
+        // constants in each connector; the config can't name one.
+        if let Some(c) = &self.sync.contact {
+            if c.chars().count() > MAX_TEXT || !is_plain_line(c) {
+                return Err(Error::Config(format!(
+                    "sync.contact must be one line of at most {MAX_TEXT} characters"
+                )));
+            }
+        }
+        if self.topics.len() > MAX_TOPICS {
+            return Err(Error::Config(format!("at most {MAX_TOPICS} topics")));
+        }
+        let total: usize = self.topics.iter().map(|t| t.sources.len()).sum();
+        if total > MAX_TOTAL_SOURCES {
+            return Err(Error::Config(format!(
+                "at most {MAX_TOTAL_SOURCES} sources across all topics (found {total})"
+            )));
+        }
         let mut names = HashSet::new();
         for t in &self.topics {
             if t.name.trim().is_empty() {
                 return Err(Error::Config("every [[topic]] needs a `name`".into()));
             }
-            if !names.insert(t.name.as_str()) {
+            check_topic_name(&t.name)?;
+            if t.sources.len() > MAX_SOURCES {
+                return Err(Error::Config(format!(
+                    "topic `{}`: at most {MAX_SOURCES} sources",
+                    t.name
+                )));
+            }
+            if t.keywords.len() > MAX_KEYWORDS {
+                return Err(Error::Config(format!(
+                    "topic `{}`: at most {MAX_KEYWORDS} keywords",
+                    t.name
+                )));
+            }
+            for k in t
+                .keywords
+                .iter()
+                .chain(t.sources.iter().filter_map(|s| s.query.as_ref()))
+            {
+                if k.trim().is_empty() || k.chars().count() > MAX_TEXT || !is_plain_line(k) {
+                    return Err(Error::Config(format!(
+                        "topic `{}`: keywords and queries must be one line of 1–{MAX_TEXT} characters",
+                        t.name
+                    )));
+                }
+            }
+            for s in &t.sources {
+                if let Some(ch) = &s.channel {
+                    if !crate::connectors::arena::is_valid_slug(ch) {
+                        return Err(Error::Config(format!(
+                            "topic `{}`: channel `{}` isn't a valid Are.na slug (lowercase letters, digits, - and _)",
+                            t.name,
+                            ch.escape_default()
+                        )));
+                    }
+                }
+            }
+            // Case-insensitive: "Lamps" and "lamps" would share one folder
+            // on Windows (review 0008 A-34).
+            if !names.insert(t.name.to_lowercase()) {
                 return Err(Error::Config(format!("duplicate topic name `{}`", t.name)));
             }
             if t.slide_seconds == 0 {
@@ -435,6 +550,49 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Premium"));
+    }
+
+    /// Review 0008: a tampered config can't steer a request path or header.
+    #[test]
+    fn rejects_values_that_could_steer_requests() {
+        let base = "[library]\nroot = \"D:/R\"\n";
+        let topic = |src: &str| format!("{base}[[topic]]\nname = \"x\"\n[[topic.source]]\n{src}\n");
+        for bad in [
+            topic("source = \"arena\"\nchannel = \"../users/me\""),
+            topic("source = \"arena\"\nchannel = \"x?per=100000\""),
+            topic("source = \"arena\"\nchannel = \"x#\""),
+            topic("source = \"arena\"\nchannel = \"X Y\""),
+            topic("source = \"cleveland\"\nquery = \"a\\nb\""),
+            format!("{base}[sync]\ncontact = \"x\\r\\nX-Evil: 1\"\n"),
+            format!("{base}[[topic]]\nname = \" padded \"\n"),
+            format!(
+                "{base}[[topic]]\nname = \"{}\"\n",
+                "n".repeat(MAX_TOPIC_NAME + 1)
+            ),
+        ] {
+            assert!(
+                matches!(Config::from_toml_str(&bad), Err(Error::Config(_))),
+                "accepted: {bad}"
+            );
+        }
+        assert!(
+            Config::from_toml_str(&topic("source = \"arena\"\nchannel = \"objects-26\"")).is_ok()
+        );
+        // Review 0008 A-34: invisible characters and case-only duplicates.
+        for bad in [
+            format!("{base}[[topic]]\nname = \"gnp.\u{202E}exe\"\n"),
+            format!("{base}[[topic]]\nname = \"Lamps\u{200B}\"\n"),
+            format!("{base}[[topic]]\nname = \"Lamps\"\n[[topic]]\nname = \"lamps\"\n"),
+        ] {
+            assert!(Config::from_toml_str(&bad).is_err(), "accepted: {bad:?}");
+        }
+        // Review 0008 A-35: a hand-typed uppercase slug is normalised, not fatal.
+        let cfg = Config::from_toml_str(&topic("source = \"arena\"\nchannel = \" Woodworking \""))
+            .unwrap();
+        assert_eq!(
+            cfg.topics[0].sources[0].channel.as_deref(),
+            Some("woodworking")
+        );
     }
 
     #[test]

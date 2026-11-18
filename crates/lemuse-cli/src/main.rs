@@ -11,6 +11,7 @@
 //! lemuse preview-data --library "D:\References" > app/preview-data.json
 //! lemuse status  --library "D:\References"
 //! lemuse search  --library "D:\References" "gearbox"
+//! lemuse add-channel --library "D:\References" https://www.are.na/someone/chairs --topic "Wood objects"
 //! ```
 
 use std::path::PathBuf;
@@ -65,6 +66,15 @@ enum Command {
     Status,
     /// Full-text search the catalog.
     Search { query: String },
+    /// Add an Are.na channel (link or slug) to a topic, then refresh it.
+    AddChannel {
+        link: String,
+        #[arg(long)]
+        topic: String,
+        /// Create the topic if it does not exist.
+        #[arg(long)]
+        new_topic: bool,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -91,6 +101,40 @@ fn main() -> ExitCode {
 
 fn run(cmd: Command, paths: &LibraryPaths) -> lemuse_core::Result<()> {
     match cmd {
+        Command::AddChannel {
+            link,
+            topic,
+            new_topic,
+        } => {
+            let cfg = ensure_library(paths)?;
+            let http = lemuse_core::sync::production_client(&cfg);
+            let added = lemuse_core::import::add_channel(
+                http.as_ref(),
+                &paths.config(),
+                &link,
+                &topic,
+                new_topic,
+            )?;
+            if !added.added {
+                println!("{} is already in {}", added.channel.slug, added.topic);
+                return Ok(());
+            }
+            println!("added {} to {}", added.channel.slug, added.topic);
+            let cfg = Config::load(&paths.config())?;
+            let s = lemuse_core::sync::refresh_channel(
+                paths,
+                &cfg,
+                &added.topic,
+                &added.channel.slug,
+                Trigger::Cli,
+            )?;
+            println!(
+                "{} images catalogued, {} errors",
+                s.blocks_upserted,
+                s.errors.len()
+            );
+            Ok(())
+        }
         Command::Init => {
             ensure_library(paths)?;
             println!("library ready at {}", paths.root().display());

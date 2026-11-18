@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { api, type LibraryStatus, type RefreshEvent, type Slide, type TopicInfo } from "./api";
+import {
+  api,
+  nameProblem,
+  sourceKey,
+  type LibraryStatus,
+  type Playlist,
+  type RefreshEvent,
+  type Slide,
+  type SlideSource,
+  type TopicInfo,
+} from "./api";
+import { LibraryPanel, type PanelStatus } from "./LibraryPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { applyToDocument, DEFAULTS, sanitize, type UiSettings } from "./settings";
 import { SlideshowView, type RefreshState } from "./SlideshowView";
@@ -17,6 +28,12 @@ function shuffled<T>(items: T[]): T[] {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
+}
+
+/** Errors from the core arrive as strings; keep the readable part. */
+function message(e: unknown): string {
+  const s = e instanceof Error ? e.message : String(e);
+  return s.replace(/^(invalid config|arena): /, "");
 }
 
 function refreshLabel(e: RefreshEvent): RefreshState {
@@ -40,7 +57,9 @@ function refreshLabel(e: RefreshEvent): RefreshState {
 export function App() {
   const [status, setStatus] = useState<LibraryStatus | null>(null);
   const [topics, setTopics] = useState<TopicInfo[]>([]);
-  const [active, setActive] = useState<string | null>(null);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [allCount, setAllCount] = useState(0);
+  const [active, setActive] = useState<SlideSource | null>({ kind: "all" });
   const [source, setSource] = useState<Slide[]>([]);
   const [shuffle, setShuffle] = useState(true);
   const [index, setIndex] = useState(0);
@@ -52,7 +71,14 @@ export function App() {
   const [fullscreen, setFullscreen] = useState(false);
   const [idle, setIdle] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
+  const [inPlaylists, setInPlaylists] = useState<number[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuError, setMenuError] = useState<string | undefined>();
+  const [libraryBusy, setLibraryBusy] = useState(false);
+  const [libraryStatus, setLibraryStatus] = useState<PanelStatus | undefined>();
+  const [playlistStatus, setPlaylistStatus] = useState<PanelStatus | undefined>();
   const settingsRef = useRef<HTMLDialogElement>(null);
+  const libraryRef = useRef<HTMLDialogElement>(null);
   const loaded = useRef(false);
   const [refresh, setRefresh] = useState<RefreshState>({
     label: api.kind === "preview" ? "Snapshot of the catalog" : "Waiting for refresh",
@@ -60,17 +86,26 @@ export function App() {
     tone: "idle",
   });
 
-  const loadLibrary = useCallback(async () => {
+  const loadPlaylists = useCallback(async () => {
     try {
-      const [s, t] = await Promise.all([api.libraryStatus(), api.topics()]);
-      setStatus(s);
-      setTopics(t);
-      if (s.refreshing) setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
-      setActive((cur) => cur ?? t.find((x) => x.slides > 0)?.name ?? t[0]?.name ?? null);
+      setPlaylists(await api.playlists());
     } catch (e) {
-      setNotice(String(e));
+      setNotice(message(e));
     }
   }, []);
+
+  const loadLibrary = useCallback(async () => {
+    try {
+      const [s, t, all] = await Promise.all([api.libraryStatus(), api.topics(), api.allCount()]);
+      setStatus(s);
+      setTopics(t);
+      setAllCount(all);
+      if (s.refreshing) setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
+    } catch (e) {
+      setNotice(message(e));
+    }
+    loadPlaylists();
+  }, [loadPlaylists]);
 
   useEffect(() => {
     loadLibrary();
@@ -80,7 +115,17 @@ export function App() {
     });
   }, [loadLibrary]);
 
-  const topic = topics.find((t) => t.name === active);
+  const topic = active?.kind === "topic" ? topics.find((t) => t.name === active.name) : undefined;
+  const playlist = active?.kind === "playlist" ? playlists.find((l) => l.id === active.id) : undefined;
+  const activeLabel = active?.kind === "all" ? "All" : (topic?.name ?? playlist?.name ?? "");
+  // What changes when new images arrive, so the slideshow reloads.
+  const activeCount = active?.kind === "all" ? allCount : (topic?.slides ?? playlist?.items ?? 0);
+  const activeKey = sourceKey(active);
+
+  // A deleted playlist or removed topic falls back to All.
+  useEffect(() => {
+    if (active?.kind === "playlist" && !playlist) setActive({ kind: "all" });
+  }, [active, playlist, playlists.length]);
 
   // ---- Settings: load once, apply live, save debounced ----
   useEffect(() => {
@@ -100,7 +145,7 @@ export function App() {
   useEffect(() => {
     if (!loaded.current) return;
     const id = window.setTimeout(() => {
-      api.saveSettings(settings).catch((e) => setNotice(`Settings not saved: ${String(e)}`));
+      api.saveSettings(settings).catch((e) => setNotice(`Settings not saved: ${message(e)}`));
     }, SAVE_DELAY_MS);
     return () => window.clearTimeout(id);
   }, [settings]);
@@ -119,7 +164,7 @@ export function App() {
 
   // ---- Auto-hide the control bar when the pointer rests ----
   useEffect(() => {
-    if (!settings.autoHide) {
+    if (!settings.autoHide || menuOpen) {
       setIdle(false);
       return;
     }
@@ -136,14 +181,19 @@ export function App() {
       window.clearTimeout(id);
       events.forEach((e) => window.removeEventListener(e, wake));
     };
-  }, [settings.autoHide, settings.autoHideSeconds]);
+  }, [settings.autoHide, settings.autoHideSeconds, menuOpen]);
 
-  const openSettings = useCallback(() => {
-    const d = settingsRef.current;
+  const openDialog = useCallback((d: HTMLDialogElement | null) => {
     if (d && !d.open) d.showModal();
   }, []);
+  const openSettings = useCallback(() => openDialog(settingsRef.current), [openDialog]);
+  const openLibrary = useCallback(() => {
+    setLibraryStatus(undefined);
+    setPlaylistStatus(undefined);
+    openDialog(libraryRef.current);
+  }, [openDialog]);
 
-  // Load the active topic's slides; reload when a refresh finishes.
+  // Load what's playing; reload when a refresh or a playlist edit changes it.
   useEffect(() => {
     if (!active) return;
     let stale = false;
@@ -152,23 +202,41 @@ export function App() {
       .then((s) => {
         if (stale) return;
         setSource(s);
-        setIndex(0);
+        setIndex((i) => (active.kind === "playlist" ? Math.min(i, Math.max(s.length - 1, 0)) : 0));
         setTick((n) => n + 1);
       })
-      .catch((e) => setNotice(String(e)));
+      .catch((e) => setNotice(message(e)));
     return () => {
       stale = true;
     };
-  }, [active, topic?.slides]);
+  }, [activeKey, activeCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (topic) setShuffle(topic.shuffle);
-  }, [topic?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (active?.kind === "topic") setShuffle(topic?.shuffle ?? true);
+    else setShuffle(active?.kind !== "playlist");
+  }, [activeKey, topic?.shuffle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Shuffle once per load/toggle; a failed image must not reshuffle the order.
   const slides = useMemo(() => (shuffle ? shuffled(source) : source), [source, shuffle]);
   const visible = useMemo(() => slides.filter((s) => !failed.has(s.block_id)), [slides, failed]);
   const safeIndex = visible.length ? index % visible.length : 0;
+  const slide = visible[safeIndex] as Slide | undefined;
+
+  // Which playlists hold the current image (for the menu's checkboxes).
+  useEffect(() => {
+    if (!slide) {
+      setInPlaylists([]);
+      return;
+    }
+    let stale = false;
+    api
+      .playlistsWith(slide.block_id)
+      .then((ids) => !stale && setInPlaylists(ids))
+      .catch(() => !stale && setInPlaylists([]));
+    return () => {
+      stale = true;
+    };
+  }, [slide?.block_id, playlists]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const go = useCallback(
     (delta: number) => {
@@ -179,13 +247,13 @@ export function App() {
     [visible.length],
   );
 
-  // Auto-advance.
+  // Auto-advance (paused while the playlist menu is open).
   const seconds = settings.slideSeconds ?? topic?.slide_seconds ?? 8;
   useEffect(() => {
-    if (!playing || visible.length < 2) return;
+    if (!playing || menuOpen || visible.length < 2) return;
     const id = window.setTimeout(() => go(1), seconds * 1000);
     return () => window.clearTimeout(id);
-  }, [playing, seconds, tick, go, visible.length]);
+  }, [playing, menuOpen, seconds, tick, go, visible.length]);
 
   // Warm the next images in memory only. In the desktop app the WebView runs
   // InPrivate, so nothing reaches a disk cache (ADR-0009).
@@ -200,10 +268,19 @@ export function App() {
     }
   }, [safeIndex, visible]);
 
-  // Keyboard: ← → Space S F H T , Esc. Ignored while typing or in Settings.
+  const toggleMenu = useCallback(() => {
+    setMenuError(undefined);
+    setMenuOpen((o) => !o);
+  }, []);
+
+  // Keyboard: ← → Space S F H T P A , Esc. Ignored while typing or in a dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "Escape" && menuOpen) {
+        setMenuOpen(false);
+        return;
+      }
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, dialog")) return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       if (k === "ArrowRight") go(1);
@@ -215,61 +292,175 @@ export function App() {
       else if (k === "f") toggleFullscreen();
       else if (k === "h") patch({ controlsHidden: !settings.controlsHidden });
       else if (k === "t") setRailOpen((o) => !o);
+      else if (k === "p" && slide) toggleMenu();
+      else if (k === "a") openLibrary();
       else if (k === ",") openSettings();
       else if (k === "Escape" && fullscreen && api.kind === "app") toggleFullscreen();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, fullscreen]);
+  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, toggleMenu, menuOpen, slide, fullscreen]);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
     if (api.kind !== "app") return; // the browser handles target=_blank itself
     e.preventDefault();
-    api.openExternal(url).catch((err) => setNotice(String(err)));
+    api.openExternal(url).catch((err) => setNotice(message(err)));
   };
 
   const onRefresh = () => {
     setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
-    api.refreshNow().catch((e) => setRefresh({ label: String(e), busy: false, tone: "error" }));
+    api.refreshNow().catch((e) => setRefresh({ label: message(e), busy: false, tone: "error" }));
+  };
+
+  // ---- Playlists ----
+  const setInPlaylist = async (playlistId: number, present: boolean) => {
+    if (!slide) return;
+    setMenuError(undefined);
+    try {
+      await api.setInPlaylist(playlistId, slide.block_id, present);
+      await loadPlaylists();
+    } catch (e) {
+      setMenuError(message(e));
+    }
+  };
+
+  const createPlaylist = async (name: string, withImage: boolean) => {
+    const problem = nameProblem("playlist", name);
+    const report = withImage ? setMenuError : (text?: string) => setPlaylistStatus(text ? { tone: "error", text } : undefined);
+    if (problem) return report(problem);
+    try {
+      const l = await api.createPlaylist(name);
+      if (withImage && slide) await api.setInPlaylist(l.id, slide.block_id, true);
+      await loadPlaylists();
+      if (withImage) setMenuError(undefined);
+      else setPlaylistStatus({ tone: "ok", text: `Created ${l.name}.` });
+    } catch (e) {
+      report(message(e));
+    }
+  };
+
+  const playlistAction = async (run: () => Promise<unknown>, done: string) => {
+    try {
+      await run();
+      await loadPlaylists();
+      setPlaylistStatus({ tone: "ok", text: done });
+    } catch (e) {
+      setPlaylistStatus({ tone: "error", text: message(e) });
+    }
+  };
+
+  // ---- Channels ----
+  const addChannel = async (link: string, topicName: string, createTopic: boolean) => {
+    if (!link) return setLibraryStatus({ tone: "error", text: "Paste an Are.na channel link first." });
+    const problem = nameProblem("topic", topicName);
+    if (problem) return setLibraryStatus({ tone: "error", text: problem });
+    setLibraryBusy(true);
+    setLibraryStatus({ tone: "idle", text: "Checking the channel with Are.na" });
+    try {
+      const r = await api.addChannel(link, topicName, createTopic);
+      const count = r.channel.contents == null ? "" : ` (${r.channel.contents.toLocaleString("en-US")} items)`;
+      setLibraryStatus(
+        r.added
+          ? { tone: "ok", text: `Added ${r.channel.title}${count} to ${r.topic}. Its images are loading now.` }
+          : { tone: "ok", text: `${r.channel.title} is already in ${r.topic}.` },
+      );
+      await loadLibrary();
+    } catch (e) {
+      setLibraryStatus({ tone: "error", text: message(e) });
+    } finally {
+      setLibraryBusy(false);
+    }
+  };
+
+  const removeChannel = async (topicName: string, channel: string) => {
+    setLibraryBusy(true);
+    try {
+      const removed = await api.removeChannel(topicName, channel);
+      setLibraryStatus({
+        tone: "ok",
+        text: removed
+          ? `Removed ${channel} from ${topicName}. Images in your playlists stay there.`
+          : `${channel} wasn't in ${topicName}.`,
+      });
+      await loadLibrary();
+    } catch (e) {
+      setLibraryStatus({ tone: "error", text: message(e) });
+    } finally {
+      setLibraryBusy(false);
+    }
   };
 
   return (
     <>
-    <SlideshowView
-      mode={api.kind}
-      topics={topics}
-      active={active}
-      slides={visible}
-      index={safeIndex}
-      playing={playing}
-      shuffle={shuffle}
-      slideSeconds={seconds}
-      tick={tick}
-      status={status}
-      refresh={refresh}
-      notice={notice}
-      fullscreen={fullscreen}
-      controlsHidden={settings.controlsHidden}
-      railOpen={railOpen}
-      onSelectTopic={(name) => {
-        setFailed(new Set());
-        setActive(name);
-        setRailOpen(false);
-      }}
-      onToggleFullscreen={toggleFullscreen}
-      onToggleControls={() => patch({ controlsHidden: !settings.controlsHidden })}
-      onToggleRail={() => setRailOpen((o) => !o)}
-      onOpenSettings={openSettings}
-      onOpenLink={onOpenLink}
-      onPrev={() => go(-1)}
-      onNext={() => go(1)}
-      onTogglePlay={() => setPlaying((p) => !p)}
-      onToggleShuffle={() => setShuffle((s) => !s)}
-      onRefresh={onRefresh}
-      onImageError={(id) => setFailed((f) => new Set(f).add(id))}
-    />
-    <SettingsPanel ref={settingsRef} settings={settings} onChange={patch} onReset={() => setSettings(DEFAULTS)} />
+      <SlideshowView
+        mode={api.kind}
+        topics={topics}
+        playlists={playlists}
+        allCount={allCount}
+        active={active}
+        activeLabel={activeLabel}
+        slides={visible}
+        index={safeIndex}
+        playing={playing}
+        shuffle={shuffle}
+        slideSeconds={seconds}
+        tick={tick}
+        status={status}
+        refresh={refresh}
+        notice={notice}
+        fullscreen={fullscreen}
+        controlsHidden={settings.controlsHidden}
+        railOpen={railOpen}
+        inPlaylists={inPlaylists}
+        playlistMenuOpen={menuOpen}
+        playlistMenuError={menuError}
+        onSelect={(next) => {
+          setFailed(new Set());
+          setNotice(undefined);
+          setMenuOpen(false);
+          setActive(next);
+          setIndex(0);
+          setRailOpen(false);
+        }}
+        onOpenLibrary={openLibrary}
+        onTogglePlaylistMenu={toggleMenu}
+        onSetInPlaylist={setInPlaylist}
+        onCreatePlaylist={(name) => createPlaylist(name, true)}
+        onToggleFullscreen={toggleFullscreen}
+        onToggleControls={() => patch({ controlsHidden: !settings.controlsHidden })}
+        onToggleRail={() => setRailOpen((o) => !o)}
+        onOpenSettings={openSettings}
+        onOpenLink={onOpenLink}
+        onPrev={() => go(-1)}
+        onNext={() => go(1)}
+        onTogglePlay={() => setPlaying((p) => !p)}
+        onToggleShuffle={() => setShuffle((s) => !s)}
+        onRefresh={onRefresh}
+        onImageError={(id) => setFailed((f) => new Set(f).add(id))}
+      />
+      <SettingsPanel ref={settingsRef} settings={settings} onChange={patch} onReset={() => setSettings(DEFAULTS)} />
+      <LibraryPanel
+        ref={libraryRef}
+        mode={api.kind}
+        topics={topics}
+        playlists={playlists}
+        defaultTopic={topic?.name}
+        busy={libraryBusy}
+        status={libraryStatus}
+        playlistStatus={playlistStatus}
+        onAddChannel={addChannel}
+        onRemoveChannel={removeChannel}
+        onCreatePlaylist={(name) => createPlaylist(name, false)}
+        onRenamePlaylist={(id, name) => {
+          const problem = nameProblem("playlist", name);
+          if (problem) return setPlaylistStatus({ tone: "error", text: problem });
+          playlistAction(() => api.renamePlaylist(id, name), `Renamed to ${name}.`);
+        }}
+        onDeletePlaylist={(id) =>
+          playlistAction(() => api.deletePlaylist(id), "Playlist deleted. Its images are still in their topics.")
+        }
+      />
     </>
   );
 }

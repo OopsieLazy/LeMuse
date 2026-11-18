@@ -16,6 +16,9 @@ hex.workspace = true
 toml.workspace = true
 rusqlite.workspace = true
 ureq.workspace = true
+# Uniquely named temp file + atomic replace for lemuse.toml edits (review 0008 A-32).
+tempfile.workspace = true
+toml_edit.workspace = true
+url.workspace = true
 
 [dev-dependencies]
-tempfile.workspace = true

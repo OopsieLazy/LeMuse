@@ -48,7 +48,21 @@ Once a remote exists, release-please maintains this file from Conventional Commi
   - a layout test proving the image never sits under the bar.
 - Followed channels and archive policy (PR #7): a new Objects topic plus 7 more channels; catalogued posts are never
   deleted by a refresh.
+- Playlists, All and Add channel (PR #8): your own lists of images (links only; a refresh never touches them); an
+  All slideshow across every topic; paste an Are.na link to add a channel to a topic (`lemuse add-channel` too).
 
 ### Security
 
 - Vite 5.4 → 6.4.5 fixes a high-severity dev-server path traversal and the esbuild dev-server advisory (PR #5).
+- PR #8:
+  - rusqlite 0.41.1 bundles SQLite 3.54 (RUSTSEC-2026-0459; FTS5 CVE-2026-11822/11824);
+  - the HTTP client is https-only and never forwards credentials on redirects;
+  - config values that reach URLs or headers are validated;
+  - CI installs npm packages with install scripts off;
+  - an npm audit gate accepts only reviewed, expiring, dev-only exceptions.
+
+  **Note for hand-edited configs:** `lemuse.toml` is now checked more strictly:
+  - topic names must be one line of at most 60 visible characters and unique ignoring case;
+  - channel slugs may contain only letters, digits, `-` and `_` (uppercase is lowercased automatically).
+
+  A config that breaks a rule is refused, with a message naming the topic and value.

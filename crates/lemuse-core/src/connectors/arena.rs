@@ -120,6 +120,172 @@ impl Connector for ArenaConnector {
     }
 }
 
+/// Longest channel slug we accept. Are.na slugs are a parameterised title
+/// plus a short random suffix; real ones are well under this.
+pub const MAX_SLUG_LEN: usize = 120;
+
+/// Is `s` a safe channel slug or numeric id? Lowercase ASCII letters, digits,
+/// `-` and `_`, starting with a letter or digit. Slugs go into API paths, so
+/// anything else (`/`, `..`, `?`, `#`, `%`, spaces, Unicode) is refused
+/// before a URL is ever built (review 0008, ADR-0014).
+pub fn is_valid_slug(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= MAX_SLUG_LEN
+        && s.as_bytes()[0].is_ascii_alphanumeric()
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
+}
+
+/// Why a pasted channel reference was refused. Shown to the user as text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChannelRefError {
+    Empty,
+    TooLong,
+    NotArena,
+    BlockLink,
+    NotAChannel,
+}
+
+impl std::fmt::Display for ChannelRefError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Empty => "Paste an Are.na channel link or its slug.",
+            Self::TooLong => "That's too long to be an Are.na channel link.",
+            Self::NotArena => "Only are.na channel links can be added.",
+            Self::BlockLink => "That's a link to a single block; paste the channel's link instead.",
+            Self::NotAChannel => "That doesn't look like an Are.na channel link.",
+        })
+    }
+}
+
+/// Longest pasted text we look at.
+pub const MAX_REF_LEN: usize = 2048;
+
+/// Turn what the user pasted into a channel slug, without any network call.
+///
+/// Accepts a bare slug (`woodworking`), a site link
+/// (`https://www.are.na/<user>/<slug>`, `are.na/channel/<slug>`), or an API
+/// link (`https://api.are.na/v3/channels/<slug>`). The pasted URL is never
+/// fetched: only the slug is kept, and the request goes to the fixed
+/// [`API_BASE`], so a link can't change where the app connects (no SSRF).
+/// The host must be exactly `are.na`, `www.are.na` or `api.are.na`, with no
+/// port or user info; look-alike hosts (`are.na.evil.example`, Unicode
+/// homographs, which the URL parser turns into `xn--` names) are refused.
+pub fn parse_channel_ref(input: &str) -> std::result::Result<String, ChannelRefError> {
+    let raw = input.trim();
+    if raw.is_empty() {
+        return Err(ChannelRefError::Empty);
+    }
+    if raw.len() > MAX_REF_LEN {
+        return Err(ChannelRefError::TooLong);
+    }
+    // The URL parser silently drops tabs and newlines; refuse them instead.
+    if raw.chars().any(char::is_control) {
+        return Err(ChannelRefError::NotAChannel);
+    }
+    if !raw.contains('/') && !raw.contains(':') && !raw.contains('.') {
+        let slug = raw.to_ascii_lowercase();
+        return if is_valid_slug(&slug) {
+            Ok(slug)
+        } else {
+            Err(ChannelRefError::NotAChannel)
+        };
+    }
+    let lower = raw.to_ascii_lowercase();
+    let with_scheme = if lower.starts_with("are.na/") || lower.starts_with("www.are.na/") {
+        format!("https://{raw}")
+    } else {
+        raw.to_string()
+    };
+    let url = url::Url::parse(&with_scheme).map_err(|_| ChannelRefError::NotAChannel)?;
+    if !matches!(url.scheme(), "https" | "http") {
+        return Err(ChannelRefError::NotArena);
+    }
+    let host = url.host_str().unwrap_or_default();
+    if !matches!(host, "are.na" | "www.are.na" | "api.are.na")
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err(ChannelRefError::NotArena);
+    }
+    let segs: Vec<&str> = url
+        .path_segments()
+        .map(|p| p.filter(|s| !s.is_empty()).collect())
+        .unwrap_or_default();
+    let slug = match (host, segs.as_slice()) {
+        ("api.are.na", ["v3" | "v2", "channels", slug]) => *slug,
+        ("api.are.na", _) => return Err(ChannelRefError::NotAChannel),
+        (_, ["block" | "blocks", ..]) => return Err(ChannelRefError::BlockLink),
+        (_, ["channel" | "channels", slug]) => *slug,
+        (_, [_user, slug]) => *slug,
+        _ => return Err(ChannelRefError::NotAChannel),
+    };
+    let slug = slug.to_ascii_lowercase();
+    if is_valid_slug(&slug) {
+        Ok(slug)
+    } else {
+        Err(ChannelRefError::NotAChannel)
+    }
+}
+
+/// What the app shows after looking a channel up.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ChannelInfo {
+    pub slug: String,
+    pub title: String,
+    /// Items in the channel, when the API reports it.
+    pub contents: Option<u64>,
+}
+
+/// Longest channel title we keep (display only).
+const MAX_TITLE_CHARS: usize = 200;
+
+/// Check a channel exists and is readable: exactly one
+/// `GET /v3/channels/<slug>` through the shared [`HttpClient`]. Refuses an
+/// invalid slug before building the URL. The response is untrusted: the
+/// returned slug is re-validated and the title is cut down to plain text.
+pub fn lookup_channel(http: &dyn HttpClient, slug: &str) -> Result<ChannelInfo> {
+    let fail = |message: String| Error::Connector {
+        connector: ID.into(),
+        message,
+    };
+    if !is_valid_slug(slug) {
+        return Err(fail(ChannelRefError::NotAChannel.to_string()));
+    }
+    let url = format!("{API_BASE}/channels/{slug}");
+    let resp = http.get(&url, &[("Accept", "application/json")])?;
+    match resp.status {
+        401 | 403 => {
+            return Err(fail(
+                "That channel is private. Private channels need your Are.na token (coming next)."
+                    .into(),
+            ))
+        }
+        404 => return Err(fail("No Are.na channel has that link.".into())),
+        _ => {}
+    }
+    let v = super::json_or_error(ID, &url, resp)?;
+    let returned = v["slug"].as_str().unwrap_or(slug).to_ascii_lowercase();
+    if !is_valid_slug(&returned) {
+        return Err(fail(
+            "Are.na sent back a channel slug LeMuse can't use.".into(),
+        ));
+    }
+    let title: String = v["title"]
+        .as_str()
+        .unwrap_or(&returned)
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_TITLE_CHARS)
+        .collect();
+    Ok(ChannelInfo {
+        slug: returned,
+        title: title.trim().to_string(),
+        contents: v["counts"]["contents"].as_u64(),
+    })
+}
+
 /// Map a `/channels/{id}/contents` response. Pure; tested with fixtures.
 pub fn parse_contents_page(v: &Value) -> Result<Page> {
     let data = v["data"].as_array().ok_or_else(|| Error::Connector {
@@ -352,6 +518,97 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn channel_refs_accept_real_link_shapes() {
+        for (input, slug) in [
+            ("woodworking", "woodworking"),
+            ("  Woodworking \n", "woodworking"),
+            ("https://www.are.na/some-user/woodworking", "woodworking"),
+            ("https://are.na/some-user/objects-26/", "objects-26"),
+            ("are.na/some-user/objects-26?tab=info#top", "objects-26"),
+            ("www.are.na/channel/metal", "metal"),
+            ("http://www.are.na/u/resonance", "resonance"),
+            ("https://api.are.na/v3/channels/sitting", "sitting"),
+            ("50205", "50205"),
+        ] {
+            assert_eq!(parse_channel_ref(input).as_deref(), Ok(slug), "{input}");
+        }
+    }
+
+    /// Review 0008: pasted text can't change the host LeMuse connects to or
+    /// smuggle path, query or header syntax into the API request.
+    #[test]
+    fn channel_refs_refuse_injection_and_other_hosts() {
+        use ChannelRefError::*;
+        for (input, why) in [
+            ("", Empty),
+            ("https://are.na.evil.example/u/x", NotArena),
+            ("https://evil.example/are.na/u/x", NotArena),
+            ("https://www.are.na@evil.example/u/x", NotArena),
+            ("https://user:pw@www.are.na/u/x", NotArena), // secret-scan: allow URL user-info test case, not an address
+            ("https://www.are.na:8443/u/x", NotArena),
+            ("https://www.\u{0430}re.na/u/x", NotArena), // Cyrillic "a"
+            ("javascript:alert(1)", NotArena),
+            ("file:///C:/Windows/win.ini", NotArena),
+            ("https://www.are.na/block/12345", BlockLink),
+            ("https://www.are.na/u/..%2F..%2Fusers", NotAChannel),
+            ("https://www.are.na/u/x%3Fper%3D1000", NotAChannel),
+            ("https://www.are.na/u/a/b", NotAChannel),
+            ("https://api.are.na/v3/users/someone", NotAChannel),
+            ("../users/me", NotAChannel),
+            ("x?per=1000", NotAChannel),
+            ("x\r\nHost: evil", NotAChannel),
+            ("-leading-dash", NotAChannel),
+            ("caf\u{e9}", NotAChannel),
+        ] {
+            assert_eq!(parse_channel_ref(input), Err(why), "{input:?}");
+        }
+        assert_eq!(
+            parse_channel_ref(&"a".repeat(MAX_REF_LEN + 1)),
+            Err(TooLong)
+        );
+        assert!(!is_valid_slug(&"a".repeat(MAX_SLUG_LEN + 1)));
+    }
+
+    const CHANNEL: &str = include_str!("../../tests/fixtures/arena_channel.json");
+
+    #[test]
+    fn lookup_reads_title_and_count_with_one_request() {
+        let http = FixtureClient::default();
+        http.push(&format!("{API_BASE}/channels/woodworking"), 200, CHANNEL);
+        let info = lookup_channel(&http, "woodworking").unwrap();
+        assert_eq!(info.slug, "woodworking");
+        assert_eq!(info.title, "Woodworking");
+        assert_eq!(info.contents, Some(4));
+        assert_eq!(http.requests.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn lookup_explains_private_missing_and_hostile_answers() {
+        let http = FixtureClient::default();
+        let url = format!("{API_BASE}/channels/secret");
+        http.push(&url, 401, "{}");
+        let private = lookup_channel(&http, "secret").unwrap_err().to_string();
+        assert!(private.contains("private"), "{private}");
+        let missing = lookup_channel(&http, "gone").unwrap_err().to_string();
+        assert!(missing.contains("No Are.na channel"), "{missing}");
+        // A hostile or broken answer can't inject a bad slug.
+        http.push(&url, 200, r#"{"slug":"../x","title":"t"}"#);
+        assert!(lookup_channel(&http, "secret").is_err());
+        // Markup stays inert text (the UI renders text, never HTML); control
+        // characters are dropped.
+        http.push(
+            &url,
+            200,
+            r#"{"slug":"secret","title":"<img src=x onerror=alert(1)>\u0000\n"}"#,
+        );
+        let info = lookup_channel(&http, "secret").unwrap();
+        assert_eq!(info.title, "<img src=x onerror=alert(1)>");
+        // An invalid slug never reaches the network.
+        assert!(lookup_channel(&http, "a/b").is_err());
+        assert_eq!(http.requests.lock().unwrap().len(), 4);
     }
 
     #[test]

@@ -45,9 +45,8 @@ jobs:
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: npm audit (high and above fails)
-        working-directory: app
-        run: npm ci --ignore-scripts && npm audit --audit-level=high
+      - name: npm audit (high and above fails; reviewed, expiring exceptions only)
+        run: npm ci --ignore-scripts --prefix app && node scripts/npm-audit-gate.mjs app
       - name: cargo audit (RustSec advisories)
         run: cargo install cargo-audit --version 0.22.2 --locked && cargo audit
       - name: Dependency review (new deps in this PR)
@@ -89,7 +88,9 @@ jobs:
           toolchain: stable
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - run: npm ci
+      # Install scripts off: the 2026 npm worms spread through install hooks
+      # (review 0008). Nothing here needs them; W3C uses the runner's Java.
+      - run: npm ci --ignore-scripts
       - name: Typecheck UI
         run: npm run typecheck
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
@@ -121,7 +122,9 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - run: npm ci
+      # Install scripts off: the 2026 npm worms spread through install hooks
+      # (review 0008). Nothing here needs them; W3C uses the runner's Java.
+      - run: npm ci --ignore-scripts
         working-directory: app
       - name: Build installer
         working-directory: app

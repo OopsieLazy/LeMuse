@@ -4,7 +4,7 @@
 // files; it can't run git. Runs after every edit (PostToolUse hook) and can be
 // run by hand right before a commit:
 //
-//   node scripts/hooks/review-snapshot.mjs
+//   node scripts/hooks/review-snapshot.mjs --manual   (by hand)
 //
 // Contents: `git status --porcelain`, `git diff HEAD`, and the text of new
 // untracked (not ignored) files, capped per file and overall. The folder is
@@ -26,11 +26,14 @@ const git = (...a) => {
 };
 
 // Hooks pipe JSON on stdin; we don't need it, but drain it so the writer
-// never blocks.
-try {
-  readFileSync(0);
-} catch {
-  /* no stdin */
+// never blocks. Run by hand, pass --manual: an inherited stdin that never
+// closes would otherwise hang the script (review 0008 D-46).
+if (!process.argv.includes("--manual")) {
+  try {
+    readFileSync(0);
+  } catch {
+    /* no stdin */
+  }
 }
 
 const root = git("rev-parse", "--show-toplevel").trim();

@@ -27,7 +27,12 @@ thiserror = "2"
 sha2 = "0.10"
 hex = "0.4"
 toml = "0.8"
-rusqlite = { version = "0.32", features = ["bundled"] }
+# 0.41 bundles SQLite 3.54 (RUSTSEC-2026-0459; FTS5 CVE-2026-11822/11824). Review 0008.
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+# Edits lemuse.toml structurally (Add channel), so user input is never spliced into TOML text.
+toml_edit = "0.22"
+# Strict parsing of pasted Are.na links (host, port, userinfo checks).
+url = "2"
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 # Blocking HTTP with rustls (no OpenSSL on Windows); see ADR-0003.

@@ -44,7 +44,10 @@ assume.
   them. Findings name the file and line, never the value. If a real secret ever lands, **rotate it**; deleting it
   isn't enough.
 - **Validators:** fmt, clippy `-D warnings`, tests, `npm run typecheck`, `npm run validate:w3c` (UI), and
-  `npm audit` / `cargo audit` when dependencies change. Report failures as they are.
+  `node scripts/npm-audit-gate.mjs app` / `cargo audit` when dependencies change. Report failures as they are.
+- **Dependencies:** a new dependency or version must be at least 14 days old (supply-chain cooldown), and npm
+  installs run with `--ignore-scripts` (the 2026 npm worms spread through install hooks). Audit exceptions live
+  in `docs/security/npm-audit-exceptions.json`: dev-only packages, with a reason and an expiry of 30 days or less.
 - **Review each change for:**
   - Tauri capabilities, plugins and CSP hosts (least privilege; justify each in the ADR);
   - network access only via `HttpClient`;
@@ -57,7 +60,7 @@ assume.
   - the Claude Code `PreToolUse` agent hook reviews each staged commit as admin;
   - the `Stop` hook (`scripts/hooks/stop-gate.mjs`) blocks finishing until the scan is clean and the branch has
     an admin review;
-  - CI runs gitleaks, `npm audit`, `cargo audit` and dependency review.
+  - CI runs gitleaks, the npm audit gate, `cargo audit` and dependency review.
 
   Never bypass a hook (`--no-verify` is denied in `.claude/settings.json`).
 
@@ -122,8 +125,9 @@ cargo run -p lemuse-cli -- --library ./library topics   # list [[topic]]s from l
 cargo run -p lemuse-cli -- --library ./library slides "Topic name"   # what the slideshow would show
 cargo run -p lemuse-cli -- --library ./library status
 cargo run -p lemuse-cli -- --library ./library sync     # real metadata refresh (no image files)
+cargo run -p lemuse-cli -- --library ./library add-channel https://www.are.na/<user>/<slug> --topic "Name" [--new-topic]
 
-cd app && npm install                # first time only
+cd app && npm ci --ignore-scripts     # first time / after lockfile changes (no install hooks)
 cd app && npm run typecheck          # UI type-check
 cd app && npm run validate:w3c       # build + render UI states + W3C Nu HTML Checker (needs Java)
 cd app && npm run preview:data       # export catalog metadata for previews ($LEMUSE_LIBRARY or default)
@@ -155,8 +159,10 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams and the reasoning
   register it in `connectors::all` and `KNOWN_SOURCES`, and add its image host to the CSP in
   `app/src-tauri/tauri.conf.json`. Probe that its images load first: AIC's host serves a Cloudflare challenge,
   so it's held back (review 0002 D-18). Never work around bot protection.
-- **Local vs remote state:** `block_media` is remote state (replaced on refresh). `block_files` is local state
-  (only ever added; a refresh must never unlink a saved file).
+- **Local vs remote state:** `block_media` is remote state (replaced on refresh). `block_files` and `playlists` /
+  `playlist_items` are local state (a refresh never touches them; a refresh must never unlink a saved file).
+- **Editing `lemuse.toml` from code:** only via `config_edit` (`toml_edit`, full re-validation, atomic write). Never
+  build TOML, SQL or URLs by splicing user or remote text; slugs pass `arena::is_valid_slug` first (ADR-0014).
 - **Connectors never do I/O policy.** They declare a `SourcePolicy` (rate budget, background-sync allowed,
   attribution); the engine enforces it. All HTTP goes through `connectors::http::HttpClient` so tests replay
   fixtures (`crates/lemuse-core/tests/fixtures/`) — never hit the network in tests.

@@ -1,11 +1,20 @@
-import type { MouseEvent } from "react";
-import { isHttps, type LibraryStatus, type Slide, type TopicInfo } from "./api";
+import type { FormEvent, MouseEvent } from "react";
+import {
+  isHttps,
+  sourceKey,
+  type LibraryStatus,
+  type Playlist,
+  type Slide,
+  type SlideSource,
+  type TopicInfo,
+} from "./api";
 
 // Pure view: everything it shows comes in through props, so the same markup
 // renders in the desktop app, the browser preview, the design artifact, the
 // W3C snapshot and the layout test (scripts/snapshot.tsx). Look and layout
 // come from attributes on <html> (settings.ts) and the tokens in
-// theme/tokens.css, never from inline styles here.
+// theme/tokens.css, never from inline styles here. Every string from a
+// remote source or the user is rendered as React text, never as HTML.
 
 export interface RefreshState {
   label: string;
@@ -16,7 +25,13 @@ export interface RefreshState {
 export interface SlideshowViewProps {
   mode: "app" | "preview";
   topics: TopicInfo[];
-  active: string | null;
+  /** Local playlists (ADR-0014). */
+  playlists: Playlist[];
+  /** Image count for "All". */
+  allCount: number;
+  active: SlideSource | null;
+  /** Name of what's playing: "All", a topic or a playlist. */
+  activeLabel: string;
   slides: Slide[];
   index: number;
   playing: boolean;
@@ -31,7 +46,17 @@ export interface SlideshowViewProps {
   /** Topic drawer open (only used by layouts without a docked topic list). */
   railOpen?: boolean;
   notice?: string;
-  onSelectTopic?: (name: string) => void;
+  /** Playlists holding the current image. */
+  inPlaylists?: number[];
+  /** The add-to-playlist menu above the controls. */
+  playlistMenuOpen?: boolean;
+  playlistMenuError?: string;
+  onSelect?: (source: SlideSource) => void;
+  onOpenLibrary?: () => void;
+  onTogglePlaylistMenu?: () => void;
+  onSetInPlaylist?: (playlistId: number, present: boolean) => void;
+  /** Create a playlist from the menu and put the current image in it. */
+  onCreatePlaylist?: (name: string) => void;
   onPrev?: () => void;
   onNext?: () => void;
   onTogglePlay?: () => void;
@@ -79,9 +104,11 @@ const ICONS = {
   settings:
     "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19.4 13.5l1.6 1.2-2 3.4-1.9-.7a7.6 7.6 0 0 1-2.1 1.2L14.7 21h-4l-.3-2.4a7.6 7.6 0 0 1-2.1-1.2l-1.9.7-2-3.4 1.6-1.2a7.5 7.5 0 0 1 0-2.4L4.4 9.9l2-3.4 1.9.7a7.6 7.6 0 0 1 2.1-1.2L10.7 3h4l.3 2.4a7.6 7.6 0 0 1 2.1 1.2l1.9-.7 2 3.4-1.6 1.2a7.5 7.5 0 0 1 0 2.4Z",
   topics: "M4 6h16M4 12h16M4 18h10",
+  add: "M12 5v14M5 12h14",
+  playlistAdd: "M4 6h11M4 11h11M4 16h7M18 13v7M14.5 16.5h7",
 };
 
-function Icon({ d }: { d: string }) {
+export function Icon({ d }: { d: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d={d} />
@@ -89,31 +116,103 @@ function Icon({ d }: { d: string }) {
   );
 }
 
+function RailItem(p: { label: string; count: number; current: boolean; onClick?: () => void }) {
+  return (
+    <li>
+      <button type="button" className="topic" aria-current={p.current ? "true" : undefined} onClick={p.onClick}>
+        <span className="topic-name">{p.label}</span>
+        <span className="topic-count">{p.count.toLocaleString("en-US")}</span>
+      </button>
+    </li>
+  );
+}
+
+function emptyText(p: SlideshowViewProps): [string, string] {
+  if (p.notice) return [`No images for ${p.activeLabel} yet`, p.notice];
+  if (!p.active) return ["No topic selected", "Pick a topic, or add an Are.na channel with the + button."];
+  if (p.active.kind === "playlist")
+    return [
+      `${p.activeLabel} is empty`,
+      "Add images to it with the playlist button under any image. A playlist keeps links only, never image files.",
+    ];
+  return [
+    `No images for ${p.activeLabel} yet`,
+    "Images appear here as soon as a refresh brings in their details. Nothing is downloaded; each one streams from its source.",
+  ];
+}
+
 export function SlideshowView(p: SlideshowViewProps) {
   const slide = p.slides[p.index] as Slide | undefined;
   const width = String(Math.max(p.slides.length, 1)).length;
+  const current = sourceKey(p.active);
+  const inLists = new Set(p.inPlaylists ?? []);
+  const [emptyTitle, emptyBody] = emptyText(p);
+  const onNewPlaylist = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const input = e.currentTarget.elements.namedItem("playlist-name");
+    if (input instanceof HTMLInputElement && input.value.trim()) {
+      p.onCreatePlaylist?.(input.value.trim());
+      input.value = "";
+    }
+  };
   return (
     <div className="app" data-rail-open={p.railOpen ? "true" : "false"}>
-      <nav className="rail" aria-label="Topics" id="topic-rail">
+      <nav className="rail" aria-label="Topics and playlists" id="topic-rail">
         <div className="brand">
           <span className="brand-name">LeMuse</span>
           {p.mode === "preview" && <span className="brand-mode">Preview</span>}
+          <button
+            type="button"
+            className="icon-btn brand-add"
+            onClick={p.onOpenLibrary}
+            aria-label="Add a channel or manage playlists"
+            title="Add channel, playlists (A)"
+          >
+            <Icon d={ICONS.add} />
+          </button>
         </div>
-        <ul className="topic-list">
-          {p.topics.map((t) => (
-            <li key={t.name}>
-              <button
-                type="button"
-                className="topic"
-                aria-current={t.name === p.active ? "true" : undefined}
-                onClick={() => p.onSelectTopic?.(t.name)}
-              >
-                <span className="topic-name">{t.name}</span>
-                <span className="topic-count">{t.slides}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="rail-scroll">
+          <ul className="topic-list" aria-label="Everything">
+            <RailItem
+              label="All"
+              count={p.allCount}
+              current={current === "all"}
+              onClick={() => p.onSelect?.({ kind: "all" })}
+            />
+          </ul>
+          <h2 className="rail-heading" id="rail-topics">
+            Topics
+          </h2>
+          <ul className="topic-list" aria-labelledby="rail-topics">
+            {p.topics.map((t) => (
+              <RailItem
+                key={t.name}
+                label={t.name}
+                count={t.slides}
+                current={current === sourceKey({ kind: "topic", name: t.name })}
+                onClick={() => p.onSelect?.({ kind: "topic", name: t.name })}
+              />
+            ))}
+          </ul>
+          <h2 className="rail-heading" id="rail-playlists">
+            Playlists
+          </h2>
+          {p.playlists.length ? (
+            <ul className="topic-list" aria-labelledby="rail-playlists">
+              {p.playlists.map((l) => (
+                <RailItem
+                  key={l.id}
+                  label={l.name}
+                  count={l.items}
+                  current={current === sourceKey({ kind: "playlist", id: l.id })}
+                  onClick={() => p.onSelect?.({ kind: "playlist", id: l.id })}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="rail-hint">None yet. Use the playlist button under an image.</p>
+          )}
+        </div>
         <div className="rail-foot">
           <p className={`refresh-label tone-${p.refresh.tone}`} role="status">
             {p.refresh.label}
@@ -154,11 +253,8 @@ export function SlideshowView(p: SlideshowViewProps) {
               />
             ) : (
               <div className="empty">
-                <p className="empty-title">{p.active ? `No images for ${p.active} yet` : "No topic selected"}</p>
-                <p className="empty-body">
-                  {p.notice ??
-                    "Images appear here as soon as a refresh brings in their details. Nothing is downloaded; each one streams from its source."}
-                </p>
+                <p className="empty-title">{emptyTitle}</p>
+                <p className="empty-body">{emptyBody}</p>
               </div>
             )}
             <button
@@ -183,7 +279,7 @@ export function SlideshowView(p: SlideshowViewProps) {
             </div>
             <div className="caption-body">
               <div className="meta">
-                <h1 className="slide-title">{slide ? slide.title || "Untitled" : (p.active ?? "LeMuse")}</h1>
+                <h1 className="slide-title">{slide ? slide.title || "Untitled" : p.activeLabel || "LeMuse"}</h1>
                 {slide && (
                   <p className="byline">
                     {slide.creator && <span className="creator">{slide.creator}</span>}
@@ -238,6 +334,19 @@ export function SlideshowView(p: SlideshowViewProps) {
                 <button type="button" className="icon-btn" onClick={p.onToggleShuffle} aria-pressed={p.shuffle} aria-label="Shuffle" title="Shuffle (S)">
                   <Icon d={ICONS.shuffle} />
                 </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onTogglePlaylistMenu}
+                  disabled={!slide}
+                  aria-expanded={Boolean(p.playlistMenuOpen && slide)}
+                  aria-controls="playlist-menu"
+                  aria-label={inLists.size ? "In a playlist: change playlists" : "Add to playlist"}
+                  data-in-playlist={inLists.size ? "true" : "false"}
+                  title="Add to playlist (P)"
+                >
+                  <Icon d={ICONS.playlistAdd} />
+                </button>
                 <button type="button" className="icon-btn" disabled aria-label="Save original" title="Save arrives in a later build">
                   <Icon d={ICONS.save} />
                 </button>
@@ -260,6 +369,54 @@ export function SlideshowView(p: SlideshowViewProps) {
                 </button>
               </div>
             </div>
+            {p.playlistMenuOpen && slide && (
+              <div className="playlist-menu" id="playlist-menu" role="group" aria-labelledby="playlist-menu-title">
+                <p className="menu-title" id="playlist-menu-title">
+                  Add to playlist
+                </p>
+                {p.playlists.length ? (
+                  <ul className="menu-list">
+                    {p.playlists.map((l) => (
+                      <li key={l.id}>
+                        <label className="menu-check">
+                          <input
+                            type="checkbox"
+                            checked={inLists.has(l.id)}
+                            onChange={(e) => p.onSetInPlaylist?.(l.id, e.target.checked)}
+                          />
+                          <span className="menu-name">{l.name}</span>
+                          <span className="topic-count">{l.items.toLocaleString("en-US")}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="menu-empty">No playlists yet. Name one to start.</p>
+                )}
+                <form className="menu-new" onSubmit={onNewPlaylist}>
+                  <label htmlFor="playlist-name" className="visually-hidden">
+                    New playlist name
+                  </label>
+                  <input
+                    id="playlist-name"
+                    name="playlist-name"
+                    type="text"
+                    maxLength={60}
+                    placeholder="New playlist"
+                    autoComplete="off"
+                    required
+                  />
+                  <button type="submit" className="primary-btn">
+                    Create
+                  </button>
+                </form>
+                {p.playlistMenuError && (
+                  <p className="menu-error" role="alert">
+                    {p.playlistMenuError}
+                  </p>
+                )}
+              </div>
+            )}
           </figcaption>
         </figure>
       </main>

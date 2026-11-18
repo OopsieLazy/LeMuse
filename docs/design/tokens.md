@@ -12,11 +12,11 @@ at the bottom.
 | Colour (semantic) | `--bg --panel --panel-fill --stage --fg --muted --line --accent --accent-ink --ok --error --backdrop --shadow-rgb` | Theme preset; light/dark mode; accent picker (ink computed for contrast) |
 | Typography | `--font-ui --font-display --font-data`, `--text-2xs…xl`, weights, leading, tracking | Typeface set; **Interface size** scales every size |
 | Space | `--space-1…8` (4 px rhythm × scale) | Interface size |
-| Layout | `--rail-width --stage-pad --stage-pad-narrow --control-size --icon-size --icon-stroke --timer-height --dialog-width --dialog-max-height --measure` | Topic list width slider; Space around the image slider; Cinema sets stage padding to 0 |
+| Layout | `--rail-width --stage-pad --stage-pad-narrow --control-size --icon-size --icon-stroke --timer-height --dialog-width --dialog-max-height --measure --menu-width --menu-max-height --field-min --status-min` | Topic list width slider; Space around the image slider; Cinema sets stage padding to 0 |
 | Shape | `--radius-base` → `--radius-sm/md/lg`, `--border`, `--focus-ring --focus-offset` | Corner rounding slider |
 | Elevation | `--image-shadow-strength` → `--image-shadow`, `--dialog-shadow` | Image shadow slider |
 | Motion | `--dur-fast --dur-med --ease` | Also turned off by `prefers-reduced-motion` |
-| Layers | `--z-reveal --z-drawer` | none (fixed) |
+| Layers | `--z-reveal --z-menu --z-drawer` | none (fixed) |
 
 **Layout presets** (Studio, Topics on the right, Controls on top, Cinema, Minimal) and **toggles** (timer, specs,
 creator, hidden controls, fit, fullscreen-immersive) are `data-*` attributes on `<html>` that components select
@@ -27,7 +27,7 @@ on. They aren't tokens, because they change structure (grid areas, what's displa
 | Value | Where | Why not |
 |---|---|---|
 | `720px` breakpoint | `@media (max-width: 720px)` | CSS custom properties **can't be used inside media queries**. It's the single breakpoint, and the layout test checks both sides of it (800 and 400 px) |
-| `1px` hairlines (borders, separator) | borders, `.controls-sep` | Structural: a hairline is one device pixel by definition. Scaling it would blur it |
+| `1px` hairlines (borders, separator) and the 1 px `.visually-hidden` box | borders, `.controls-sep`, screen-reader-only labels | Structural: a hairline is one device pixel by definition. Scaling it would blur it |
 | `0`, `100%`, `1fr`, `minmax(0, 1fr)`, grid areas | layout | Structure, not style. Changing them breaks the "image never under the bar" guarantee the layout test enforces |
 | SVG path data | `ICONS` in `SlideshowView.tsx` | Geometry. Icon size, stroke width and colour *are* tokens |
 | Timer duration (`animationDuration`) | inline style on the timer bar | Data (seconds per slide), not style. It comes from the topic or the Settings slider |

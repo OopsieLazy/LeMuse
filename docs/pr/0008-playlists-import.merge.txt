@@ -1,0 +1,22 @@
+feat: playlists, All, Add channel; security upkeep (#8)
+
+What: local playlists of images, an All view of every topic, and
+paste-a-link Are.na channel import; SQLite and HTTP hardening; npm
+install scripts off in CI; npm audit gate with expiring exceptions.
+Why: owner's session-6 request (playlists + All, add feature for Q14,
+injection and fetch-target questions, stay current on security).
+
+✅ Playlists: add the current image (P), create, rename, delete; links only
+✅ All: every topic in one slideshow; counts via COUNT(*) (D-19)
+✅ Add channel: exact Are.na hosts, strict slug, one lookup, toml_edit write
+✅ Config can't steer requests: slugs, queries, contact, names validated
+✅ rusqlite 0.41.1 (SQLite 3.54: RUSTSEC-2026-0459, FTS5 CVEs)
+✅ HTTP: https_only, no auth across redirects, parsed token-host check
+✅ CI: npm ci --ignore-scripts; npm-audit-gate.mjs (dev-only, ≤30 days)
+✅ No new Tauri plugin, capability or CSP host (ADR-0014)
+⬜ Copy a playlist to an Are.na channel (needs owner's token; later)
+⬜ Save, Are.na token in Credential Manager, load_more (next PR)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0008-playlists-import.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
