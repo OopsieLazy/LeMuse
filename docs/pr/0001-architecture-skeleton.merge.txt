@@ -1,0 +1,28 @@
+feat: ServeNSurf architecture skeleton with stream-first topics (#1)
+
+Researched plan, seven architecture decisions and a compiling, tested
+skeleton for ServeNSurf: a Windows app that plays a stream or slideshow of
+reference images on a topic, fed by Are.na channels the user picks. Images
+stream from Are.na's CDN; originals are saved locally only on request.
+
+✅ Deep research report and notes (Are.na v3 API/terms, sources, stack, process)
+✅ ADR-0001 Tauri 2 + Rust core (accepted by owner)
+✅ ADR-0002 SQLite/FTS5 catalog + content-addressed store + hardlink views
+✅ ADR-0003 watermark refresh engine + connector trait
+✅ ADR-0004 Are.na compliance + source licence tiers
+✅ ADR-0005 refresh on launch; tray/scheduler opt-in
+✅ ADR-0006 GitHub Flow, Conventional Commits, squash, staged review loop
+✅ ADR-0007 stream-first topics; save on request; paginate, don't enumerate
+✅ servensurf-core: topics, media URLs, slides(), refresh engine (30 tests)
+✅ servensurf CLI: init, topics, slides, status, search (sync stubbed)
+✅ Tauri 2 + React shell listing topics (compiles, clippy-clean)
+✅ Renamed to ServeNSurf; MIT licence
+✅ CLAUDE.md, templates, PLAN, ARCHITECTURE, PROGRESS, PR/issue templates, CI
+✅ Review rounds 1-2: A-3, A-9, D-7, D-8, D-9 fixed
+⬜ Production HTTP client, launch refresh, slideshow view, Save (-> M1)
+⬜ 5xx retry (D-2), streaming saves (D-1), preload cap (D-10) (-> M1)
+⬜ Topic editor + grid view (-> M2)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0001-architecture-skeleton.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -1,0 +1,86 @@
+{
+  "data": [
+    {
+      "id": 9613792,
+      "base_type": "Block",
+      "type": "Image",
+      "state": "available",
+      "title": "Exploded gearbox isometric",
+      "description": { "markdown": "Isometric **exploded** view", "html": "<p>Isometric <strong>exploded</strong> view</p>", "plain": "Isometric exploded view" },
+      "updated_at": "2026-11-10T12:00:00Z",
+      "user": { "slug": "example-user", "name": "Example User" },
+      "source": { "url": "https://example.invalid/gearbox", "title": "Gearbox", "provider": { "name": "example.invalid", "url": "https://example.invalid" } },
+      "image": {
+        "src": "https://d2w9rnfcy7mm78.cloudfront.net/9613792/original_abc.jpg?1606117715",
+        "filename": "original_abc.jpg",
+        "file_size": 1925505,
+        "width": 2121,
+        "height": 1268,
+        "small": { "src": "https://images.are.na/eyJzbWFsbCI6MX0=", "src_2x": "https://images.are.na/eyJzbWFsbCI6Mn0=", "width": 400, "height": 239 },
+        "medium": { "src": "https://images.are.na/eyJtIjoxfQ==", "src_2x": "https://images.are.na/eyJtIjoyfQ==", "width": 1200, "height": 717 },
+        "large": { "src": "https://images.are.na/eyJsIjoxfQ==", "src_2x": "https://images.are.na/eyJsIjoyfQ==", "width": 1800, "height": 1076 },
+        "square": { "src": "https://images.are.na/eyJzcSI6MX0=", "src_2x": "https://images.are.na/eyJzcSI6Mn0=", "width": 400, "height": 400 }
+      },
+      "connection": { "position": 3 }
+    },
+    {
+      "id": 9700001,
+      "base_type": "Block",
+      "type": "Attachment",
+      "state": "available",
+      "title": "Bracket.step",
+      "description": null,
+      "updated_at": "2026-11-09T08:30:00Z",
+      "user": { "slug": "example-user", "name": "Example User" },
+      "source": null,
+      "attachment": {
+        "filename": "Bracket.step",
+        "content_type": "application/octet-stream",
+        "file_size": 48213,
+        "file_extension": "step",
+        "updated_at": "2026-11-09T08:30:00Z",
+        "url": "https://attachments.are.na/9700001/Bracket.step"
+      },
+      "image": {
+        "src": "https://d2w9rnfcy7mm78.cloudfront.net/9700001/original_preview.png",
+        "filename": "original_preview.png",
+        "file_size": 20311
+      },
+      "connection": { "position": 2 }
+    },
+    {
+      "id": 9700002,
+      "base_type": "Block",
+      "type": "Text",
+      "state": "available",
+      "title": "",
+      "content": { "markdown": "Hatch at 45 degrees for section cuts.", "html": "<p>Hatch at 45 degrees for section cuts.</p>", "plain": "Hatch at 45 degrees for section cuts." },
+      "updated_at": "2026-11-08T10:00:00Z",
+      "user": { "slug": "example-user" },
+      "connection": { "position": 1 }
+    },
+    {
+      "id": 555,
+      "type": "Channel",
+      "slug": "nested-channel",
+      "title": "Nested channel",
+      "updated_at": "2026-11-07T10:00:00Z"
+    },
+    {
+      "id": 9700003,
+      "base_type": "Block",
+      "type": "PendingBlock",
+      "state": "processing",
+      "updated_at": "2026-11-06T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "per_page": 100,
+    "total_pages": 2,
+    "total_count": 105,
+    "next_page": 2,
+    "prev_page": null,
+    "has_more_pages": true
+  }
+}

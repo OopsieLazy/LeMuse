@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a new capability (becomes a spec in docs/specs/)
+title: "feat: "
+labels: ["type: feature", "status: triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What's true when this ships?
+    validations:
+      required: true
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Milestone
+      options: [M1 first gather, M2 gallery, M3 robustness, M4 background, M5 sources, unsure]
+  - type: checkboxes
+    id: compliance
+    attributes:
+      label: Compliance
+      options:
+        - label: This doesn't add crawling or bulk downloading (ADR-0004)
+          required: true

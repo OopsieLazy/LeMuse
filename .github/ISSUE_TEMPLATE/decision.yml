@@ -1,0 +1,27 @@
+name: Decision needed
+description: An architectural or product question that needs an ADR and an owner decision
+title: "decision: "
+labels: ["type: decision", "status: triage"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What forces a decision now?
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options and recommendation
+      description: Name each option; state which one is recommended and why.
+    validations:
+      required: true
+  - type: checkboxes
+    id: loop
+    attributes:
+      label: Review loop
+      options:
+        - label: ADR drafted (docs/adr/)
+        - label: Admin pass done
+        - label: Developer pass done

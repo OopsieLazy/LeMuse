@@ -1,0 +1,5 @@
+# The owner must approve every PR (ADR-0006).
+# TODO(owner, Q3): replace the placeholder with your GitHub handle once the repo exists, e.g.
+#   *  @your-handle
+# For this to be enforceable, the agent must push from a separate bot account or GitHub App.
+*  @OWNER_HANDLE_PLACEHOLDER
