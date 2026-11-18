@@ -7,12 +7,14 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ## 2026-11-18 (session 13): v0.7.0 merged; compact windows
 
-**Branch:** `feat/0016-compact-layout` (pushed) · **Status:** awaiting owner review
+**Branches:** `feat/0016-compact-layout`, `feat/0017-save-originals` (pushed) · **Status:** awaiting owner review
 
 - **Owner merged** #1 and #2 and tagged v0.7.0. The CI fix had no PR, so it's carried in this one.
 - **Built:** below 1,024 px wide or 560 px tall the app works like the mini player (image fills it, ☰ drawer,
   tap for a slimmer bar, credit stays on the image). Layout test adds 768 × 1024 and an image-fill check.
-- **Checks:** W3C 50; layout 288 renders; secret scan clean.
+- **Then (same session):** smooth compact transitions (#16); **Save originals** (#17, ADR-0022): host
+  allow-list, magic bytes, retries on network/5xx; real saves from Are.na and Cleveland checked.
+- **Checks:** 99 tests; W3C 51; layout 294 renders; secret scan clean.
 
 ---
 

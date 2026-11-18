@@ -16,14 +16,16 @@ dashboard, reference sheets. Next: compact windows (PR below), then v0.8 Save an
 
 ## Now (session 13, owner's request of 2026-11-18)
 
-v0.7.0 is on `main` (#1, #2). Next PR: **`feat/0016-compact-layout`** (title `feat: compact layout for tablets and
-small windows`), which also carries the CI fix.
+v0.7.0 is on `main`. Merge order: **#16 `feat/0016-compact-layout`** (with the CI fix) → **#17
+`feat/0017-save-originals`** (stacked on #16).
 
 | # | Work | Status |
 |---|---|---|
-| 1 | Compact windows behave like the mini player: image fills it, ☰ drawer, tap for a slimmer bar, credit on the image | ✅ pushed |
-| 2 | CI fix (gitleaks over full history; title check on edit), carried in the same PR | ✅ pushed |
-| 3 | Owner: Dependency graph; lock `main`; Q21–Q23 | ⏳ owner |
+| 1 | Compact windows like the mini player; **smooth** bar slide and rail ease (#16) | ✅ pushed |
+| 2 | CI fix carried in #16 | ✅ pushed |
+| 3 | **Save originals** (v0.8 starts): host allow-list (A-37), magic bytes, retries (D-2), `lemuse save` (#17) | ✅ pushed |
+| 4 | Next: Are.na token in Credential Manager, import followed channels, single instance, queue reads during refresh (D-74) | ⏳ next PR |
+| 5 | Owner: Dependency graph; lock `main`; Q21–Q23 | ⏳ owner |
 
 ## Roadmap
 
@@ -48,14 +50,13 @@ Claude's recommendation; the owner can reorder.
 
 ### v0.8: Save and sign in (finishes M1)
 
-- [ ] **Save** the original of the current image: download → content store → `views/<topic>/`, with a "saved"
-      mark. Includes streaming download with hash-on-write (D-1) and a download host allow-list per source
-      (A-37)
+- [x] **Save** the original of the current image into `views/<topic>/`, with a "saved" mark; download host
+      allow-list (A-37); retries (D-2) (#17, ADR-0022). Streaming download with hash-on-write (D-1) still open
 - [ ] **Are.na token** in Windows Credential Manager (Settings field + `lemuse auth set|clear`):
       private channels, and 120 reads/min instead of 30
 - [ ] **Import the channels you follow** (needs the token)
 - [ ] **Load more:** fetch a channel's next pages when a slideshow runs low (ADR-0007 #3, D-23)
-- [ ] Retries on 5xx and network errors (D-2); single-instance app (a second launch focuses the first window)
+- [ ] Single-instance app (a second launch focuses the first window)
 
 ### v0.9: Browse and organize (M2)
 
@@ -158,7 +159,6 @@ Claude's recommendation; the owner can reorder.
 | ID | From | Finding | Planned in |
 |---|---|---|---|
 | D-1 | Review 0001 r1 | Downloads buffered fully in memory; large CAD files need streaming | M1 |
-| D-2 | Review 0001 r1 | Retry covers 429 only; add 5xx and network errors | M1 |
 | D-3 | Review 0001 r1 | A partially failed block leaves orphan objects | M3 |
 | D-5 | Review 0001 r1 | Renamed titles leave stale view files | M2 |
 | D-12 | Review 0001 r2 | The CSP pins one CloudFront hostname for originals | M1 (load errors now skip the slide, PR #3; surface them in the UI) |
@@ -173,7 +173,6 @@ Claude's recommendation; the owner can reorder.
 | D-30 | Review 0005 | The review snapshot refreshes asynchronously after edits, so it can lag by one tool call | Mitigated: run `review-snapshot.mjs` before commits; the agent blocks on a stale snapshot |
 | D-33 | Review 0006 | Auto-hide in docked layouts re-fits the image when the bar hides (the bar never overlays, by owner rule) | Accepted |
 | A-11 | Review 0002 | Starter Are.na channels are third-party curated and may change | Owner review; M2 topic editor |
-| A-37 | Review 0008 | Download mode (and Save) fetch image URLs from any https host the API names | Save PR: allow-list download hosts per connector, matching the CSP |
 | D-42 | Review 0008 | npm audit exception for picomatch GHSA-fc5q-39xc-vjpf (dev-only, no fixed release) | Re-check by 2026-12-15; the gate fails on expiry |
 | D-53 | Review 0009 | Shuffle mixes the current page only | M2: shuffle across pages (random order in SQL) |
 | D-54 | Review 0009 | Word-based categories mislabel some images; untitled images rely on channel names | M2: manual corrections; later maybe a local image model (ADR-0015 option B) |
@@ -181,5 +180,6 @@ Claude's recommendation; the owner can reorder.
 | D-75 | Review 0013 | The installer doesn't ship `lemuse.exe` (needed for Task Scheduler) | v0.8: bundle the CLI as a sidecar |
 | D-78 | Review 0014 | The dashboard page loads the newest 300 per topic | Page through `/api/v1/slides` |
 | D-80 | Review 0014 | The app doesn't start the dashboard; the token isn't kept between runs | Settings switch; token in Credential Manager (v0.8) |
+| D-94 | Review 0017 | Save Are.na attachments (STEP, DXF, PDF) | With a file-type allow-list |
 | A-50 | Review 0010 | CI actions pinned to Node 20 releases (deprecated); ubuntu-latest moving to Ubuntu 26 | Next CI touch: bump pinned SHAs (14-day cooldown) |
 | A-39 | Review 0009 | In-app Are.na search needs Premium | Only if the owner buys Premium (Q10 = no) |

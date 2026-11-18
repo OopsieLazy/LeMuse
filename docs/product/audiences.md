@@ -15,7 +15,7 @@ or is planned (CLAUDE.md). The reasoning behind the table is in ADR-0016 and ADR
 | **Creators, streamers, studios** | Mood and B-roll on stream; a studio wall screen | ✅ Mini player · ✅ JSON CLI · ✅ Dashboard page `lemuse serve` (OBS, Home Assistant) · 🗺 Webhooks | Are.na, local folders |
 | **Teachers, schools** | Classroom slideshows of public-domain objects, with attribution | ✅ Topics from museum keywords · ✅ Attribution always shown · ✅ Dashboard page on a projector · ✅ Printable sheets · 🗺 LeMuse Web (ADR-0020) | Museums, Wikimedia Commons |
 | **Game, film, 3D artists** | Concept, material and texture reference | ✅ Categories · 🗺 Poly Haven · 💡 3D previews | Poly Haven, Are.na, museums |
-| **Researchers, archivists** | Keeping links to things that vanish | ✅ Links kept after removal · ✅ `export-links` (CSV, JSON) · 🗺 Archive view | Are.na, museums |
+| **Researchers, archivists** | Keeping links to things that vanish | ✅ Links kept after removal · ✅ `export-links` (CSV, JSON) · ✅ Save originals · 🗺 Archive view | Are.na, museums |
 
 ## Sources
 

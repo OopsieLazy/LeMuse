@@ -31,6 +31,7 @@ On failure, `ok` is `false`, `error` holds the message, and the exit code is 1:
 | `init` | `{ root, config }` |
 | `sheet [--topic T \| --playlist P] [--count N] [--seed S]` | `{ heading, seed, count, html }` (without `--json`: the HTML itself) |
 | `sync --full` | Same as `sync`, reading every channel to its end |
+| `save <block-id> [--topic T \| --playlist P]` | `{ block_id, view, bytes, already_stored }`; `view` is relative to the library |
 | `preview-data` | Always JSON (for the UI preview), without the envelope |
 
 Without `--json`, `export-links --format csv|json|txt` writes a CSV (escaped and guarded against formula
