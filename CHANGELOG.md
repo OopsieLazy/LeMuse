@@ -8,6 +8,16 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Whole channels, auto refresh and JSON (work item 13, ADR-0017):
+  - big channels load in full: each refresh resumes where the last one stopped; a just-added channel reads up
+    to 5,000 items at once;
+  - the app refreshes every 60 minutes while it runs (`sync.interval_minutes`, 0 = off);
+  - `--json` on every CLI command, one envelope `{"lemuse":1,"command","ok","data"|"error"}`
+    (docs/automation.md); `status` lists channels still loading.
+  - **Release note:** a `lemuse.toml` with `pages_per_refresh = 2` (the old default written by `init`) is
+    raised to 5 once, with a comment beside it. Set it back to 2 and it stays.
+- Mini player and kept links (work item 12, ADR-0016): mini player (M), Copy link (L), image fallbacks,
+  `lemuse export-links`.
 - Pages, categories and Find channels (PR #9, ADR-0015):
   - views over 500 images get a page menu (1–500, 501–1,000, …);
   - LeMuse sorts images into ~70 categories (kind, material, medium, object, style) from titles, channel names

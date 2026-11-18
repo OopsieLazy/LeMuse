@@ -11,7 +11,8 @@ Images stream from the source CDN; the user can Save any image as a local file. 
 automatically on launch. Owner: free Are.na tier, MIT licence. See ADR-0007 for the stream-first design.
 
 Start of every session: read [docs/PROGRESS.md](docs/PROGRESS.md) (latest entry first) and [docs/PLAN.md](docs/PLAN.md)
-for the current milestone. Research backing the design is in `reports/` and `research_notes/`.
+for the current milestone. Keep [docs/product/audiences.md](docs/product/audiences.md) (who it's for, which
+sources serve them) current whenever a feature or source ships or is planned. Research backing the design is in `reports/` and `research_notes/`.
 
 ## Operating model — enterprise, staged review loop
 
