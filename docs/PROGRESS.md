@@ -5,6 +5,19 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-17 (session 8): v0.6.0 released; roadmap; GitHub review flow (work item 10)
+
+**Branch:** `docs/0010-roadmap-review-flow` (pushed) · **Status:** awaiting owner review on GitHub
+
+- **Owner merged** #1–#9 and pushed `main` + `v0.6.0`. The first CI run failed in gitleaks (A-47, open).
+- **Owner decisions (Q17):** Claude pushes branches, never `main`; the owner reviews and squash-merges on
+  github.com (no `gh`); lock `main` with a ruleset.
+- **Done:** roadmap v0.7–v1.0 + feature ideas (PLAN); CLAUDE.md and handoff template use the web flow;
+  ADR-0002…0015 accepted.
+- **Next:** resolve A-47; ruleset on `main`; then v0.7 (Save + Are.na token + load more).
+
+---
+
 ## 2026-11-17 (session 7): Pages, categories, Find channels (PR #9)
 
 **Branch:** `feat/0009-pages-categories-discover` (stacked on #8) · **Status:** awaiting owner review (app launched)

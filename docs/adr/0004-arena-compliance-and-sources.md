@@ -1,5 +1,5 @@
 ---
-status: proposed          # amended by ADR-0007 (stream-first)
+status: accepted          # amended by ADR-0007 (stream-first)
 date: 2026-11-16
 decision-makers: owner
 consulted: admin pass, developer pass
