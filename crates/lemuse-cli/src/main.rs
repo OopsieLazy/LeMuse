@@ -366,6 +366,7 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             let cfg = Config::load(&paths.config())?;
             let mut catalog = Catalog::open(&paths.catalog())?;
             catalog.ensure_categories(lemuse_core::categories::vocabulary())?;
+            catalog.ensure_dupes()?;
             Ok(pretty(lemuse_core::serve::preview_data(
                 &cfg, &catalog, per_topic,
             )?))

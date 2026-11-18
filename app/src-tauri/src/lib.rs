@@ -576,6 +576,7 @@ pub fn run() {
             std::thread::spawn(|| {
                 if let Ok(mut c) = catalog() {
                     let _ = c.ensure_categories(categories::vocabulary());
+                    let _ = c.ensure_dupes();
                 }
             });
             // The window is already up from the cached catalog; the launch

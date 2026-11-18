@@ -19,6 +19,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0004_playlist_block_index.sql"),
     include_str!("../../migrations/0005_categories.sql"),
     include_str!("../../migrations/0006_resume_cursor.sql"),
+    include_str!("../../migrations/0007_block_dupes.sql"),
 ];
 
 /// Caps that keep a scripted or runaway UI from growing local state without
@@ -95,6 +96,9 @@ impl<'a> Scope<'a> {
         matches!(self, Scope::Collections(k) if k.is_empty())
     }
 }
+
+/// Bumped when the re-upload rule changes, so groups are rebuilt.
+const DUPES_VERSION: &str = "2";
 
 /// Most categories one filter may name on each side.
 pub const MAX_FILTER_CATEGORIES: usize = 24;
@@ -248,10 +252,20 @@ fn scope_sql(scope: &Scope<'_>, filter: &CategoryFilter) -> (String, Vec<Value>)
     } else {
         conds.join(" AND ")
     };
-    (
-        format!("SELECT s.block_id, s.ord FROM ({base}) s WHERE {cond}"),
-        values,
-    )
+    let sql = match scope {
+        // One block per re-upload group (the oldest in view); see block_dupes.
+        Scope::Collections(_) => format!(
+            "SELECT block_id, ord FROM (
+                 SELECT s.block_id, s.ord, ROW_NUMBER() OVER (
+                     PARTITION BY COALESCE(g.grp, s.block_id) ORDER BY s.block_id) AS keep
+                 FROM ({base}) s LEFT JOIN block_dupes g ON g.block_id = s.block_id
+                 WHERE {cond})
+             WHERE keep = 1"
+        ),
+        // Playlists show exactly what the user added.
+        Scope::Playlist(_) => format!("SELECT s.block_id, s.ord FROM ({base}) s WHERE {cond}"),
+    };
+    (sql, values)
 }
 
 fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
@@ -788,6 +802,57 @@ impl Catalog {
         )?;
         tx.commit()?;
         Ok(rows)
+    }
+
+    /// Group Are.na re-saves: image blocks saved from the **same source image
+    /// address** with the **same pixel size** are one picture uploaded twice.
+    /// (Titles alone aren't enough: product shots and site screenshots share
+    /// titles, and Are.na's file names are unique per upload.) Bare-domain
+    /// sources such as `https://www.instagram.com/` don't count. Museum blocks
+    /// are left alone. Returns the number of blocks in a group.
+    pub fn rebuild_dupes(&mut self) -> Result<usize> {
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM block_dupes", [])?;
+        let n = tx.execute(
+            "WITH img AS (
+                 SELECT b.id, b.origin_url AS o, m.width AS w, m.height AS h,
+                        length(b.origin_url) - length(replace(b.origin_url, '/', '')) AS slashes
+                 FROM blocks b JOIN block_media m ON m.block_id = b.id AND m.role = 'original'
+                 WHERE b.connector = 'arena' AND b.kind = 'image'
+                   AND m.width > 0 AND m.height > 0 AND b.origin_url IS NOT NULL),
+             grouped AS (
+                 SELECT id, MIN(id) OVER (PARTITION BY o, w, h) AS g,
+                        COUNT(*) OVER (PARTITION BY o, w, h) AS n
+                 FROM img
+                 WHERE slashes >= 3 AND NOT (slashes = 3 AND o LIKE '%/'))
+             INSERT INTO block_dupes (block_id, grp)
+             SELECT id, g FROM grouped WHERE n > 1",
+            [],
+        )?;
+        tx.execute(
+            "INSERT INTO derived_state (key, value) VALUES ('dupes', ?1)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            params![DUPES_VERSION],
+        )?;
+        tx.commit()?;
+        Ok(n)
+    }
+
+    /// Build the re-upload groups once after an update that introduced them.
+    pub fn ensure_dupes(&mut self) -> Result<bool> {
+        let built: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT value FROM derived_state WHERE key = 'dupes'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if built.as_deref() == Some(DUPES_VERSION) {
+            return Ok(false);
+        }
+        self.rebuild_dupes()?;
+        Ok(true)
     }
 
     /// Rebuild categories only if this vocabulary hasn't built them yet
@@ -1470,5 +1535,55 @@ mod tests {
         c.set_in_playlist(p.id, id, true).unwrap();
         assert_eq!(c.playlist_id("gates").unwrap(), Some(p.id));
         assert_eq!(c.links(&Scope::Playlist(p.id)).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn resaves_show_once_in_topics_but_not_in_playlists() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let make = |c: &mut Catalog, id: &str, origin: &str, w: u32| {
+            let mut b = sample(id, "Teenage Engineering computer");
+            b.source.origin_url = Some(origin.into());
+            b.media = vec![
+                MediaRef {
+                    role: "original".into(),
+                    url: format!("https://cdn.invalid/{id}.jpg"),
+                    width: Some(w),
+                    height: Some(800),
+                },
+                media("large", &format!("https://images.invalid/{id}.jpg")),
+            ];
+            let bid = c.upsert_block(&b).unwrap();
+            c.link_block(refs, bid, None).unwrap();
+            bid
+        };
+        let shot = "https://images.example/te/76037.png";
+        let a = make(&mut c, "1", shot, 1000);
+        let resave = make(&mut c, "2", shot, 1000);
+        let other_photo = make(&mut c, "3", "https://images.example/te/5f5a1.png", 1000);
+        let other_size = make(&mut c, "4", shot, 1200);
+        let insta1 = make(&mut c, "5", "https://www.instagram.com/", 1000);
+        let insta2 = make(&mut c, "6", "https://www.instagram.com/", 1000);
+        assert!(c.ensure_dupes().unwrap());
+        assert!(!c.ensure_dupes().unwrap());
+        let keys = [("arena", "refs")];
+        let scope = Scope::collections(&keys);
+        let mut ids: Vec<i64> = c
+            .slides_in(&scope, &CategoryFilter::default(), 50, 0)
+            .unwrap()
+            .iter()
+            .map(|s| s.block_id)
+            .collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            vec![a, other_photo, other_size, insta1, insta2],
+            "only the re-save is folded"
+        );
+        assert_eq!(c.count_in(&scope, &CategoryFilter::default()).unwrap(), 5);
+        let p = c.create_playlist("Both").unwrap();
+        c.set_in_playlist(p.id, a, true).unwrap();
+        c.set_in_playlist(p.id, resave, true).unwrap();
+        assert_eq!(c.playlist_slides(p.id, 10, 0).unwrap().len(), 2);
     }
 }

@@ -37,6 +37,7 @@ pub fn refresh_library(
     };
     // Categories are derived from what was just fetched (ADR-0015).
     catalog.rebuild_categories(crate::categories::vocabulary())?;
+    catalog.rebuild_dupes()?;
     Ok(summary)
 }
 
