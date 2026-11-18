@@ -1,0 +1,20 @@
+#!/bin/sh
+# ServeNSurf pre-commit gate (ADR-0009). Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# When a commit touches the UI (app/ markup, styles or scripts), run the W3C
+# Nu HTML Checker over the built UI and its rendered states. Rust-only
+# commits skip it. Never bypass with --no-verify; fix the markup instead.
+
+ui_changes=$(git diff --cached --name-only --diff-filter=ACMR -- \
+  'app/index.html' 'app/src/*' 'app/scripts/*' 'app/vite.config.ts' 'app/package.json')
+
+if [ -z "$ui_changes" ]; then
+  exit 0
+fi
+
+echo "pre-commit: UI changed; running W3C validation (npm run validate:w3c)"
+if ! npm --prefix app run --silent validate:w3c; then
+  echo "pre-commit: W3C validation failed; commit stopped." >&2
+  exit 1
+fi

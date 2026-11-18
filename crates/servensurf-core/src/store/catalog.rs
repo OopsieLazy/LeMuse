@@ -337,7 +337,14 @@ impl Catalog {
             as u64)
     }
 
+    /// Record a new run. Callers hold the sync lock, so any row still
+    /// `running` belongs to a process that died mid-run (e.g. the app was
+    /// closed during a refresh); mark it `interrupted` (review 0003 D-26).
     pub fn start_run(&self, trigger: &str) -> Result<i64> {
+        self.conn.execute(
+            "UPDATE sync_runs SET status = 'interrupted' WHERE status = 'running'",
+            [],
+        )?;
         self.conn.execute(
             "INSERT INTO sync_runs (trigger, status) VALUES (?1, 'running')",
             [trigger],
@@ -519,5 +526,21 @@ mod tests {
             c.watermark(col).unwrap().as_deref(),
             Some("2026-11-16T00:00:00Z")
         );
+    }
+
+    #[test]
+    fn start_run_marks_orphaned_runs_interrupted() {
+        let cat = Catalog::open_in_memory().unwrap();
+        let orphan = cat.start_run("launch").unwrap(); // process "killed" here
+        let next = cat.start_run("manual").unwrap();
+        let status = |id: i64| -> String {
+            cat.conn
+                .query_row("SELECT status FROM sync_runs WHERE id = ?1", [id], |r| {
+                    r.get(0)
+                })
+                .unwrap()
+        };
+        assert_eq!(status(orphan), "interrupted");
+        assert_eq!(status(next), "running");
     }
 }

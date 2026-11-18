@@ -8,6 +8,7 @@
 //! servensurf topics  --library "D:\References"
 //! servensurf sync    --library "D:\References" --trigger schedule
 //! servensurf slides  --library "D:\References" "Industrial design"
+//! servensurf preview-data --library "D:\References" > app/preview-data.json
 //! servensurf status  --library "D:\References"
 //! servensurf search  --library "D:\References" "gearbox"
 //! ```
@@ -16,10 +17,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use servensurf_core::config::{starter_toml, Config};
+use servensurf_core::config::{ensure_library, Config};
 use servensurf_core::store::catalog::Catalog;
 use servensurf_core::store::LibraryPaths;
-use servensurf_core::sync::Trigger;
+use servensurf_core::sync::{refresh_library, Trigger};
 
 #[derive(Parser)]
 #[command(
@@ -28,7 +29,8 @@ use servensurf_core::sync::Trigger;
     about = "Stream reference images by topic from Are.na channels you choose"
 )]
 struct Cli {
-    /// Library root. Defaults to %USERPROFILE%\Pictures\ServeNSurf.
+    /// Library root. Defaults to $SERVENSURF_LIBRARY, then
+    /// %USERPROFILE%\Pictures\ServeNSurf.
     #[arg(long, global = true)]
     library: Option<PathBuf>,
 
@@ -53,6 +55,12 @@ enum Command {
         #[arg(long, default_value_t = 20)]
         limit: u32,
     },
+    /// Print every topic with its first slides as JSON, for the browser
+    /// preview of the UI (`app/preview-data.json`). Metadata only.
+    PreviewData {
+        #[arg(long, default_value_t = 40)]
+        per_topic: u32,
+    },
     /// Show library stats.
     Status,
     /// Full-text search the catalog.
@@ -67,7 +75,10 @@ enum TriggerArg {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let root = cli.library.unwrap_or_else(Config::default_root);
+    let root = cli
+        .library
+        .or_else(|| std::env::var_os("SERVENSURF_LIBRARY").map(PathBuf::from))
+        .unwrap_or_else(Config::default_root);
     let paths = LibraryPaths::new(&root);
     match run(cli.command, &paths) {
         Ok(()) => ExitCode::SUCCESS,
@@ -81,19 +92,9 @@ fn main() -> ExitCode {
 fn run(cmd: Command, paths: &LibraryPaths) -> servensurf_core::Result<()> {
     match cmd {
         Command::Init => {
-            paths.ensure()?;
-            Catalog::open(&paths.catalog())?;
-            let cfg_path = paths.config();
-            if !cfg_path.exists() {
-                let text = starter_toml(paths.root())?;
-                std::fs::write(&cfg_path, text)
-                    .map_err(|e| servensurf_core::Error::io(&cfg_path, e))?;
-            }
+            ensure_library(paths)?;
             println!("library ready at {}", paths.root().display());
-            println!(
-                "starter topics written to {} (edit to taste)",
-                cfg_path.display()
-            );
+            println!("topics are in {} (edit to taste)", paths.config().display());
             Ok(())
         }
         Command::Topics => {
@@ -121,16 +122,45 @@ fn run(cmd: Command, paths: &LibraryPaths) -> servensurf_core::Result<()> {
             Ok(())
         }
         Command::Sync { trigger } => {
-            let _cfg = Config::load(&paths.config())?;
-            let _trigger = match trigger {
+            let cfg = Config::load(&paths.config())?;
+            let trigger = match trigger {
                 TriggerArg::Cli => Trigger::Cli,
                 TriggerArg::Schedule => Trigger::Schedule,
             };
-            // M1 wires the production HTTP client (+ optional token from
-            // Credential Manager) here, then calls SyncEngine::run.
-            Err(servensurf_core::Error::NotImplemented(
-                "network refresh (M1: production HTTP client)",
-            ))
+            eprintln!("refreshing {} topic(s)...", cfg.topics.len());
+            let summary = refresh_library(paths, &cfg, trigger)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&summary).unwrap_or_default()
+            );
+            Ok(())
+        }
+        Command::PreviewData { per_topic } => {
+            // Metadata only (titles, creators, CDN URLs). No image bytes are
+            // fetched or written: the preview streams them (ADR-0009).
+            let cfg = Config::load(&paths.config())?;
+            let catalog = Catalog::open(&paths.catalog())?;
+            let mut topics = Vec::new();
+            for t in &cfg.topics {
+                let slides = catalog.slides(&t.collection_keys(), per_topic, 0)?;
+                topics.push(serde_json::json!({
+                    "name": t.name,
+                    "slide_seconds": t.slide_seconds,
+                    "shuffle": t.shuffle,
+                    "sources": t.resolved_sources().len(),
+                    "slides": slides,
+                }));
+            }
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "generated_from": "servensurf preview-data",
+                    "blocks": catalog.block_count()?,
+                    "topics": topics,
+                }))
+                .unwrap_or_default()
+            );
+            Ok(())
         }
         Command::Slides { topic, limit } => {
             let cfg = Config::load(&paths.config())?;

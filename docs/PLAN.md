@@ -32,21 +32,27 @@ Each milestone is one or more PRs. Each PR goes through the review loop ([CLAUDE
 - [x] 13 Are.na channels verified for Wood objects, Y2K tech, Product design, Vintage tech
 - [x] Shared per-source throttle (D-13); known channels skip lookups (D-14). 40 tests
 
+### PR #3: Live preview ✅ built, awaiting owner gate (ADR-0009)
+
+- [x] Slideshow UI (`SlideshowView`), shared by the app, previews and the W3C snapshot
+- [x] Production HTTP client, `refresh_library()`, CLI `sync`, launch refresh + Refresh button
+- [x] Test build (CI job + local installer), browser preview, design artifact
+- [x] W3C gate: pre-commit hook + CI. InPrivate WebView (no image disk cache)
+
 ### M1: First slideshow (the vertical slice)
 
 **Outcome:** you add a topic with one Are.na channel to `servensurf.toml`, launch the app, pick the topic, and
 images play full-window. Save puts the original in `views/<topic>/`.
 
-- [ ] Production `HttpClient`:
-  - blocking client on a worker thread;
-  - `ServeNSurf/<ver> (+contact)` User-Agent;
+- [x] Production `HttpClient` (PR #3): blocking `ureq` on a worker thread; `ServeNSurf/<ver> (+contact)` UA
+- [ ] Production `HttpClient`, remaining:
   - optional bearer token (Credential Manager);
   - retries on 5xx and network errors (D-2);
   - streaming file download with hash-on-write (D-1, for Save).
-- [ ] Launch refresh thread (`Trigger::Launch`) + `refresh_now`, with `refresh://progress` events. Tauri
-      single-instance plugin
+- [x] Launch refresh thread (`Trigger::Launch`) + `refresh_now`, with `refresh://status` events (PR #3)
+- [ ] Tauri single-instance plugin
 - [ ] Lazy `load_more(topic)`: fetch the next page of a channel when fewer than ~20 slides remain (ADR-0007 #3)
-- [ ] **Slideshow view**:
+- [x] **Slideshow view** (PR #3; F for fullscreen still to do):
   - full-window image, auto-advance every `slide_seconds`;
   - keys: ← → to move, space to pause, F for fullscreen;
   - shuffle;
@@ -108,8 +114,8 @@ images play full-window. Save puts the original in `views/<topic>/`.
 | D-2 | Review 0001 r1 | Retry covers 429 only; add 5xx and network errors | M1 |
 | D-3 | Review 0001 r1 | A partially failed block leaves orphan objects | M3 |
 | D-5 | Review 0001 r1 | Renamed titles leave stale view files | M2 |
-| D-10 | Review 0001 r2 | Image CDN rate limits are undocumented; the UI must cap preloading | M1 (preload ≤ 2) |
-| D-12 | Review 0001 r2 | The CSP pins one CloudFront hostname for originals | M1 (surface image load errors) |
+| D-10 | Review 0001 r2 | Image CDN rate limits are undocumented; the UI must cap preloading | ✅ PR #3 (preload ≤ 2) |
+| D-12 | Review 0001 r2 | The CSP pins one CloudFront hostname for originals | M1 (load errors now skip the slide, PR #3; surface them in the UI) |
 | A-4 | Review 0001 r1 | Review gates are procedural until the ruleset, bot account and deny rules exist | M1 |
 | A-5 | Review 0001 r1 | Asset scope hardcoded to `$PICTURE/ServeNSurf/**` | M2 |
 | A-6 | Review 0001 r1 | Removed remote items are invisible to the watermark walk | M3 |
@@ -117,4 +123,7 @@ images play full-window. Save puts the original in `views/<topic>/`.
 | A-8 | Review 0001 r2 | Owner has no contact URL for the User-Agent yet | M1 |
 | D-15 | Review 0002 | `slides()` "newest first" is loose across sources (mixed timestamp formats) | M2 (normalize to UTC) |
 | D-18 | Review 0002 | AIC images sit behind a Cloudflare challenge for non-browser clients; unverified in WebView2 | M1 (verify; enable `aic` only if it works) |
+| A-17 | Review 0003 | InPrivate WebView loses `localStorage`; UI prefs must persist via the core | M2 |
+| D-19 | Review 0003 | Topic slide counts use a full `slides()` query | M2 (`COUNT(*)`) |
+| D-23 | Review 0003 | A refresh reloads the active topic from slide 1 | M1 (`load_more` appends) |
 | A-11 | Review 0002 | Starter Are.na channels are third-party curated and may change | Owner review; M2 topic editor |

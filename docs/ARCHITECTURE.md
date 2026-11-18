@@ -53,6 +53,9 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
 | **HTTP behind `HttpClient`; fixture tests** | Deterministic tests, no network in CI, easy 429 injection | 0003 |
 | **Blocking I/O on a worker thread** | The rate limit is the bottleneck; async adds complexity without throughput | 0003 |
 | **Attribution always on screen** | Are.na content belongs to its creators | 0004, 0007 |
+| **One pure view (`SlideshowView`) rendered by the app, the browser preview, the design artifact and the W3C snapshot** | The owner sees the real design every PR; nothing drifts between what's reviewed and what ships | 0009 |
+| **W3C Nu HTML Checker, local, on commits + CI** | Conformance checked on the real rendered markup; no markup sent to a web service | 0009 |
+| **WebView2 InPrivate** | Streamed images live only in memory; nothing lands in a disk cache | 0009 |
 | **GitHub Flow + Conventional Commits + squash + staged review loop** | Auditable and revertible; the owner keeps the final gate | 0006 |
 
 ## Code map
@@ -70,7 +73,9 @@ This explains the big picture and *why* each piece is shaped the way it is. The 
 | `crates/servensurf-core/tests/fixtures/` | Recorded or hand-built API responses |
 | `crates/servensurf-cli/` | `servensurf`: `init`, `topics`, `slides`, `sync` (stub), `status`, `search` |
 | `app/src-tauri/` | Tauri shell: `library_status`, `topics`, `slides`, `search`, `refresh_now` (stub) |
-| `app/src/` | React UI; `api.ts` is the only place that calls `invoke` |
+| `app/src/` | React UI: `SlideshowView.tsx` (pure view), `App.tsx` (state, timer, keys), `api.ts` (Tauri or preview backend) |
+| `app/scripts/` | `snapshot.tsx` (UI states for W3C), `validate-w3c.mjs`, `make-artifact.mjs` |
+| `.githooks/pre-commit` | W3C gate for UI commits |
 
 ## Refresh run, step by step
 

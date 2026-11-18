@@ -1,0 +1,24 @@
+feat: live preview with the real slideshow, W3C gate and no image cache (#3)
+
+The real UI and real data, viewable every PR (ADR-0009): a test installer,
+a browser preview and a design artifact all render the same component.
+
+✅ Production HTTP client; servensurf sync; refresh on launch + Refresh button
+✅ First real refresh: 55 sources, 3,742 images, 0 errors, 0 files written
+✅ Slideshow UI: topic rail, stage, attribution, timer, ←/→/Space/S, shuffle
+✅ Preload ≤ 2; broken images skipped (review D-21 fixed)
+✅ HTTP body cap errors instead of truncating (review D-22 fixed)
+✅ W3C Nu HTML Checker on the built page, CSS and 6 UI states
+✅ Pre-commit hook + CI job enforce W3C; a broken page fails the gate
+✅ CI test-build job uploads a Windows installer per PR
+✅ WebView2 InPrivate: no streamed image is written to a disk cache
+✅ Sync lock is an OS file lock; a killed app can no longer block refreshes
+   (review D-25 fixed, found by the smoke test; MSRV 1.89)
+✅ Killed runs are marked interrupted in the run log (review D-26 fixed)
+✅ 44 tests; fmt and clippy clean
+⬜ Save, load_more, fullscreen, token storage (-> M1)
+⬜ UI preferences persisted via the core (-> M2)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0003-live-preview.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

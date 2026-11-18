@@ -5,6 +5,52 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-16 (session 4): See the real app every PR; W3C gate; no image cache (PR #3)
+
+**Branch:** `feat/0003-live-preview` (stacked on `feat/0002-keyword-topics`) · **PR:** #3 (local) ·
+**Status:** awaiting owner review
+
+### Done
+
+- The owner asked to see the product as it's built, plus a W3C check on commits, a test build or artifact, and
+  no PNG downloads in cache. Wrote ADR-0009.
+- **Real data:**
+  - production HTTP client (`ureq`, rustls) and `refresh_library()`;
+  - `servensurf sync` works;
+  - first real refresh: 55 sources, **3,742 images catalogued, 0 errors, 0 files written**.
+- **Real UI:**
+  - `SlideshowView` with topic rail, full-window image, attribution, timer and controls;
+  - keys ←/→/Space/S; shuffle; preload ≤ 2; broken images skipped.
+  - The app refreshes on launch and from the Refresh button.
+- **See it:**
+  - Windows test installer (local build plus a CI `test-build` job per PR);
+  - `npm run preview:web` (browser, real images);
+  - design artifact (private): https://claude.ai/artifact/T6ucPPa6HwhkWqvLEiSHfY
+- **W3C:** the Nu HTML Checker (local Java) validates the built page, CSS and 6 rendered UI states.
+  - A pre-commit hook (`.githooks`, enabled in this clone) and CI enforce it.
+  - Proven: a broken page fails with exit 1.
+- **No image cache:** WebView2 runs InPrivate. Previews hold metadata only; the artifact draws placeholders.
+- Review 0003: fixed D-25 (closing the app mid-refresh left a lock that blocked refreshes for 6 h; found by
+  the release smoke test), D-21 (broken image stalls the slideshow) and D-22 (silent body truncation). A-14…A-18 and
+  D-19/20/23/24 noted or deferred.
+
+### Decisions
+
+- ADR-0009: live preview, W3C gate, no image disk cache. Status: proposed.
+
+### Deferred / known gaps
+
+- Save (button shown disabled), lazy `load_more`, token storage, 5xx retry, F for fullscreen → M1.
+- UI preferences must persist through the core (InPrivate has no lasting localStorage) → M2.
+- AIC in-app check (D-18) is still open. CI has never run (no remote yet).
+
+### Next session starts with
+
+1. The owner reviews the artifact and the installer, then merges #1 → #2 → #3 (commands in the handoff).
+2. `feat/0004-save-and-load-more` → finish M1: Save, `load_more`, fullscreen, AIC check.
+
+---
+
 ## 2026-11-16 (session 3): Q8 answered → keyword topics (PR #2)
 
 **Branch:** `feat/0002-keyword-topics` (stacked on `feat/0001-architecture-skeleton`) · **PR:** #2 (local) ·

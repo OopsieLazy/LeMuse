@@ -175,6 +175,20 @@ pub fn starter_toml(root: impl Into<PathBuf>) -> Result<String> {
     Ok(Config::new(root).to_toml()? + "\n" + STARTER_TOPICS_TOML)
 }
 
+/// Make sure a library exists at `paths` and return its config: create the
+/// folders and catalog, and write the starter topics on first use. Shared by
+/// `servensurf init` and the desktop app's first launch.
+pub fn ensure_library(paths: &crate::store::LibraryPaths) -> Result<Config> {
+    paths.ensure()?;
+    crate::store::catalog::Catalog::open(&paths.catalog())?;
+    let cfg_path = paths.config();
+    if !cfg_path.exists() {
+        let text = starter_toml(paths.root())?;
+        std::fs::write(&cfg_path, text).map_err(|e| Error::io(&cfg_path, e))?;
+    }
+    Config::load(&cfg_path)
+}
+
 impl Config {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self {
@@ -420,5 +434,22 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Premium"));
+    }
+
+    #[test]
+    fn ensure_library_writes_starter_topics_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = crate::store::LibraryPaths::new(dir.path());
+        let cfg = ensure_library(&paths).unwrap();
+        assert_eq!(cfg.topics.len(), 15);
+        // A user's edits survive the next launch.
+        std::fs::write(
+            paths.config(),
+            "[library]
+root = \"x\"
+",
+        )
+        .unwrap();
+        assert!(ensure_library(&paths).unwrap().topics.is_empty());
     }
 }

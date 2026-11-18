@@ -34,6 +34,21 @@ Fix findings between passes. Every finding is either fixed in the PR or deferred
 cheaply: product scope, licensing, spending money, contacting third parties (e.g. emailing Are.na), publishing,
 anything touching the owner's accounts. Otherwise decide, document the reasoning in the ADR/review, and proceed.
 
+## See it, don't guess it (ADR-0009)
+
+- Every PR that touches the UI ships it three ways:
+  - the **test build** (NSIS installer; CI's `test-build` job uploads one per PR);
+  - the **browser preview** (`npm run preview:web`);
+  - the **design artifact** (`npm run preview:artifact`), republished to the same Artifact URL and linked in
+    the PR.
+- All three render `app/src/SlideshowView.tsx`. Keep it a pure view; data comes through `app/src/api.ts`.
+- **W3C:** commits that touch `app/` run the Nu HTML Checker (`.githooks/pre-commit` → `npm run validate:w3c`,
+  local Java, no web service). Enable once per clone: `git config core.hooksPath .githooks`. New UI states go
+  into `app/scripts/snapshot.tsx` so they get validated too.
+- **No images in caches:** the WebView runs InPrivate (`incognito: true`); preload is in-memory and ≤ 2; previews
+  carry metadata only and the artifact draws placeholders. No screenshots or downloaded PNGs in the repo or caches.
+  Only Save writes image bytes.
+
 ## Git and PR standards
 
 - **GitHub Flow:** `main` is always releasable; work on short-lived branches `type/NNNN-short-slug`
@@ -55,7 +70,7 @@ append an entry to `docs/PROGRESS.md`, then give the owner **every command** the
 
 ## Commands
 
-Run from the repo root unless noted. Rust 1.80+ (MSVC toolchain), Node 20+.
+Run from the repo root unless noted. Rust 1.89+ (MSVC toolchain), Node 20+, Java 11+ (W3C check).
 
 ```sh
 cargo build                          # core + CLI (default workspace members)
@@ -69,9 +84,14 @@ cargo run -p servensurf-cli -- --library ./library init     # scratch library (.
 cargo run -p servensurf-cli -- --library ./library topics   # list [[topic]]s from servensurf.toml
 cargo run -p servensurf-cli -- --library ./library slides "Topic name"   # what the slideshow would show
 cargo run -p servensurf-cli -- --library ./library status
+cargo run -p servensurf-cli -- --library ./library sync     # real metadata refresh (no image files)
 
 cd app && npm install                # first time only
 cd app && npm run typecheck          # UI type-check
+cd app && npm run validate:w3c       # build + render UI states + W3C Nu HTML Checker (needs Java)
+cd app && npm run preview:data       # export catalog metadata for previews ($SERVENSURF_LIBRARY or default)
+cd app && npm run preview:web        # real UI in the browser at :1421, images streamed
+cd app && npm run preview:artifact   # one-file design preview → app/dist-preview/servensurf-preview.html
 cd app && npm run tauri dev          # desktop app with hot reload (builds app/src-tauri)
 cd app && npm run tauri build        # NSIS/MSI installer
 ```

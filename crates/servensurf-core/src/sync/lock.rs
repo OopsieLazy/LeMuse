@@ -1,53 +1,51 @@
-//! Single-run lock so the GUI's launch sync and a scheduled CLI sync never
-//! write the library at the same time.
+//! Single-run lock so the GUI's launch refresh and a scheduled CLI refresh
+//! never write the library at the same time.
+//!
+//! It is an OS file lock (`LockFileEx` on Windows), not a marker file: the
+//! OS releases it when the holding process exits for any reason, so closing
+//! the app mid-refresh or a crash can't leave a stale lock that blocks
+//! refreshes (review 0003 D-25). The `.sync.lock` file itself may stay on
+//! disk; only the lock on it matters.
 
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions, TryLockError};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
 
 use crate::{Error, Result};
 
-/// A lock older than this is assumed to belong to a crashed run.
-pub const STALE_AFTER: Duration = Duration::from_secs(6 * 60 * 60);
-
 #[derive(Debug)]
 pub struct SyncLock {
+    /// Holding the handle holds the lock; dropping it releases the lock.
+    _file: File,
     path: PathBuf,
 }
 
 impl SyncLock {
     pub fn acquire(path: &Path) -> Result<Self> {
-        if is_stale(path) {
-            let _ = std::fs::remove_file(path);
-        }
-        let mut f = OpenOptions::new()
+        let mut file = OpenOptions::new()
+            .read(true)
             .write(true)
-            .create_new(true)
+            .create(true)
+            .truncate(false)
             .open(path)
-            .map_err(|e| match e.kind() {
-                std::io::ErrorKind::AlreadyExists => Error::SyncLocked(path.to_path_buf()),
-                _ => Error::io(path, e),
-            })?;
-        let _ = writeln!(f, "pid={}", std::process::id());
+            .map_err(|e| Error::io(path, e))?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(TryLockError::WouldBlock) => return Err(Error::SyncLocked(path.to_path_buf())),
+            Err(TryLockError::Error(e)) => return Err(Error::io(path, e)),
+        }
+        // Informational only (who holds it); the lock is what counts.
+        let _ = file.set_len(0);
+        let _ = writeln!(file, "pid={}", std::process::id());
         Ok(Self {
+            _file: file,
             path: path.to_path_buf(),
         })
     }
-}
 
-impl Drop for SyncLock {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
+    pub fn path(&self) -> &Path {
+        &self.path
     }
-}
-
-fn is_stale(path: &Path) -> bool {
-    std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| SystemTime::now().duration_since(t).ok())
-        .is_some_and(|age| age > STALE_AFTER)
 }
 
 #[cfg(test)]
@@ -61,6 +59,15 @@ mod tests {
         let first = SyncLock::acquire(&p).unwrap();
         assert!(matches!(SyncLock::acquire(&p), Err(Error::SyncLocked(_))));
         drop(first);
+        assert!(SyncLock::acquire(&p).is_ok());
+    }
+
+    #[test]
+    fn leftover_lock_file_without_a_holder_is_not_a_lock() {
+        // What a killed process leaves behind: the file, but no OS lock.
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join(".sync.lock");
+        std::fs::write(&p, "pid=999999\n").unwrap();
         assert!(SyncLock::acquire(&p).is_ok());
     }
 }

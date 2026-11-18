@@ -27,3 +27,10 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 - Keyword topics (PR #2): the owner's 15 starter topics; Cleveland Museum of Art and Art Institute of Chicago
   keyword-search connectors (CC0 only; weekly refresh); 13 verified Are.na channels; one shared throttle per
   source per refresh.
+- Live preview (PR #3):
+  - the slideshow UI: topic rail, full-window image, attribution, timer, ←/→/Space/S keys, shuffle, preload ≤ 2;
+    images that fail to load are skipped;
+  - real refresh: production HTTP client, `servensurf sync`, refresh on app launch and with the Refresh button;
+  - previews: browser preview, a design artifact and a Windows test-build CI job;
+  - W3C Nu HTML Checker gate in a pre-commit hook and in CI;
+  - InPrivate WebView, so no streamed image is written to a disk cache.

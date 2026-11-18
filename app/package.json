@@ -8,7 +8,12 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:snapshot": "vite build --ssr scripts/snapshot.tsx --outDir .snapshot/ssr --emptyOutDir && node .snapshot/ssr/snapshot.js .snapshot/html",
+    "validate:w3c": "npm run build && npm run build:snapshot && node scripts/validate-w3c.mjs",
+    "preview:data": "cargo run -q -p servensurf-cli -- preview-data --per-topic 40 > preview/preview-data.json",
+    "preview:web": "vite --mode preview",
+    "preview:artifact": "vite build --mode preview --outDir dist-preview --emptyOutDir && node scripts/make-artifact.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
@@ -21,6 +26,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vnu-jar": "26.10.12"
   }
 }

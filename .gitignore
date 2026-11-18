@@ -28,3 +28,8 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# UI preview + validation outputs (ADR-0009); regenerate with npm scripts
+app/preview/
+app/dist-preview/
+app/.snapshot/

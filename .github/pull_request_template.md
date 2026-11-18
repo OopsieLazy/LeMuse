@@ -27,7 +27,14 @@ Closes #
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test`: <!-- N passed -->
 - [ ] `cd app && npm run typecheck` (if UI touched)
+- [ ] `cd app && npm run validate:w3c`: W3C Nu HTML Checker, 0 errors (if UI touched)
 - [ ] Manual check: <!-- what you ran and saw -->
+
+## See it (ADR-0009, required if UI touched)
+
+- Design artifact (same URL every PR): <!-- https://claude.ai/artifact/... -->
+- Test build: <!-- CI artifact name, or local path of the installer -->
+- Browser preview: `cd app && npm run preview:data && npm run preview:web`
 
 ## Risk and rollback
 
