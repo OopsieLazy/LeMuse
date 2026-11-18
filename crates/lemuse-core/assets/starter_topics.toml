@@ -8,7 +8,24 @@
 #   • arena — Are.na channels (free plan: no keyword search, so channels are
 #     picked by hand). Refreshed every launch. All channels below were checked
 #     on 2026-11-16 and are public; they're curated by other Are.na users.
+#   Some channels were added on request (Q11, 2026-11-17): each name was
+#   looked up once with GET /v3/channels/<slug> (no search). If one isn't the
+#   channel you meant, replace its slug with the one from its URL.
 # Add your own: paste the last part of a channel URL as `channel`.
+
+[[topic]]
+name = "Objects"
+shuffle = true
+# Are.na channels only, no museum search.
+[[topic.source]]
+source = "arena"
+channel = "objects-26"              # "objects '26" by nur-volp (1,381 blocks)
+[[topic.source]]
+source = "arena"
+channel = "poetry-in-objects"       # "poetry in objects" by so-fia (37)
+[[topic.source]]
+source = "arena"
+channel = "gesture-incense"         # "*gesture incense" by kiran-scott-de-martinville (34)
 
 [[topic]]
 name = "Molds"
@@ -37,6 +54,12 @@ channel = "nomadic-furniture"        # "nomadic furniture" (62)
 [[topic.source]]
 source = "arena"
 channel = "plywood-furniture-ideas"  # "Plywood Furniture Ideas" (20)
+[[topic.source]]
+source = "arena"
+channel = "sitting"                  # "sitting" by hagen-kuller (7)
+[[topic.source]]
+source = "arena"
+channel = "woodworking"              # "Woodworking" by andy-pruett (4)
 
 [[topic]]
 name = "Wrought iron"
@@ -44,6 +67,9 @@ keywords = ["wrought iron", "ironwork", "iron gate"]
 shuffle = true
 [[topic.source]]
 source = "cleveland"
+[[topic.source]]
+source = "arena"
+channel = "metal"                    # "Metal" by daniel-baer (16)
 
 [[topic]]
 name = "Castle"
@@ -74,8 +100,11 @@ keywords = ["machine", "scientific instrument", "clock"]
 shuffle = true
 [[topic.source]]
 source = "cleveland"
-# Museums cover historic machines and instruments. Add Are.na channels for
-# modern hardware.
+# Museums cover historic machines and instruments.
+[[topic.source]]
+source = "arena"
+channel = "resonance"                # "Resonance" by sasa-milic (14)
+# Another channel wasn't found by name; paste its URL slug here.
 
 [[topic]]
 name = "Form"
@@ -97,6 +126,9 @@ channel = "product-design--4"           # "Product Design" (482)
 [[topic.source]]
 source = "arena"
 channel = "product-design-egarhgbsadw"  # "Product design" (235)
+[[topic.source]]
+source = "arena"
+channel = "id-industrial-design"        # "ID - Industrial Design" by calvin-lien (381)
 [[topic.source]]
 source = "cleveland"
 
@@ -120,6 +152,7 @@ keywords = ["chess", "chessmen", "chess set"]
 shuffle = true
 [[topic.source]]
 source = "cleveland"
+# Another channel wasn't found by name; paste its URL slug here.
 
 [[topic]]
 name = "Vintage"
@@ -138,6 +171,12 @@ channel = "vintage-tech-logos"   # "Vintage Tech Logos" (1,178 blocks)
 [[topic.source]]
 source = "arena"
 channel = "vintage-ui"           # "Vintage UI" (94)
+[[topic.source]]
+source = "arena"
+channel = "vintage-tech-aesthetic"  # "Vintage Tech Aesthetic" by buzz-andersen (130)
+[[topic.source]]
+source = "arena"
+channel = "retro-hardware"       # "retro hardware" by slaap-wel (112)
 [[topic.source]]
 source = "cleveland"
 

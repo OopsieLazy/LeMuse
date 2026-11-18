@@ -36,3 +36,10 @@ app/.snapshot/
 
 # Admin-review snapshot of uncommitted work (ADR-0011); never committed
 .claude/review/
+
+# Keys and credentials never belong in the repo (review 0006 A-26)
+*.pem
+*.key
+*.pfx
+*.p12
+credentials*.json

@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import type { LibraryStatus, Slide, TopicInfo } from "./api";
+import { isHttps, type LibraryStatus, type Slide, type TopicInfo } from "./api";
 
 // Pure view: everything it shows comes in through props, so the same markup
 // renders in the desktop app, the browser preview, the design artifact, the
@@ -188,7 +188,7 @@ export function SlideshowView(p: SlideshowViewProps) {
                   <p className="byline">
                     {slide.creator && <span className="creator">{slide.creator}</span>}
                     <span className="source">{sourceName(slide)}</span>
-                    {slide.page_url && (
+                    {slide.page_url && isHttps(slide.page_url) && (
                       <a
                         href={slide.page_url}
                         target="_blank"

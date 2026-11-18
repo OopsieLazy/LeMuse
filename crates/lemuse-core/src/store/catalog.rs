@@ -168,11 +168,17 @@ impl Catalog {
                  non_commercial, no_ai, remote_updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
              ON CONFLICT (connector, remote_id) DO UPDATE SET
-                 kind = excluded.kind, title = excluded.title,
-                 description = excluded.description, content = excluded.content,
-                 page_url = excluded.page_url, origin_url = excluded.origin_url,
-                 license_id = excluded.license_id, creator = excluded.creator,
-                 attribution_text = excluded.attribution_text,
+                 kind = excluded.kind,
+                 -- Archive policy (ADR-0013, review 0007 A-29): an update
+                 -- never blanks a known title, link or attribution.
+                 title = COALESCE(excluded.title, blocks.title),
+                 description = COALESCE(excluded.description, blocks.description),
+                 content = COALESCE(excluded.content, blocks.content),
+                 page_url = COALESCE(excluded.page_url, blocks.page_url),
+                 origin_url = COALESCE(excluded.origin_url, blocks.origin_url),
+                 license_id = COALESCE(excluded.license_id, blocks.license_id),
+                 creator = COALESCE(excluded.creator, blocks.creator),
+                 attribution_text = COALESCE(excluded.attribution_text, blocks.attribution_text),
                  non_commercial = excluded.non_commercial, no_ai = excluded.no_ai,
                  remote_updated_at = excluded.remote_updated_at,
                  fetched_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')",
@@ -207,8 +213,11 @@ impl Catalog {
             )?;
         }
 
-        // Media URLs are remote state: replace them on every update.
-        tx.execute("DELETE FROM block_media WHERE block_id = ?1", [id])?;
+        // Media URLs are remote state: replace them when the source sends a
+        // new set, but keep the last known set if it sends none (A-29).
+        if !b.media.is_empty() {
+            tx.execute("DELETE FROM block_media WHERE block_id = ?1", [id])?;
+        }
         for m in &b.media {
             tx.execute(
                 "INSERT OR REPLACE INTO block_media (block_id, role, url, width, height)
@@ -415,6 +424,43 @@ mod tests {
             }],
             remote_updated_at: Some("2026-11-01T00:00:00Z".into()),
         }
+    }
+
+    /// Review 0007 A-29: an update that arrives without an image or
+    /// attribution must not erase what the catalog already knows.
+    #[test]
+    fn update_without_media_or_creator_keeps_last_known_values() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let mut first = sample("7", "Lamp");
+        first.license.creator = Some("A. Maker".into());
+        first.source.page_url = Some("https://www.are.na/block/7".into());
+        let id = c.upsert_block(&first).unwrap();
+        let mut sparse = sample("7", "Lamp");
+        sparse.media.clear();
+        sparse.license.creator = None;
+        sparse.source.page_url = None;
+        sparse.title = None;
+        c.upsert_block(&sparse).unwrap();
+        let (creator, page, title): (Option<String>, Option<String>, Option<String>) = c
+            .conn
+            .query_row(
+                "SELECT creator, page_url, title FROM blocks WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(creator.as_deref(), Some("A. Maker"));
+        assert_eq!(page.as_deref(), Some("https://www.are.na/block/7"));
+        assert_eq!(title.as_deref(), Some("Lamp"));
+        let media: i64 = c
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM block_media WHERE block_id = ?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(media, 2);
     }
 
     fn media(role: &str, url: &str) -> MediaRef {

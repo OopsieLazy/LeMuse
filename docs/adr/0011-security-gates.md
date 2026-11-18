@@ -32,6 +32,11 @@ Plus:
 - `.claude/settings.json` **deny rules**: force pushes, pushes to main, merges into main, `--no-verify`, and reading
   `.env` / `*.pem` / `*.key`.
 - **Installer size budget**: 10 MiB in CI (currently 3.56 MiB), which keeps the app slim.
+- Deny rules are **best-effort** prefix matches; a determined command can be phrased around them. The real
+  control is **GitHub branch protection on `main`** (owner sets it up; commands in the handoff): required PR,
+  required checks, no force pushes (review 0005 A-20).
+- CI: third-party actions are pinned to full commit SHAs, the default `GITHUB_TOKEN` is read-only, and
+  `cargo-audit` is pinned (A-21).
 - Vite upgraded 5.4 → **6.4.5**. That fixes a high-severity dev-server path traversal and the esbuild advisory;
   `npm audit` now reports 0.
 

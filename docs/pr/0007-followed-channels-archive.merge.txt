@@ -1,0 +1,17 @@
+feat: followed channels in topics; archive policy (#7)
+
+What: 10 followed Are.na channels added (new Objects topic); posts kept
+in the catalog forever, images only on Save; free-source plan.
+Why: owner's Q11 list, caching question, Q8 A + C + others (ADR-0013).
+
+✅ Objects topic: objects '26, poetry in objects, *gesture incense
+✅ ID - Industrial Design, Vintage Tech Aesthetic, retro hardware, Metal,
+   Resonance, sitting, Woodworking added to existing topics
+✅ Test: refreshes never delete catalogued posts
+✅ ADR-0013: metadata + links forever; pixels only on Save
+⬜ Private channels (need a token) and two not found by name
+⬜ Next sources: The Met, Wikimedia Commons, Smithsonian, AIC
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0007-followed-channels-archive.md)
+Approved-by: <owner>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

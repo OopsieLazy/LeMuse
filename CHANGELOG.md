@@ -34,3 +34,21 @@ Once a remote exists, release-please maintains this file from Conventional Commi
   - previews: browser preview, a design artifact and a Windows test-build CI job;
   - W3C Nu HTML Checker gate in a pre-commit hook and in CI;
   - InPrivate WebView, so no streamed image is written to a disk cache.
+- Renamed to **LeMuse** (PR #4). GitHub: <https://github.com/OopsieLazy/LeMuse>.
+- Security gates (PR #5):
+  - secret and personal-data scan in pre-commit, before the agent finishes, and in CI;
+  - an admin-review agent hook on commits;
+  - gitleaks, npm/cargo audit, dependency review;
+  - a 10 MiB installer budget.
+- Design system and Settings (PR #6):
+  - tokens for every visual value;
+  - 5 themes, 5 layouts, 4 typeface sets, an accent colour, sliders and toggles;
+  - fullscreen and a hideable control bar;
+  - links open in the system browser;
+  - a layout test proving the image never sits under the bar.
+- Followed channels and archive policy (PR #7): a new Objects topic plus 7 more channels; catalogued posts are never
+  deleted by a refresh.
+
+### Security
+
+- Vite 5.4 → 6.4.5 fixes a high-severity dev-server path traversal and the esbuild dev-server advisory (PR #5).

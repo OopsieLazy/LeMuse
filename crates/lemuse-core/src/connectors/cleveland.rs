@@ -149,7 +149,11 @@ fn map_artwork(a: &Value) -> Option<RemoteItem> {
         source: SourceRef {
             connector: ID.into(),
             remote_id: id,
-            page_url: a["url"].as_str().map(str::to_string),
+            // Only https links are kept: they become clickable (review 0006 A-25).
+            page_url: a["url"]
+                .as_str()
+                .filter(|u| u.starts_with("https://"))
+                .map(str::to_string),
             origin_url: None,
         },
         kind: BlockKind::Image,

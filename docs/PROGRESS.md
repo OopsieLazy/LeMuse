@@ -5,6 +5,24 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-17 (session 5): LeMuse; security gates; Settings and fullscreen; followed channels (PRs #4–#7)
+
+**Branches:** `refactor/0004-rename-lemuse` → `ci/0005-security-gates` → `feat/0006-design-tokens-settings` →
+`feat/0007-followed-channels-archive` (stacked on #3) · **Status:** awaiting owner review
+
+- **Done:**
+  - Renamed to LeMuse (ADR-0010); GitHub remote set.
+  - Security gates: scan, admin agent hook, Stop gate, CI audits (ADR-0011).
+  - Tokens, Settings, fullscreen, hideable bar, layout test (ADR-0012).
+  - 10 followed channels; archive policy (ADR-0013).
+- **Checks:** 49 tests; W3C 20 files; layout 90 renders; npm audit 0; secret scan clean.
+- **Admin review** (agent, read-only): 10 findings (A-20…A-29), all fixed; none blocking (reviews 0005–0007).
+- **Owner decisions:** Q4 LeMuse, Q5 MIT, Q8 A+C+others, Q10 no Premium, Q12 layout liked, Q13 command format.
+  Open: Q14 (channel matches), Q15 (git for the review agent).
+- **Next:** the owner pushes and merges #1–#7; then `feat/0008-save-and-import` (PLAN § Now).
+
+---
+
 ## 2026-11-16 (session 4): See the real app every PR; W3C gate; no image cache (PR #3)
 
 **Branch:** `feat/0003-live-preview` (stacked on `feat/0002-keyword-topics`) · **PR:** #3 (local) ·

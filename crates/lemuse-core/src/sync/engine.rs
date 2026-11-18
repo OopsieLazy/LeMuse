@@ -622,6 +622,37 @@ mod tests {
         assert_eq!(catalog.watermark(1).unwrap(), None);
     }
 
+    /// Archive policy (ADR-0013): a refresh never deletes what the catalog
+    /// already knows. Items that vanish from the remote channel keep their
+    /// metadata, link and attribution in the local catalog.
+    #[test]
+    fn items_removed_remotely_stay_in_the_catalog() {
+        let (dir, http, cfg) = setup(FileMode::Stream);
+        let mut catalog = Catalog::open_in_memory().unwrap();
+        queue_channel(&http);
+        let mut engine = SyncEngine::new(LibraryPaths::new(dir.path()), &mut catalog, http.clone());
+        engine.sleep_enabled = false;
+        engine
+            .run(&cfg, &mut arena(&http), Trigger::Launch)
+            .unwrap();
+        // Later the channel is emptied upstream.
+        http.push(
+            &contents_url(1),
+            200,
+            r#"{"data":[],"meta":{"has_more_pages":false}}"#,
+        );
+        let s = engine
+            .run(&cfg, &mut arena(&http), Trigger::Manual)
+            .unwrap();
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        drop(engine);
+        assert_eq!(catalog.block_count().unwrap(), 3);
+        assert_eq!(
+            catalog.slides(&[("arena", "refs")], 10, 0).unwrap().len(),
+            2
+        );
+    }
+
     #[test]
     fn ext_from_url_handles_queries_and_missing_ext() {
         assert_eq!(ext_from_url("https://x/a/b.JPG?123"), "jpg");

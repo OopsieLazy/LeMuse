@@ -12,6 +12,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isForbiddenFile } from "../secret-rules.mjs";
 
 const MAX_FILE = 200 * 1024;
 const MAX_TOTAL = 2 * 1024 * 1024;
@@ -42,6 +43,12 @@ parts.push("## git diff HEAD", git("diff", "HEAD", "--no-color").trimEnd() || "(
 
 const untracked = git("ls-files", "--others", "--exclude-standard").split("\n").filter(Boolean);
 for (const f of untracked) {
+  // Never copy key or credential files into the snapshot; name them only
+  // (review 0006 A-26).
+  if (isForbiddenFile(f)) {
+    parts.push(`## new file ${f}`, "(credential or key file: contents withheld)");
+    continue;
+  }
   let text;
   try {
     if (statSync(join(root, f)).size > MAX_FILE) {

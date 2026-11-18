@@ -4,46 +4,18 @@
 //
 //   node scripts/scan-secrets.mjs --staged          # lines being committed
 //   node scripts/scan-secrets.mjs --range main...HEAD
+//   node scripts/scan-secrets.mjs --untracked       # new files not yet added
 //   node scripts/scan-secrets.mjs --all             # every tracked file
 //
-// Scans only ADDED lines (diff modes) so history doesn't re-alarm. Exit 1 on
-// any finding. A false positive can be allowed on its line with the comment
-// `secret-scan: allow` and a reason; reviewers check every use.
+// Diff modes scan only ADDED lines, so history doesn't re-alarm. Exit 1 on
+// any finding. Output names file:line and the rule, never the matched text.
+// A reviewed false positive can be allowed on its line with the comment
+// `secret-scan: allow <reason>`.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { isForbiddenFile, personalEmails, RULES } from "./secret-rules.mjs";
 
-const RULES = [
-  ["private key", /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/],
-  ["GitHub token", /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b/],
-  ["AWS access key", /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/],
-  ["Google API key", /\bAIza[0-9A-Za-z_-]{35}\b/],
-  ["Slack token", /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/],
-  ["Stripe key", /\b[sr]k_live_[0-9A-Za-z]{20,}\b/],
-  ["Anthropic/OpenAI key", /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}\b/],
-  ["JWT", /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/],
-  ["bearer token literal", /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/],
-  [
-    "hard-coded credential",
-    /\b(?:api[_-]?key|secret|token|passw(?:or)?d|client[_-]?secret)\b\s*[:=]\s*["'][^"'\s${}<>]{12,}["']/i,
-  ],
-  // Personal addresses never belong in the repo (privacy rule in CLAUDE.md).
-  [
-    "personal email address",
-    /\b[A-Za-z0-9._%+-]+@(?:gmail|googlemail|outlook|hotmail|live|yahoo|icloud|me|proton|protonmail|aol)\.[a-z.]{2,}\b/i,
-  ],
-];
-
-// Files that must never be committed, whatever they contain.
-const FORBIDDEN_FILES = [
-  /(^|\/)\.env(\..+)?$/,
-  /\.(pem|key|pfx|p12|keystore|jks)$/i,
-  /(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/,
-  /(^|\/)credentials(\.json)?$/i,
-  /(^|\/)\.npmrc$/,
-  /\.db(-wal|-shm)?$/,
-];
-const ALLOW_ENV_EXAMPLE = /(^|\/)\.env\.example$/;
-const SELF = "scripts/scan-secrets.mjs";
+const SELF = new Set(["scripts/scan-secrets.mjs", "scripts/secret-rules.mjs"]);
 const ALLOW_PRAGMA = /secret-scan:\s*allow/;
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -52,38 +24,50 @@ function addedLinesFromDiff(diff) {
   const out = [];
   let file = null;
   let line = 0;
+  let inHeader = false;
   for (const raw of diff.split("\n")) {
-    if (raw.startsWith("+++ ")) {
+    // Files are tracked by `diff --git` headers, so an added line that starts
+    // with "++ " can't be mistaken for a file name (review 0005 A-22).
+    if (raw.startsWith("diff --git ")) {
+      inHeader = true;
+      file = null;
+    } else if (inHeader && raw.startsWith("+++ ")) {
       file = raw.slice(4).replace(/^b\//, "");
       if (file === "/dev/null") file = null;
     } else if (raw.startsWith("@@")) {
+      inHeader = false;
       const m = /\+(\d+)/.exec(raw);
       line = m ? Number(m[1]) - 1 : 0;
-    } else if (file && raw.startsWith("+")) {
+    } else if (!inHeader && file && raw.startsWith("+")) {
       line += 1;
       out.push({ file, line, text: raw.slice(1) });
-    } else if (file && !raw.startsWith("-")) {
+    } else if (!inHeader && file && !raw.startsWith("-")) {
       line += 1;
     }
   }
   return out;
 }
 
-function collect(mode, arg) {
-  if (mode === "--all") {
-    const files = git("ls-files").split("\n").filter(Boolean);
-    const lines = [];
-    for (const file of files) {
-      let text;
-      try {
-        text = readFileSync(file, "utf8");
-      } catch {
-        continue;
-      }
-      if (text.includes("\0")) continue; // binary
-      text.split("\n").forEach((t, i) => lines.push({ file, line: i + 1, text: t }));
+function wholeFiles(files) {
+  const lines = [];
+  for (const file of files) {
+    let text;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
     }
-    return { files, lines };
+    if (text.includes("\0")) continue; // binary
+    text.split("\n").forEach((t, i) => lines.push({ file, line: i + 1, text: t }));
+  }
+  return lines;
+}
+
+function collect(mode, arg) {
+  if (mode === "--all" || mode === "--untracked") {
+    const list = mode === "--all" ? git("ls-files") : git("ls-files", "--others", "--exclude-standard");
+    const files = list.split("\n").filter(Boolean);
+    return { files, lines: wholeFiles(files) };
   }
   const base = mode === "--staged" ? ["diff", "--cached"] : ["diff", arg];
   const files = git(...base, "--name-only", "--diff-filter=ACMR").split("\n").filter(Boolean);
@@ -92,25 +76,22 @@ function collect(mode, arg) {
 }
 
 const [mode = "--staged", arg] = process.argv.slice(2);
-if (!["--staged", "--range", "--all"].includes(mode) || (mode === "--range" && !arg)) {
-  console.error("usage: scan-secrets.mjs --staged | --range <a...b> | --all");
+if (!["--staged", "--range", "--untracked", "--all"].includes(mode) || (mode === "--range" && !arg)) {
+  console.error("usage: scan-secrets.mjs --staged | --range <a...b> | --untracked | --all");
   process.exit(2);
 }
 
 const { files, lines } = collect(mode, arg);
 const findings = [];
 for (const f of files) {
-  if (FORBIDDEN_FILES.some((re) => re.test(f)) && !ALLOW_ENV_EXAMPLE.test(f)) {
-    findings.push(`${f}: forbidden file type (secrets, keys or local databases never go in git)`);
-  }
+  if (isForbiddenFile(f)) findings.push(`${f}: forbidden file type (secrets, keys or local databases never go in git)`);
 }
 for (const { file, line, text } of lines) {
-  if (file === SELF || ALLOW_PRAGMA.test(text)) continue;
+  if (SELF.has(file) || ALLOW_PRAGMA.test(text)) continue;
   for (const [name, re] of RULES) {
-    if (re.test(text) && !/noreply@/i.test(text)) {
-      findings.push(`${file}:${line}: ${name}`);
-    }
+    if (re.test(text)) findings.push(`${file}:${line}: ${name}`);
   }
+  if (personalEmails(text).length) findings.push(`${file}:${line}: email address (not on the allow-list)`);
 }
 
 if (findings.length) {

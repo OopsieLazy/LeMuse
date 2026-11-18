@@ -361,6 +361,7 @@ mod tests {
         assert_eq!(
             names,
             [
+                "Objects",
                 "Molds",
                 "Wood objects",
                 "Wrought iron",
@@ -441,7 +442,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let paths = crate::store::LibraryPaths::new(dir.path());
         let cfg = ensure_library(&paths).unwrap();
-        assert_eq!(cfg.topics.len(), 15);
+        assert_eq!(cfg.topics.len(), 16);
         // A user's edits survive the next launch.
         std::fs::write(
             paths.config(),
