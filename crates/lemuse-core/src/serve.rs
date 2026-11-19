@@ -83,6 +83,9 @@ pub struct Response {
     pub body: Vec<u8>,
     /// Only on HTML: the page's Content-Security-Policy.
     pub csp: Option<String>,
+    /// Headers a status needs (RFC 9110/6750): `Allow` on 405,
+    /// `WWW-Authenticate` on 401, `Retry-After` on 503.
+    pub headers: Vec<(&'static str, String)>,
 }
 
 impl Response {
@@ -92,21 +95,79 @@ impl Response {
             content_type: "application/json; charset=utf-8",
             body: serde_json::to_vec_pretty(v).unwrap_or_default(),
             csp: None,
+            headers: Vec::new(),
         }
+        .with_status_headers()
     }
-    fn text(status: u16, msg: &str) -> Self {
+
+    /// An API error in the JSON envelope, with its stable code (ADR-0024).
+    fn api_error(status: u16, command: &str, code: &str, msg: &str) -> Self {
+        Self::json(
+            status,
+            &json!({ "lemuse": JSON_VERSION, "command": command, "ok": false,
+                     "code": code, "error": msg }),
+        )
+    }
+
+    /// A small HTML error page for people (ADR-0024): the status, what it
+    /// means, and a way back. Fixed text only; nothing from the request is
+    /// echoed, so there is nothing to inject.
+    pub fn error_page(status: u16) -> Self {
+        let (title, body) = match status {
+            400 => ("Bad request", "LeMuse couldn't read that request."),
+            401 => ("Token needed", "Open the dashboard from the address <code>lemuse serve</code> printed; it carries the token."),
+            404 => ("Page not found", "There is no page at this address."),
+            405 => ("Method not allowed", "The dashboard only reads: it answers GET and HEAD."),
+            414 => ("Address too long", "That address is longer than LeMuse accepts."),
+            421 => ("Wrong address", "Use <code>http://127.0.0.1</code> with the port <code>lemuse serve</code> printed."),
+            431 => ("Request too large", "The request's headers are larger than LeMuse accepts."),
+            503 => ("Busy", "The dashboard is answering many requests. Try again in a moment."),
+            _ => ("Something went wrong", "LeMuse hit a problem answering this. Details are in the <code>lemuse serve</code> window."),
+        };
+        let html = format!(
+            "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\
+             <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
+             <title>{status} {title} · LeMuse</title><style>{ERROR_PAGE_CSS}</style></head>\
+             <body><main><p class=\"code\">{status}</p><h1>{title}</h1><p>{body}</p>\
+             <p><a href=\"/\">Back to the dashboard</a></p></main></body></html>\n"
+        );
         Self {
             status,
-            content_type: "text/plain; charset=utf-8",
-            body: msg.as_bytes().to_vec(),
-            csp: None,
+            content_type: "text/html; charset=utf-8",
+            body: html.into_bytes(),
+            csp: Some(ERROR_PAGE_CSP.into()),
+            headers: Vec::new(),
         }
+        .with_status_headers()
+    }
+
+    fn with_status_headers(mut self) -> Self {
+        match self.status {
+            401 => self
+                .headers
+                .push(("WWW-Authenticate", "Bearer realm=\"lemuse\"".into())),
+            405 => self.headers.push(("Allow", "GET, HEAD".into())),
+            503 => self.headers.push(("Retry-After", "2".into())),
+            _ => {}
+        }
+        self
     }
 }
+
+/// Styles of the error page: light and dark, no external files.
+const ERROR_PAGE_CSS: &str = "html{color-scheme:light dark;font-family:system-ui,sans-serif}\
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:Canvas;color:CanvasText}\
+main{max-width:34rem;padding:2rem 1rem}.code{margin:0;font-size:3rem;font-weight:700;opacity:.35}\
+h1{margin:.25rem 0 1rem;font-size:1.5rem}a{color:LinkText}";
+
+/// The error page loads nothing and runs nothing; only its inline style.
+const ERROR_PAGE_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; \
+form-action 'none'; frame-ancestors 'none'";
 
 fn reason(status: u16) -> &'static str {
     match status {
         200 => "OK",
+        304 => "Not Modified",
         400 => "Bad Request",
         401 => "Unauthorized",
         404 => "Not Found",
@@ -380,7 +441,7 @@ impl Server {
             if self.active.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
                 self.active.fetch_sub(1, Ordering::SeqCst);
                 let mut s = stream;
-                let _ = write_response(&mut s, &Response::text(503, "busy"), false);
+                let _ = write_response(&mut s, &Response::error_page(503), false);
                 continue;
             }
             let me = Arc::clone(&self);
@@ -396,7 +457,7 @@ impl Server {
         let _ = stream.set_write_timeout(Some(Duration::from_secs(15)));
         let (resp, head_only) = match read_head(&mut stream).and_then(|h| parse_head(&h)) {
             Ok(req) => (self.handle(&req), req.head_only),
-            Err(status) => (Response::text(status, reason(status)), false),
+            Err(status) => (Response::error_page(status), false),
         };
         let _ = write_response(&mut stream, &resp, head_only);
     }
@@ -412,7 +473,7 @@ impl Server {
     /// Route one request. Reads only; never writes the library.
     pub fn handle(&self, req: &Request) -> Response {
         if !self.host_ok(req.host.as_deref()) {
-            return Response::text(421, "use http://127.0.0.1 with the port LeMuse printed");
+            return Response::error_page(421);
         }
         if let Some(name) = req.path.strip_prefix("/api/v1/") {
             let authorised = req
@@ -424,11 +485,7 @@ impl Server {
                 })
                 .is_some_and(|t| token_ok(t.trim(), &self.token));
             if !authorised {
-                return Response::json(
-                    401,
-                    &json!({ "lemuse": JSON_VERSION, "command": name, "ok": false,
-                             "error": "missing or wrong token" }),
-                );
+                return Response::api_error(401, name, "unauthorized", "missing or wrong token");
             }
             return self.api(name, req);
         }
@@ -444,16 +501,18 @@ impl Server {
                     content_type: f.content_type,
                     body: f.body.clone(),
                     csp: f.content_type.starts_with("text/html").then(page_csp),
+                    headers: Vec::new(),
                 },
-                None => Response::text(404, "not found"),
+                None => Response::error_page(404),
             },
             None if key == "/index.html" => Response {
                 status: 200,
                 content_type: "text/html; charset=utf-8",
                 body: FALLBACK_PAGE.as_bytes().to_vec(),
                 csp: Some(page_csp()),
+                headers: Vec::new(),
             },
-            None => Response::text(404, "not found"),
+            None => Response::error_page(404),
         }
     }
 
@@ -474,13 +533,7 @@ impl Server {
                     Err(e) => error_response(name, &e),
                 };
             }
-            _ => {
-                return Response::json(
-                    404,
-                    &json!({ "lemuse": JSON_VERSION, "command": name,
-                                                      "ok": false, "error": "no such endpoint" }),
-                )
-            }
+            _ => return Response::api_error(404, name, "not_found", "no such endpoint"),
         };
         match result {
             Ok(data) => Response::json(
@@ -594,20 +647,23 @@ fn bad(msg: &str) -> Error {
 /// 400 with the message for bad input; 500 with no details otherwise, so
 /// paths (which hold the Windows user name) never reach a LAN client.
 fn error_response(name: &str, e: &Error) -> Response {
-    let (status, msg) = match e {
-        Error::Config(m) => (400, m.clone()),
-        other => {
-            eprintln!("lemuse serve: {name}: {other}");
-            (
-                500,
-                "internal error (see the lemuse serve window)".to_string(),
-            )
-        }
+    use crate::error::code;
+    let status = match e.code() {
+        code::INVALID => 400,
+        code::NOT_FOUND => 404,
+        code::BUSY => 503,
+        _ => 500,
     };
-    Response::json(
-        status,
-        &json!({ "lemuse": JSON_VERSION, "command": name, "ok": false, "error": msg }),
-    )
+    if status == 500 {
+        eprintln!("lemuse serve: {name}: {e}");
+        return Response::api_error(
+            500,
+            name,
+            "internal",
+            "internal error (see the lemuse serve window)",
+        );
+    }
+    Response::api_error(status, name, e.code(), &e.to_string())
 }
 
 fn read_head(stream: &mut TcpStream) -> std::result::Result<Vec<u8>, u16> {
@@ -641,6 +697,9 @@ fn write_response(stream: &mut TcpStream, r: &Response, head_only: bool) -> std:
     );
     if let Some(csp) = &r.csp {
         head.push_str(&format!("Content-Security-Policy: {csp}\r\n"));
+    }
+    for (k, v) in &r.headers {
+        head.push_str(&format!("{k}: {v}\r\n"));
     }
     head.push_str("\r\n");
     stream.write_all(head.as_bytes())?;
@@ -746,6 +805,62 @@ mod tests {
     }
 
     #[test]
+    fn errors_have_pages_codes_and_the_headers_their_status_needs() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = server(dir.path());
+        let header = |r: &Response, k: &str| {
+            r.headers
+                .iter()
+                .find(|(n, _)| *n == k)
+                .map(|(_, v)| v.clone())
+        };
+        // A missing page is an HTML page with a strict CSP, not plain text.
+        let missing = s.handle(&get("/nope", None));
+        assert_eq!(missing.status, 404);
+        assert!(missing.content_type.starts_with("text/html"));
+        let html = String::from_utf8(missing.body.clone()).unwrap();
+        assert!(html.starts_with("<!doctype html>") && html.contains("<title>404 Page not found"));
+        assert!(missing
+            .csp
+            .as_deref()
+            .unwrap()
+            .starts_with("default-src 'none'"));
+        // API errors stay JSON, with a stable code.
+        let unauth = s.handle(&get("/api/v1/status", None));
+        assert_eq!(
+            header(&unauth, "WWW-Authenticate").as_deref(),
+            Some("Bearer realm=\"lemuse\"")
+        );
+        let v: Value = serde_json::from_slice(&unauth.body).unwrap();
+        assert_eq!(v["code"], "unauthorized");
+        let v: Value =
+            serde_json::from_slice(&s.handle(&get("/api/v1/nope", Some(TOKEN))).body).unwrap();
+        assert_eq!(v["code"], "not_found");
+        let bad = s.handle(&get("/api/v1/slides?source=topic:Nope", Some(TOKEN)));
+        assert_eq!(bad.status, 404);
+        let v: Value = serde_json::from_slice(&bad.body).unwrap();
+        assert_eq!(v["code"], "not_found");
+        let bad = s.handle(&get("/api/v1/slides?page=x", Some(TOKEN)));
+        assert_eq!(bad.status, 400);
+        // Every status the server sends has a page and the right headers.
+        for status in [400, 401, 404, 405, 414, 421, 431, 500, 503] {
+            let r = Response::error_page(status);
+            assert_eq!(r.status, status);
+            assert!(String::from_utf8(r.body.clone())
+                .unwrap()
+                .contains(&format!(">{status}<")));
+        }
+        assert_eq!(
+            header(&Response::error_page(405), "Allow").as_deref(),
+            Some("GET, HEAD")
+        );
+        assert_eq!(
+            header(&Response::error_page(503), "Retry-After").as_deref(),
+            Some("2")
+        );
+    }
+
+    #[test]
     fn static_files_come_only_from_the_bundle() {
         let dir = tempfile::tempdir().unwrap();
         let s = server(dir.path());
@@ -775,7 +890,7 @@ mod tests {
         assert_eq!(code("source=../x"), 400);
         assert_eq!(code("source=all&page=99999999"), 400);
         assert_eq!(code("source=all&include=wood' OR 1=1"), 400);
-        assert_eq!(code("source=topic:Nope"), 400);
+        assert_eq!(code("source=topic:Nope"), 404);
         assert_eq!(s.handle(&get("/api/v1/nope", Some(TOKEN))).status, 404);
         let v: Value =
             serde_json::from_slice(&s.handle(&get("/api/v1/preview-data", Some(TOKEN))).body)

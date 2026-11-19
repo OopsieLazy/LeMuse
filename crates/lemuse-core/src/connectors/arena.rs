@@ -464,9 +464,31 @@ pub fn related_channels(
     let url =
         format!("{API_BASE}/blocks/{block_id}/connections?per={RELATED_PER_PAGE}&page={page}");
     let v = get_json(http, &url, "Are.na no longer has that image.")?;
+    channel_page(&v)
+}
+
+/// The channels an Are.na user follows (ADR-0024): one page of
+/// `GET /v3/users/<slug>/following?type=Channel`, newest first. Needs the
+/// token for the owner's own private follows; read only on a click.
+pub fn followed_channels(http: &dyn HttpClient, user: &str, page: u32) -> Result<RelatedChannels> {
+    if !is_valid_slug(user) || page == 0 || page > MAX_RELATED_PAGE {
+        return Err(Error::Config(
+            "Save your Are.na token in Settings first.".into(),
+        ));
+    }
+    let url = format!(
+        "{API_BASE}/users/{user}/following?type=Channel&per={RELATED_PER_PAGE}&page={page}&sort=created_at_desc"
+    );
+    let v = get_json(http, &url, "Are.na doesn't have that account.")?;
+    channel_page(&v)
+}
+
+/// One page of channel objects (`data` + `meta`), as [`RelatedChannels`].
+/// Slugs that fail [`is_valid_slug`] are dropped; text is plain.
+fn channel_page(v: &Value) -> Result<RelatedChannels> {
     let data = v["data"].as_array().ok_or_else(|| Error::Connector {
         connector: ID.into(),
-        message: "connections response missing `data` array".into(),
+        message: "Are.na answered without a channel list.".into(),
     })?;
     let channels = data
         .iter()
@@ -894,6 +916,30 @@ mod tests {
         );
         assert_eq!(r.channels[1].owner.as_deref(), Some("Another Owner"));
         assert_eq!((r.total, r.next_page), (Some(107), Some(2)));
+    }
+
+    /// The following list uses the same channel objects as connections
+    /// (OpenAPI `FollowableListResponse`), so the same fixture serves.
+    #[test]
+    fn followed_channels_is_one_request_per_page() {
+        let http = FixtureClient::default();
+        let url = format!(
+            "{API_BASE}/users/example-person/following?type=Channel&per=24&page=1&sort=created_at_desc"
+        );
+        http.push(&url, 200, CONNECTIONS);
+        let r = followed_channels(&http, "example-person", 1).unwrap();
+        assert_eq!(*http.requests.lock().unwrap(), vec![url]);
+        assert_eq!(r.channels.len(), 2);
+        assert_eq!(r.next_page, Some(2));
+        // Bad account names and pages never reach the network.
+        let none = FixtureClient::default();
+        for (user, page) in [("", 1), ("../me", 1), ("a b", 1), ("ok", 0), ("ok", 21)] {
+            assert!(
+                followed_channels(&none, user, page).is_err(),
+                "{user} {page}"
+            );
+        }
+        assert!(none.requests.lock().unwrap().is_empty());
     }
 
     #[test]

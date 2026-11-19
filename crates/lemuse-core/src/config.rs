@@ -278,7 +278,11 @@ impl Config {
 
     pub fn load(path: &Path) -> Result<Self> {
         let text = std::fs::read_to_string(path).map_err(|e| Error::io(path, e))?;
-        Self::from_toml_str(&text)
+        // Say which file is wrong; other `Config` errors are bad input.
+        Self::from_toml_str(&text).map_err(|e| match e {
+            Error::Config(m) => Error::Config(format!("lemuse.toml: {m}")),
+            other => other,
+        })
     }
 
     pub fn to_toml(&self) -> Result<String> {

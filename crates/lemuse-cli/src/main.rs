@@ -185,6 +185,13 @@ enum TokenAction {
     /// Paste a token (hidden as you type, or piped in). Are.na checks it
     /// first (one read); nothing is saved if it's refused.
     Set,
+    /// Ask Are.na whether the saved token still works (one read).
+    Check,
+    /// Channels your Are.na account follows (one read per page; needs the token).
+    Following {
+        #[arg(long, default_value_t = 1)]
+        page: u32,
+    },
     /// Remove the saved token; refreshes run as a guest again.
     Clear,
 }
@@ -243,15 +250,13 @@ fn main() -> ExitCode {
     if cli.json {
         let doc = match &result {
             Ok(o) => json!({ "lemuse": JSON_VERSION, "command": name, "ok": true, "data": o.data }),
-            Err(e) => {
-                json!({ "lemuse": JSON_VERSION, "command": name, "ok": false, "error": e.to_string() })
-            }
+            Err(e) => json!({ "lemuse": JSON_VERSION, "command": name, "ok": false,
+                              "code": e.code(), "error": e.to_string() }),
         };
         println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
-        return if result.is_ok() {
-            ExitCode::SUCCESS
-        } else {
-            ExitCode::FAILURE
+        return match &result {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(e) => ExitCode::from(exit_code(e)),
         };
     }
     match result {
@@ -260,9 +265,26 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("error: {e}");
-            ExitCode::FAILURE
+            eprintln!("error [{}]: {e}", e.code());
+            ExitCode::from(exit_code(&e))
         }
+    }
+}
+
+/// Process exit codes, one per error code (docs/automation.md). 2 is clap's
+/// own "bad arguments".
+fn exit_code(e: &lemuse_core::Error) -> u8 {
+    use lemuse_core::error::code;
+    match e.code() {
+        code::INVALID => 3,
+        code::NOT_FOUND => 4,
+        code::BUSY => 5,
+        code::RATE_LIMITED => 6,
+        code::NETWORK => 7,
+        code::SOURCE => 8,
+        code::TOKEN => 9,
+        code::IO | code::CATALOG => 10,
+        _ => 1,
     }
 }
 
@@ -661,6 +683,44 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
                         account.tier.read_limit_per_min()
                     );
                     Ok(out(to_value!(&account), text))
+                }
+                TokenAction::Check => {
+                    let cfg = ensure_library(paths)?;
+                    let token = credentials::arena_token()?.ok_or_else(|| {
+                        lemuse_core::Error::Token(format!(
+                            "No Are.na token saved. Make one at {TOKEN_PAGE}, then run: lemuse arena-token set"
+                        ))
+                    })?;
+                    let client = lemuse_core::sync::client_with(&cfg, Some(token));
+                    match lemuse_core::connectors::arena::account(client.as_ref())? {
+                        Some(account) => {
+                            let text = format!(
+                                "Are.na accepts the token: {} ({} account), up to {} reads a minute.\n",
+                                account.slug,
+                                account.tier.name(),
+                                account.tier.read_limit_per_min()
+                            );
+                            Ok(out(to_value!(&account), text))
+                        }
+                        None => Err(lemuse_core::Error::Token(
+                            lemuse_core::sync::TOKEN_REFUSED_SHORT.into(),
+                        )),
+                    }
+                }
+                TokenAction::Following { page } => {
+                    let cfg = ensure_library(paths)?;
+                    let account = credentials::arena_status()?.account.ok_or_else(|| {
+                        lemuse_core::Error::Token(
+                            "Save your Are.na token first: lemuse arena-token set".into(),
+                        )
+                    })?;
+                    let http = lemuse_core::sync::production_client(&cfg);
+                    let list = lemuse_core::connectors::arena::followed_channels(
+                        http.as_ref(),
+                        &account,
+                        page,
+                    )?;
+                    Ok(pretty(to_value!(&list)))
                 }
                 TokenAction::Clear => {
                     let removed = credentials::clear_arena_token()?;

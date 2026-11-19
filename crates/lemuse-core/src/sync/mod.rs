@@ -69,6 +69,10 @@ pub struct ArenaSession {
     pub note: Option<String>,
 }
 
+/// Shown when Are.na refuses the token (no refresh involved).
+pub const TOKEN_REFUSED_SHORT: &str = "Are.na refused the saved token (revoked or mistyped). \
+Make a new one at are.na/settings/personal-access-tokens and save it again.";
+
 /// Shown when Are.na refuses the saved token.
 pub const TOKEN_REFUSED: &str = "Are.na refused your saved token, so this refresh ran as a guest \
 (30 reads a minute, public channels only). Make a new token and paste it in Settings.";
