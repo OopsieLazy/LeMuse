@@ -96,6 +96,20 @@ enum Command {
     },
     /// Show an Are.na channel's first images without adding it (2 reads).
     PreviewChannel { link: String },
+    /// Is there a newer LeMuse? One request to GitHub's Releases API; nothing
+    /// is downloaded (ADR-0028).
+    UpdateCheck,
+    /// Add the Are.na channels you follow that aren't in a topic yet (needs
+    /// the token; one read per page of the list, nothing else). Each goes to
+    /// the best-matching topic, or "Following". Then run `lemuse sync`.
+    ImportFollowing {
+        /// Put them all in this topic instead (created if needed).
+        #[arg(long)]
+        topic: Option<String>,
+        /// Only show what would be added.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Every stored link of a topic, a playlist, or All (default), to stdout.
     /// Links only; no image is downloaded.
     ExportLinks {
@@ -130,6 +144,9 @@ enum Command {
         count: usize,
         #[arg(long)]
         seed: Option<String>,
+        /// Include images the nudity sensor flagged (hidden by default).
+        #[arg(long)]
+        show_nudity: bool,
     },
     /// Save an image's full-size original into views/<topic or playlist>/
     /// (views/Saved/ by default). The block id is in `slides` output.
@@ -168,6 +185,8 @@ impl Command {
             Command::Search { .. } => "search",
             Command::AddChannel { .. } => "add-channel",
             Command::PreviewChannel { .. } => "preview-channel",
+            Command::ImportFollowing { .. } => "import-following",
+            Command::UpdateCheck => "update-check",
             Command::ExportLinks { .. } => "export-links",
             Command::Related { .. } => "related",
             Command::Serve { .. } => "serve",
@@ -565,6 +584,7 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             playlist,
             count,
             seed,
+            show_nudity,
         } => {
             use lemuse_core::export;
             let cfg = Config::load(&paths.config())?;
@@ -584,7 +604,10 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             };
             let mut all = Vec::new();
             for page in 0..SHEET_PAGES {
-                let got = catalog.slides_in(&scope, &Default::default(), 500, page * 500)?;
+                // Hidden images never; likely nudity only when asked (ADR-0027).
+                let filter = lemuse_core::store::catalog::CategoryFilter::default()
+                    .with_content_defaults(show_nudity);
+                let got = catalog.slides_in(&scope, &filter, 500, page * 500)?;
                 let last = got.len() < 500;
                 all.extend(got);
                 if last {
@@ -732,6 +755,94 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
                     Ok(out(json!({ "removed": removed }), text))
                 }
             }
+        }
+        Command::UpdateCheck => {
+            // No library needed and no Are.na token: a plain client to GitHub.
+            let http = lemuse_core::update::client();
+            let current = env!("CARGO_PKG_VERSION");
+            let latest = lemuse_core::update::latest_release(http.as_ref(), current)?;
+            let text = match &latest {
+                Some(r) if r.newer => format!(
+                    "LeMuse {} is available (you have {current}): {}\n",
+                    r.version, r.url
+                ),
+                Some(r) => format!(
+                    "You have the latest LeMuse ({current}; newest release {}).\n",
+                    r.version
+                ),
+                None => format!("No LeMuse release is published yet (you have {current}).\n"),
+            };
+            Ok(out(json!({ "current": current, "latest": latest }), text))
+        }
+        Command::ImportFollowing { topic, dry_run } => {
+            let cfg = ensure_library(paths)?;
+            if let Some(t) = &topic {
+                lemuse_core::config::check_topic_name(t)?;
+            }
+            let account = lemuse_core::credentials::arena_status()?
+                .account
+                .ok_or_else(|| {
+                    lemuse_core::Error::Token(
+                        "Save your Are.na token first: lemuse arena-token set".into(),
+                    )
+                })?;
+            let http = lemuse_core::sync::production_client(&cfg);
+            // The whole followed list, one read per page (at most 20 pages).
+            let mut followed = Vec::new();
+            let mut page = Some(1);
+            while let Some(p) = page.filter(|p| *p <= 20) {
+                let list =
+                    lemuse_core::connectors::arena::followed_channels(http.as_ref(), &account, p)?;
+                let annotated = lemuse_core::import::annotate_followed(&cfg, list);
+                page = annotated.next_page;
+                followed.extend(annotated.channels);
+            }
+            let picks: Vec<lemuse_core::import::FollowedPick> = followed
+                .iter()
+                .filter(|f| f.in_topics.is_empty())
+                .map(|f| lemuse_core::import::FollowedPick {
+                    slug: f.channel.slug.clone(),
+                    title: f.channel.title.clone(),
+                    topic: Some(topic.clone().unwrap_or_else(|| f.suggested.clone())),
+                })
+                .collect();
+            let already = followed.len() - picks.len();
+            let added = if dry_run {
+                Vec::new()
+            } else {
+                lemuse_core::import::add_followed(&paths.config(), &picks)?
+            };
+            let mut text = format!(
+                "You follow {} channels on Are.na; {already} are already in a topic.
+",
+                followed.len()
+            );
+            for p in &picks {
+                let to = p.topic.as_deref().unwrap_or("?");
+                let verb = if dry_run { "would add" } else { "added" };
+                text.push_str(&format!(
+                    "  {verb} {} ({}) → {to}
+",
+                    p.title, p.slug
+                ));
+            }
+            if picks.is_empty() {
+                text.push_str(
+                    "Nothing new to add.
+",
+                );
+            } else if !dry_run {
+                text.push_str(
+                    "Run `lemuse sync` (or press Refresh in the app) to load their images.
+",
+                );
+            }
+            Ok(out(
+                json!({ "followed": followed.len(), "already": already, "dry_run": dry_run,
+                        "planned": picks.iter().map(|p| json!({"slug": p.slug, "title": p.title, "topic": p.topic})).collect::<Vec<_>>(),
+                        "added": added }),
+                text,
+            ))
         }
         Command::Related { block_id, page } => {
             let cfg = ensure_library(paths)?;
