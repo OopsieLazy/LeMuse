@@ -14,7 +14,7 @@
   --bg: #f2f3f1;
   --panel: #fafaf8;
   --panel-fill: var(--panel);
-  --stage: #e3e4e0;
+  --stage: #e2e2e2; /* zero chroma: the surround shifts how an image reads (art review) */
   --fg: #1b1c1e;
   --muted: #64676d;
   --line: #d9dbd7;
@@ -108,6 +108,15 @@
   /* Right-click menu on the image. */
   --context-menu-width: calc(220px * var(--ui-scale));
   --context-menu-height: calc(170px * var(--ui-scale));
+  /* Practice tools (ADR-0025). Grid lines are two strokes, light over dark,
+     so they read on any image; squint is a soft blur. */
+  --squint-blur: 6px;
+  --grid-line: rgb(255 255 255 / 0.85);
+  --grid-shade: rgb(0 0 0 / 0.55);
+  --grid-line-width: 1px;
+  --study-menu-width: calc(360px * var(--ui-scale));
+  --session-clock-size: calc(28px * var(--ui-scale));
+  --drawn-thumb: calc(120px * var(--ui-scale));
 }
 
 /* Studio dark: follows the system unless light is chosen... */
@@ -115,7 +124,7 @@
   :root:not([data-theme="light"]) {
     --bg: #121314;
     --panel: #18191b;
-    --stage: #0b0c0d;
+    --stage: #161616;
     --fg: #e8e9ea;
     --muted: #9a9da3;
     --line: #2a2c2f;
@@ -132,7 +141,7 @@
 :root[data-theme="dark"] {
   --bg: #121314;
   --panel: #18191b;
-  --stage: #0b0c0d;
+  --stage: #161616;
   --fg: #e8e9ea;
   --muted: #9a9da3;
   --line: #2a2c2f;

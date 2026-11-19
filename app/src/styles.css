@@ -285,6 +285,11 @@ input {
   overflow: hidden;
 }
 
+/* Image, grid and empty state share the frame's one cell (ADR-0025). */
+.frame > :is(img, .grid-overlay, .empty) {
+  grid-area: 1 / 1;
+}
+
 .frame img {
   display: block;
   width: auto;
@@ -293,6 +298,27 @@ input {
   max-height: 100%;
   object-fit: contain;
   box-shadow: var(--image-shadow);
+}
+
+/* With a grid on, the image fills the cell (still contained), so the grid's
+   viewBox maps onto it exactly; the shadow would outline the empty bands. */
+.frame[data-grid="true"] img {
+  width: 100%;
+  height: 100%;
+  box-shadow: none;
+}
+
+/* Mirror and upside down turn the image and the grid together. */
+.frame[data-mirror="true"] > :is(img, .grid-overlay) {
+  transform: scaleX(-1);
+}
+
+.frame[data-upside="true"] > :is(img, .grid-overlay) {
+  transform: rotate(180deg);
+}
+
+.frame[data-mirror="true"][data-upside="true"] > :is(img, .grid-overlay) {
+  transform: scaleY(-1);
 }
 
 :root[data-fit="cover"] .frame {
@@ -304,6 +330,71 @@ input {
   height: 100%;
   object-fit: cover;
   box-shadow: none;
+}
+
+.grid-overlay {
+  place-self: stretch;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.grid-overlay line {
+  fill: none;
+}
+
+.grid-shade {
+  stroke: var(--grid-shade);
+  stroke-width: calc(var(--grid-line-width) * 3);
+}
+
+.grid-line {
+  stroke: var(--grid-line);
+  stroke-width: var(--grid-line-width);
+}
+
+.study-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* The pose clock on the image (top right), readable from the drawing board. */
+.session-clock {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 2;
+  display: grid;
+  justify-items: end;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--panel-fill);
+  color: var(--fg);
+  pointer-events: none;
+}
+
+.session-time {
+  font-family: var(--font-data);
+  font-size: var(--session-clock-size);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.session-pose {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+
+.session-clock[data-warn="true"] .session-time {
+  color: var(--error);
+}
+
+.session-clock[data-paused="true"] .session-time {
+  color: var(--muted);
 }
 
 .empty {
@@ -1550,4 +1641,266 @@ ul.channel-list {
   .frame {
     transition: none;
   }
+}
+
+/* ============ Practice tools (ADR-0025) ============ */
+
+/* ♥: outlined when off, filled when the image is a favourite. */
+[data-favourite="true"] {
+  color: var(--accent);
+}
+
+[data-favourite="true"] svg path {
+  fill: currentColor;
+}
+
+.study-menu {
+  width: min(var(--study-menu-width), calc(100vw - 2 * var(--space-6)));
+}
+
+.study-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.study-toggle .chip-mark::before {
+  content: "+";
+}
+
+.study-toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.study-toggle[aria-pressed="true"] .chip-mark::before {
+  content: "\2713";
+  color: inherit;
+}
+
+.study-set .choice-options {
+  gap: var(--space-2);
+}
+
+.study-set .choice-option span {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.study-balance {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.study-balance input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/* Session planner and summary */
+.plan-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(180px * var(--ui-scale)), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.plan-option {
+  position: relative;
+  display: grid;
+}
+
+.plan-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.plan-card {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.plan-option input:checked + .plan-card {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.plan-option input:focus-visible + .plan-card {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.plan-name {
+  font-weight: var(--weight-medium);
+}
+
+.plan-rounds,
+.plan-total {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.plan-total {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.custom-rounds {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.round-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-6);
+}
+
+.round-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.round-row input {
+  width: calc(64px * var(--ui-scale));
+}
+
+.round-row :is(input, select) {
+  padding: var(--space-1) var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.session-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0;
+}
+
+.session-stats strong {
+  font-family: var(--font-data);
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.drawn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--drawn-thumb), 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drawn-item {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.drawn-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--stage);
+}
+
+.drawn-caption {
+  display: grid;
+  min-width: 0;
+  font-size: var(--text-2xs);
+}
+
+.drawn-title,
+.drawn-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawn-meta {
+  color: var(--muted);
+}
+
+.drawn-fav {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  background: var(--panel-fill);
+}
+
+/* Keyboard shortcuts sheet */
+.shortcut-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.shortcut {
+  display: grid;
+  grid-template-columns: calc(72px * var(--ui-scale)) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: baseline;
+}
+
+.shortcut dd {
+  margin: 0;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 var(--space-2);
+  border: var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* While a study aid is on, the image says so (bottom right), so a mirrored or
+   posterized reference is never mistaken for the real one. */
+.study-badge {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 2;
+  max-width: 45%;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--panel-fill);
+  color: var(--fg);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }

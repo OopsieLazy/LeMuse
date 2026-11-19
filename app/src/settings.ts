@@ -6,6 +6,8 @@
 // `sanitize` whitelists every enum and clamps every number. Only validated
 // numbers and #rrggbb colours ever reach style.setProperty.
 
+import { PLAN_IDS, DEFAULT_CUSTOM, sanitizeRounds, type PlanId, type Round } from "./practice";
+
 export const PRESETS = ["studio", "gallery", "blueprint", "paper", "millennium"] as const;
 export const MODES = ["system", "light", "dark"] as const;
 export const LAYOUTS = ["studio", "rail-right", "caption-top", "cinema", "minimal"] as const;
@@ -43,6 +45,10 @@ export interface UiSettings {
   fullscreenImmersive: boolean;
   /** Where the mini player was last (physical px), or null (ADR-0016). */
   miniBounds: { x: number; y: number; width: number; height: number } | null;
+  /** Timed sessions (ADR-0025): the last plan, your own rounds, the chime. */
+  practicePlan: PlanId;
+  customRounds: Round[];
+  practiceSound: boolean;
 }
 
 /** Ranges for every slider: [min, max, step]. One table feeds clamping and the UI. */
@@ -78,6 +84,9 @@ export const DEFAULTS: UiSettings = {
   autoHideSeconds: 3,
   fullscreenImmersive: true,
   miniBounds: null,
+  practicePlan: "gesture",
+  customRounds: DEFAULT_CUSTOM,
+  practiceSound: true,
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -133,6 +142,9 @@ export function sanitize(raw: unknown): UiSettings {
     autoHideSeconds: num("autoHideSeconds", r.autoHideSeconds, d.autoHideSeconds),
     fullscreenImmersive: bool(r.fullscreenImmersive, d.fullscreenImmersive),
     miniBounds: bounds(r.miniBounds),
+    practicePlan: oneOf(PLAN_IDS, r.practicePlan, d.practicePlan),
+    customRounds: r.customRounds === undefined ? d.customRounds : sanitizeRounds(r.customRounds),
+    practiceSound: bool(r.practiceSound, d.practiceSound),
   };
 }
 

@@ -12,6 +12,20 @@ import {
   type TopicInfo,
   type Vocabulary,
 } from "./api";
+import {
+  balanceExponent,
+  clock,
+  FAVOURITES,
+  gridLines,
+  NO_STUDY,
+  studyActive,
+  studyFilter,
+  toneTable,
+  VALUES_FILTER_ID,
+  type SessionView,
+  type StudyAids,
+} from "./practice";
+import { StudyMenu } from "./StudyMenu";
 
 // Pure view: everything it shows comes in through props, so the same markup
 // renders in the desktop app, the browser preview, the design artifact, the
@@ -118,6 +132,25 @@ export interface SlideshowViewProps {
   onOpenLink?: (event: MouseEvent<HTMLAnchorElement>, url: string) => void;
   onRefresh?: () => void;
   onImageError?: (blockId: number) => void;
+  /** The image finished loading (a session's pose clock starts then). */
+  onImageLoad?: (blockId: number, width: number, height: number) => void;
+  /** Size of the current image when the catalog doesn't know it. */
+  imageSize?: { width: number; height: number };
+  /** Study aids drawn over the image (ADR-0025). */
+  study?: StudyAids;
+  studyMenuOpen?: boolean;
+  onToggleStudyMenu?: () => void;
+  onStudy?: (patch: Partial<StudyAids>) => void;
+  onResetStudy?: () => void;
+  /** A timed session is running. */
+  session?: SessionView | null;
+  /** Open the session planner, or end the running session. */
+  onSession?: () => void;
+  /** The image fills the frame (settings: fit = cover); the grid follows. */
+  cover?: boolean;
+  /** ♥: the current image is in Favourites. */
+  favourite?: boolean;
+  onToggleFavourite?: () => void;
 }
 
 const SOURCES: [RegExp, string][] = [
@@ -138,6 +171,25 @@ export function sourceName(slide: Slide): string {
 }
 
 const pad = (n: number, width: number) => String(n).padStart(width, "0");
+
+/** Alt text like a short museum label: title, then creator (WCAG 1.1.1). */
+export function altText(slide: Pick<Slide, "title" | "creator">): string {
+  const title = slide.title?.trim() || "Untitled reference image";
+  return slide.creator?.trim() ? `${title}, ${slide.creator.trim()}` : title;
+}
+
+/** "Mirrored · Upside down · 3 values · Grid": shown on the image while an aid is on. */
+function studyBadge(s: StudyAids): string {
+  return [
+    s.mirror && "Mirrored",
+    s.upside && "Upside down",
+    s.tones === 2 ? "Notan" : s.tones > 0 ? `${s.tones} values` : s.grey && "Greyscale",
+    s.squint && "Squint",
+    s.grid !== "off" && "Grid",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 /** Inline icons: geometry, not style. Stroke and size come from tokens. */
 const ICONS = {
@@ -162,6 +214,9 @@ const ICONS = {
   link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
   mini: "M3 5h18v14H3ZM12 12h7v5h-7Z",
   expand: "M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7",
+  heart: "M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20Z",
+  study: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17ZM12 3.5v17M12 7h5M12 11h7.5M12 15h7M12 19h4",
+  timer: "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM12 9v4l2.5 2.5M9.5 2.5h5",
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -220,6 +275,11 @@ function emptyText(p: SlideshowViewProps): [string, string] {
   if (f.include.length || f.exclude.length)
     return ["No images match this filter", "Change or clear the category filter to see more."];
   if (!p.active) return ["No topic selected", "Pick a topic, or add an Are.na channel with the + button."];
+  if (p.active.kind === "playlist" && p.activeLabel === FAVOURITES)
+    return [
+      "No favourites yet",
+      "Press ♥ (or K) on any image to keep it here. Like playlists, Favourites keeps links only, never image files.",
+    ];
   if (p.active.kind === "playlist")
     return [
       `${p.activeLabel} is empty`,
@@ -237,6 +297,13 @@ export function SlideshowView(p: SlideshowViewProps) {
   const current = sourceKey(p.active);
   const inLists = new Set(p.inPlaylists ?? []);
   const [emptyTitle, emptyBody] = emptyText(p);
+  const study = p.study ?? NO_STUDY;
+  const studying = studyActive(study);
+  const session = p.session ?? null;
+  // The grid is drawn in the shown image's own proportions (its loaded size
+  // first: that's what object-fit uses), so it lines up and squares stay square.
+  const iw = p.imageSize?.width || slide?.width || 1000;
+  const ih = p.imageSize?.height || slide?.height || 1000;
   const filter = p.filter ?? NO_FILTER;
   const filtering = filter.include.length + filter.exclude.length;
   const total = p.total ?? p.slides.length;
@@ -363,6 +430,9 @@ export function SlideshowView(p: SlideshowViewProps) {
         <figure className="stage">
           <div
             className="frame"
+            data-mirror={study.mirror ? "true" : "false"}
+            data-upside={study.upside ? "true" : "false"}
+            data-grid={slide && study.grid !== "off" ? "true" : "false"}
             onContextMenu={(e) => {
               if (!slide || (e.target instanceof HTMLButtonElement && !e.target.matches(".compact-tap, .mini-tap"))) return;
               e.preventDefault();
@@ -370,16 +440,38 @@ export function SlideshowView(p: SlideshowViewProps) {
             }}
           >
             {slide ? (
-              <img
-                key={slide.block_id}
-                src={slide.display_url}
-                alt={slide.title ?? "Untitled reference image"}
-                width={slide.width ?? undefined}
-                height={slide.height ?? undefined}
-                decoding="async"
-                referrerPolicy="no-referrer"
-                onError={() => p.onImageError?.(slide.block_id)}
-              />
+              // With a grid on, the image fills its cell (object-fit contain or
+              // cover) and the grid is an SVG in the same cell with the image's
+              // own viewBox and the same fit, so the lines sit on the image.
+              <>
+                <img
+                  key={slide.block_id}
+                  src={slide.display_url}
+                  alt={altText(slide)}
+                  width={slide.width ?? undefined}
+                  height={slide.height ?? undefined}
+                  decoding="async"
+                  referrerPolicy="no-referrer"
+                  style={studying ? { filter: studyFilter(study) } : undefined}
+                  onLoad={(e) => p.onImageLoad?.(slide.block_id, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
+                  onError={() => p.onImageError?.(slide.block_id)}
+                />
+                {study.grid !== "off" && (
+                  <svg
+                    className="grid-overlay"
+                    viewBox={`0 0 ${iw} ${ih}`}
+                    preserveAspectRatio={p.cover ? "xMidYMid slice" : "xMidYMid meet"}
+                    aria-hidden="true"
+                  >
+                    {gridLines(study.grid, iw, ih).map(([x1, y1, x2, y2], i) => (
+                      <g key={i}>
+                        <line className="grid-shade" x1={x1} y1={y1} x2={x2} y2={y2} vectorEffect="non-scaling-stroke" />
+                        <line className="grid-line" x1={x1} y1={y1} x2={x2} y2={y2} vectorEffect="non-scaling-stroke" />
+                      </g>
+                    ))}
+                  </svg>
+                )}
+              </>
             ) : (
               <div className="empty">
                 <p className="empty-title">{emptyTitle}</p>
@@ -390,6 +482,45 @@ export function SlideshowView(p: SlideshowViewProps) {
                   </button>
                 )}
               </div>
+            )}
+            {study.tones > 0 && (
+              // The value view: luminance in sRGB, a balance curve, then N flat tones.
+              <svg className="study-defs" width="0" height="0" aria-hidden="true" focusable="false">
+                <filter id={VALUES_FILTER_ID} colorInterpolationFilters="sRGB">
+                  <feColorMatrix
+                    type="matrix"
+                    values="0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0 0 0 1 0"
+                  />
+                  <feComponentTransfer>
+                    <feFuncR type="gamma" exponent={balanceExponent(study.balance)} />
+                    <feFuncG type="gamma" exponent={balanceExponent(study.balance)} />
+                    <feFuncB type="gamma" exponent={balanceExponent(study.balance)} />
+                  </feComponentTransfer>
+                  <feComponentTransfer>
+                    <feFuncR type="discrete" tableValues={toneTable(study.tones)} />
+                    <feFuncG type="discrete" tableValues={toneTable(study.tones)} />
+                    <feFuncB type="discrete" tableValues={toneTable(study.tones)} />
+                  </feComponentTransfer>
+                </filter>
+              </svg>
+            )}
+            {slide && studying > 0 && (
+              // Never forget a flip: the reference is shown changed (research: art review).
+              <p className="study-badge">{studyBadge(study)}</p>
+            )}
+            {session && (
+              <p
+                className="session-clock"
+                role="timer"
+                data-paused={session.paused ? "true" : "false"}
+                data-warn={!session.paused && session.left <= 5 ? "true" : "false"}
+              >
+                <span className="session-time">{clock(session.left)}</span>
+                <span className="session-pose">
+                  {session.paused ? "Paused · " : ""}
+                  {session.pose} / {session.poses}
+                </span>
+              </p>
             )}
             <button
               type="button"
@@ -629,6 +760,26 @@ export function SlideshowView(p: SlideshowViewProps) {
                   </p>
                 )}
               </div>
+              {session ? (
+                <dl className="specs session-specs">
+                  <div>
+                    <dt>Pose</dt>
+                    <dd>
+                      {session.pose} / {session.poses}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Round</dt>
+                    <dd>
+                      {session.round} / {session.rounds}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{session.paused ? "Paused" : "Left"}</dt>
+                    <dd>{clock(session.left)}</dd>
+                  </div>
+                </dl>
+              ) : (
               <dl className="specs">
                 <div>
                   <dt>Slide</dt>
@@ -645,6 +796,7 @@ export function SlideshowView(p: SlideshowViewProps) {
                   <dd>{slide?.width && slide.height ? `${slide.width} × ${slide.height} px` : "Unknown"}</dd>
                 </div>
               </dl>
+              )}
               <div className="controls" role="group" aria-label="Slideshow controls">
                 {pages > 1 && (
                   <>
@@ -688,6 +840,42 @@ export function SlideshowView(p: SlideshowViewProps) {
                 </button>
                 <button type="button" className="icon-btn" onClick={p.onToggleShuffle} aria-pressed={p.shuffle} aria-label="Shuffle" title="Shuffle (S)">
                   <Icon d={ICONS.shuffle} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onSession}
+                  disabled={!slide && !session}
+                  data-active={session ? "true" : "false"}
+                  aria-label={session ? "End the session" : "Timed session"}
+                  title={session ? "End the session and see what you drew (Esc)" : "Timed drawing session (N)"}
+                >
+                  <Icon d={ICONS.timer} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onToggleStudyMenu}
+                  disabled={!slide}
+                  aria-expanded={Boolean(p.studyMenuOpen && slide)}
+                  aria-controls="study-menu"
+                  data-active={studying ? "true" : "false"}
+                  aria-label={studying ? `Study aids (${studying} on)` : "Study aids"}
+                  title="Mirror, values, grid (X U G V B O)"
+                >
+                  <Icon d={ICONS.study} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onToggleFavourite}
+                  disabled={!slide}
+                  aria-pressed={Boolean(p.favourite)}
+                  data-favourite={p.favourite ? "true" : "false"}
+                  aria-label="Favourite"
+                  title="♥ Favourite (K)"
+                >
+                  <Icon d={ICONS.heart} />
                 </button>
                 <button
                   type="button"
@@ -825,6 +1013,9 @@ export function SlideshowView(p: SlideshowViewProps) {
                   </p>
                 )}
               </div>
+            )}
+            {p.studyMenuOpen && slide && (
+              <StudyMenu study={study} onChange={p.onStudy} onReset={p.onResetStudy} onClose={p.onToggleStudyMenu} />
             )}
             {p.filterMenuOpen && (
               <div className="playlist-menu filter-menu" id="filter-menu" role="group" aria-labelledby="filter-menu-title">

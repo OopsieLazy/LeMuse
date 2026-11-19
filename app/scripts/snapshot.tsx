@@ -14,6 +14,9 @@ import { LibraryPanel, type LibraryPanelProps } from "../src/LibraryPanel";
 import { SettingsPanel, type ArenaTokenView } from "../src/SettingsPanel";
 import { ErrorScreen } from "../src/ErrorScreen";
 import { RefreshDetails } from "../src/RefreshDetails";
+import { PracticePanel, type PracticePanelProps } from "../src/PracticePanel";
+import { ShortcutsPanel } from "../src/ShortcutsPanel";
+import { NO_STUDY, type SessionResult } from "../src/practice";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
 import { SlideshowView, type SlideshowViewProps } from "../src/SlideshowView";
 import sample from "./sample-data.json";
@@ -134,14 +137,68 @@ interface State {
   mini?: boolean;
   /** Compact windows: the tapped-open bar. */
   compactBar?: boolean;
+  /** The timed-session planner or summary (ADR-0025). */
+  practice?: Partial<PracticePanelProps>;
+  shortcuts?: boolean;
 }
 
 // A tall portrait image is the case that used to run under the control bar.
 const tall: Slide = { ...slides[0], block_id: 9001, width: 1200, height: 3000, title: "Tall portrait test image" };
 const wide: Slide = { ...slides[0], block_id: 9002, width: 4000, height: 900, title: "Wide panorama test image" };
 
+// Practice tools (ADR-0025).
+const studyOn = { ...NO_STUDY, mirror: true, tones: 3 as const, balance: 0.2, grid: "thirds" as const };
+const running = { planName: "Class", pose: 7, poses: 18, round: 1, rounds: 4, left: 24, paused: false };
+const sessionResult: SessionResult = {
+  planName: "Gesture warm-up",
+  from: topics[0].name,
+  drawn: slides.slice(0, 8).map((s) => ({
+    block_id: s.block_id,
+    title: s.title,
+    display_url: s.display_url,
+    creator: s.creator,
+    seconds: 30,
+  })),
+  seconds: 240,
+  skipped: 2,
+  finished: true,
+};
+const practiceBase: PracticePanelProps = {
+  view: "plan",
+  planId: "class",
+  customRounds: [{ count: 5, seconds: 60 }],
+  sound: true,
+  from: topics[0].name,
+  images: 420,
+};
+
 export const STATES: Record<string, State> = {
   playing: { props: base },
+  "study-menu": { props: { ...base, studyMenuOpen: true, study: studyOn } },
+  "study-aids": { props: { ...base, slides: [tall], index: 0, study: { ...studyOn, grid: "squares", upside: true } } },
+  "study-notan-squint": { props: { ...base, study: { ...NO_STUDY, tones: 2, squint: true, grid: "diagonals" } } },
+  "study-cover": { props: { ...base, study: { ...NO_STUDY, grey: true, grid: "quarters" } }, settings: { fit: "cover" } },
+  favourite: { props: { ...base, favourite: true } },
+  "favourites-empty": {
+    props: { ...base, playlists: [...playlists, { id: 3, name: "Favourites", items: 0 }], active: { kind: "playlist", id: 3 }, activeLabel: "Favourites", slides: [], index: 0 },
+  },
+  "session-running": { props: { ...base, session: running } },
+  "session-paused": { props: { ...base, session: { ...running, paused: true, left: 3 } } },
+  "session-mini": { props: { ...base, mini: true, session: { ...running, left: 4 } }, mini: true },
+  "practice-plan": { props: base, practice: {} },
+  "practice-custom": {
+    props: base,
+    practice: { planId: "custom", customRounds: [{ count: 10, seconds: 30 }, { count: 3, seconds: 300 }] },
+  },
+  "practice-summary": {
+    props: base,
+    practice: { view: "summary", result: sessionResult, favourites: [slides[1].block_id], kept: "Kept as “Session 19 Nov, 14:05” (8 images). It's in Playlists." },
+  },
+  "practice-summary-empty": {
+    props: base,
+    practice: { view: "summary", result: { ...sessionResult, drawn: [], seconds: 0, finished: false }, onResume: () => undefined },
+  },
+  shortcuts: { props: base, shortcuts: true },
   paused: { props: { ...base, playing: false, index: 0 } },
   refreshing: { props: { ...base, refresh: { label: "Refreshing topics", busy: true, tone: "idle" } } },
   "empty-topic": { props: { ...base, active: { kind: "topic", name: "Molds" }, activeLabel: "Molds", slides: [], index: 0 } },
@@ -355,11 +412,13 @@ function documentFor(name: string, st: State, extraHead = "") {
     return page(name, attrText, styleText, renderToStaticMarkup(<ErrorScreen {...st.crash} />), extraHead);
   }
   const body =
-    renderToStaticMarkup(<SlideshowView {...st.props} controlsHidden={settings.controlsHidden} />) +
+    renderToStaticMarkup(<SlideshowView {...st.props} controlsHidden={settings.controlsHidden} cover={settings.fit === "cover"} />) +
     (st.panel
       ? renderToStaticMarkup(<SettingsPanel settings={settings} arena={st.arena} about={st.about} staticOpen />)
       : "") +
     (st.refreshDetails ? renderToStaticMarkup(<RefreshDetails {...st.refreshDetails} staticOpen />) : "") +
+    (st.practice ? renderToStaticMarkup(<PracticePanel {...practiceBase} {...st.practice} staticOpen />) : "") +
+    (st.shortcuts ? renderToStaticMarkup(<ShortcutsPanel staticOpen />) : "") +
     (st.library
       ? renderToStaticMarkup(
           <LibraryPanel

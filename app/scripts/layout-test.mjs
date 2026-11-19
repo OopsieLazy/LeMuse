@@ -88,6 +88,19 @@ const measure = String(async function run() {
         if (r.height < 40 || r.width < 40) fail(`image too small to see (${Math.round(r.width)}x${Math.round(r.height)})`);
         if (visible(caption, win) && overlap(r, caption.getBoundingClientRect()) > 1) fail("image overlaps the control bar");
       }
+      // Study grid (ADR-0025): same box as the image and the image's proportions,
+      // so the lines sit on the picture, not on the empty bands around it.
+      const grid = doc.querySelector(".frame .grid-overlay");
+      if (img && grid && visible(img, win)) {
+        checks++;
+        const a = img.getBoundingClientRect();
+        const b = grid.getBoundingClientRect();
+        if (Math.abs(a.left - b.left) > 1 || Math.abs(a.top - b.top) > 1 || Math.abs(a.width - b.width) > 1 || Math.abs(a.height - b.height) > 1)
+          fail(`grid box ${Math.round(b.width)}x${Math.round(b.height)} isn't the image box ${Math.round(a.width)}x${Math.round(a.height)}`);
+        const vb = grid.viewBox.baseVal;
+        if (img.naturalHeight && vb && Math.abs(vb.width / vb.height - img.naturalWidth / img.naturalHeight) > 0.01)
+          fail("grid proportions differ from the image");
+      }
       const outside = (r) =>
         r.right > win.innerWidth + 1 || r.bottom > win.innerHeight + 1 || r.left < -1 || r.top < -1;
       const controls =

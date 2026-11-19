@@ -28,6 +28,32 @@ import { LibraryPanel, type PanelStatus } from "./LibraryPanel";
 import { SettingsPanel, type ArenaTokenView } from "./SettingsPanel";
 import { applyToDocument, DEFAULTS, sanitize, type UiSettings } from "./settings";
 import { SlideshowView, type RefreshState } from "./SlideshowView";
+import { PracticePanel } from "./PracticePanel";
+import { ShortcutsPanel } from "./ShortcutsPanel";
+import {
+  FAVOURITES,
+  finishPose,
+  GRIDS,
+  nextOf,
+  NO_STUDY,
+  planFor,
+  poseCount,
+  poseMs,
+  posesBefore,
+  restartPose,
+  sessionPlaylistName,
+  startSession as firstPose,
+  stopSession,
+  tickSession,
+  TONES,
+  type Running,
+  type SessionResult,
+  type StudyAids,
+} from "./practice";
+import * as cue from "./sound";
+
+/** How often the pose clock steps (ms). */
+const SESSION_TICK_MS = 200;
 
 /** Debounce for saving settings while a slider is dragged. */
 const SAVE_DELAY_MS = 300;
@@ -143,6 +169,18 @@ export function App() {
   const [refreshFailed, setRefreshFailed] = useState<{ list: string[]; total: number }>({ list: [], total: 0 });
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [about, setAbout] = useState<About | null>(null);
+  // Practice tools (ADR-0025).
+  const [study, setStudy] = useState<StudyAids>(NO_STUDY);
+  const [studyOpen, setStudyOpen] = useState(false);
+  const [natural, setNatural] = useState<{ id: number; width: number; height: number } | null>(null);
+  const [session, setSession] = useState<Running | null>(null);
+  const [result, setResult] = useState<SessionResult | null>(null);
+  const [practiceView, setPracticeView] = useState<"plan" | "summary">("plan");
+  const [kept, setKept] = useState<string | undefined>();
+  const [keeping, setKeeping] = useState(false);
+  const [drawnFavs, setDrawnFavs] = useState<number[]>([]);
+  const practiceRef = useRef<HTMLDialogElement>(null);
+  const shortcutsRef = useRef<HTMLDialogElement>(null);
   const refreshDetailsRef = useRef<HTMLDialogElement>(null);
   const settingsRef = useRef<HTMLDialogElement>(null);
   const libraryRef = useRef<HTMLDialogElement>(null);
@@ -254,7 +292,7 @@ export function App() {
   }, []);
 
   // ---- Auto-hide the control bar when the pointer rests ----
-  const anyMenu = menuOpen || filterOpen;
+  const anyMenu = menuOpen || filterOpen || studyOpen;
   useEffect(() => {
     if (!settings.autoHide || anyMenu) {
       setIdle(false);
@@ -394,13 +432,13 @@ export function App() {
   }, [contextMenu]);
   useEffect(() => setContextMenu(null), [slide?.block_id]);
 
-  // Auto-advance (paused while a menu is open).
+  // Auto-advance (paused while a menu is open; a timed session drives itself).
   const seconds = settings.slideSeconds ?? topic?.slide_seconds ?? 8;
   useEffect(() => {
-    if (!playing || anyMenu || visible.length < 2) return;
+    if (!playing || anyMenu || visible.length < 2 || session) return;
     const id = window.setTimeout(() => go(1), seconds * 1000);
     return () => window.clearTimeout(id);
-  }, [playing, anyMenu, seconds, tick, go, visible.length]);
+  }, [playing, anyMenu, seconds, tick, go, visible.length, session]);
 
   // Warm the next images in memory only. In the desktop app the WebView runs
   // InPrivate, so nothing reaches a disk cache (ADR-0009).
@@ -418,12 +456,44 @@ export function App() {
   const toggleMenu = useCallback(() => {
     setMenuError(undefined);
     setFilterOpen(false);
+    setStudyOpen(false);
     setMenuOpen((o) => !o);
   }, []);
   const toggleFilter = useCallback(() => {
     setMenuOpen(false);
+    setStudyOpen(false);
     setFilterOpen((o) => !o);
   }, []);
+  const toggleStudy = useCallback(() => {
+    setMenuOpen(false);
+    setFilterOpen(false);
+    setStudyOpen((o) => !o);
+  }, []);
+  const changeStudy = useCallback((p: Partial<StudyAids>) => setStudy((s) => ({ ...s, ...p })), []);
+
+  // ---- ♥ Favourites: a playlist made on the first ♥ (ADR-0025) ----
+  const favId = playlists.find((l) => l.name === FAVOURITES)?.id;
+  const favourite = favId !== undefined && inPlaylists.includes(favId);
+  // One ♥ at a time, so a double press can't make Favourites twice (review 0020 D-118).
+  const favBusy = useRef(false);
+  const setFavourite = useCallback(
+    async (blockId: number, present: boolean) => {
+      if (favBusy.current) return;
+      favBusy.current = true;
+      try {
+        let id = favId;
+        if (id === undefined) {
+          if (!present) return;
+          id = (await api.createPlaylist(FAVOURITES)).id;
+        }
+        await api.setInPlaylist(id, blockId, present);
+        await loadPlaylists();
+      } finally {
+        favBusy.current = false;
+      }
+    },
+    [favId, loadPlaylists],
+  );
 
   // ---- Related channels for the current Are.na image (one read per page) ----
   // Answers for an image the user has moved away from are dropped.
@@ -510,24 +580,210 @@ export function App() {
     }
   }, [slide, active, say]);
 
-  // Keyboard: ← → Space S F H T P C R D M L A , Esc. Ignored while typing or in a dialog.
+  // ---- Timed sessions (ADR-0025) ----
+  // The session lives in state for the view and in a ref for the clock, so
+  // the clock never works from a stale copy. `commit` updates both.
+  const plan = planFor(settings.practicePlan, settings.customRounds);
+  const sessionRef = useRef<Running | null>(null);
+  const resumable = useRef<Running | null>(null);
+  const slideRef = useRef(slide);
+  slideRef.current = slide;
+  const commit = useCallback((s: Running | null) => {
+    sessionRef.current = s;
+    setSession(s);
+  }, []);
+
+  const openPractice = useCallback(() => {
+    setPracticeView("plan");
+    setKept(undefined);
+    openDialog(practiceRef.current);
+  }, [openDialog]);
+
+  /** Show the summary (the plan finished, or the session was stopped). */
+  const showResult = useCallback(
+    (r: SessionResult, before: Running | null) => {
+      // Ended early by mistake? Resume puts it back exactly as it was.
+      resumable.current = r.finished || !before ? null : { ...before, paused: true };
+      commit(null);
+      setResult(r);
+      setPracticeView("summary");
+      setKept(undefined);
+      if (r.finished && settings.practiceSound) cue.finish();
+      openDialog(practiceRef.current);
+    },
+    [commit, openDialog, settings.practiceSound],
+  );
+  const endSession = useCallback((s: Running) => showResult(stopSession(s, slideRef.current), s), [showResult]);
+
+  const many = visible.length > 1;
+  const startSession = useCallback(() => {
+    practiceRef.current?.close();
+    if (!visible.length) return;
+    if (settings.practiceSound) {
+      cue.primeSound();
+      cue.change();
+    }
+    setPlaying(false);
+    setResult(null);
+    setStudyOpen(false);
+    resumable.current = null;
+    commit(firstPose(plan, activeLabel, many, Date.now()));
+    if (many) go(1);
+  }, [visible.length, many, settings.practiceSound, plan, activeLabel, go, commit]);
+
+  /** Finish this pose (its time ran out, or → skipped it) and move on. */
+  const advancePose = useCallback(
+    (kind: "done" | "skip") => {
+      const s = sessionRef.current;
+      if (!s) return;
+      const step = finishPose(s, slideRef.current, kind, many, Date.now());
+      if ("result" in step) return showResult(step.result, null);
+      commit(step.next);
+      if (many) go(1);
+      if (settings.practiceSound) cue.change();
+    },
+    [commit, showResult, go, many, settings.practiceSound],
+  );
+  const advanceRef = useRef(advancePose);
+  advanceRef.current = advancePose;
+
+  /** ← in a session: the previous image, and this pose starts over. */
+  const backPose = useCallback(() => {
+    const s = sessionRef.current;
+    if (!s) return;
+    go(-1);
+    commit(restartPose(s, many, Date.now()));
+  }, [go, commit, many]);
+
+  const togglePause = useCallback(() => {
+    const s = sessionRef.current;
+    if (s) commit({ ...s, paused: !s.paused });
+  }, [commit]);
+
+  // The pose clock (practice.ts tickSession): counts only while the image is
+  // on screen, beeps in the last three seconds, starts a slow pose anyway.
+  const running = session !== null && !session.paused;
+  const sound = settings.practiceSound;
+  useEffect(() => {
+    if (!running) return;
+    let last = performance.now();
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      const dt = now - last;
+      last = now;
+      const s = sessionRef.current;
+      if (!s) return;
+      const step = tickSession(s, dt, Date.now());
+      if (step.done) return advanceRef.current("done");
+      if (step.beep && sound) cue.tick();
+      if (step.s !== s) commit(step.s);
+    }, SESSION_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [running, sound, commit]);
+
+  // Minimised or hidden: pause, so a pose isn't lost while you look away.
+  useEffect(() => {
+    const onHide = () => {
+      const s = sessionRef.current;
+      if (document.hidden && s && !s.paused) commit({ ...s, paused: true });
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [commit]);
+
+  const onImageLoad = useCallback(
+    (id: number, width: number, height: number) => {
+      setNatural({ id, width, height });
+      const s = sessionRef.current;
+      if (s?.waiting && id === slideRef.current?.block_id) commit({ ...s, waiting: false });
+    },
+    [commit],
+  );
+
+  const sessionView = session
+    ? {
+        planName: session.plan.name,
+        pose: posesBefore(session.plan, session.at) + 1,
+        poses: poseCount(session.plan),
+        round: session.at.round + 1,
+        rounds: session.plan.rounds.length,
+        left: Math.max(0, session.left / 1000),
+        paused: session.paused,
+      }
+    : null;
+
+  // The summary's ♥ marks: which drawn images are already favourites.
+  useEffect(() => {
+    if (!result || favId === undefined) {
+      setDrawnFavs([]);
+      return;
+    }
+    let stale = false;
+    const ids = [...new Set(result.drawn.map((d) => d.block_id))];
+    Promise.all(ids.map((id) => api.playlistsWith(id).then((l) => (l.includes(favId) ? id : null))))
+      .then((x) => !stale && setDrawnFavs(x.filter((n): n is number => n !== null)))
+      .catch(() => !stale && setDrawnFavs([]));
+    return () => {
+      stale = true;
+    };
+  }, [result, favId, playlists]);
+
+  const keepSession = async () => {
+    if (!result) return;
+    setKeeping(true);
+    try {
+      const l = await api.createPlaylist(sessionPlaylistName(new Date()));
+      const ids = [...new Set(result.drawn.map((d) => d.block_id))];
+      for (const id of ids) await api.setInPlaylist(l.id, id, true);
+      await loadPlaylists();
+      setKept(`Kept as “${l.name}” (${ids.length} image${ids.length === 1 ? "" : "s"}). It's in Playlists.`);
+    } catch (e) {
+      setKept(message(e));
+    } finally {
+      setKeeping(false);
+    }
+  };
+
+  const toggleFavourite = useCallback(() => {
+    if (!slide) return;
+    setFavourite(slide.block_id, !favourite)
+      .then(() => say(favourite ? "Removed from Favourites" : "♥ Added to Favourites"))
+      .catch((e) => say(message(e)));
+  }, [slide, favourite, setFavourite, say]);
+
+  // Keyboard: ← → Space S F H T P C R D M L A , Esc, and the practice keys
+  // N K X U G V B O 0 ? (ShortcutsPanel lists them all). Ignored while typing or in a dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "Escape" && (menuOpen || filterOpen || miniMenuOpen)) {
+      if (e.key === "Escape" && (menuOpen || filterOpen || miniMenuOpen || studyOpen)) {
         setMenuOpen(false);
         setFilterOpen(false);
         setMiniMenuOpen(false);
+        setStudyOpen(false);
         return;
       }
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, dialog")) return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (k === "ArrowRight") go(1);
-      else if (k === "ArrowLeft") go(-1);
+      const s = sessionRef.current;
+      if (k === "ArrowRight") (s ? advancePose("skip") : go(1));
+      else if (k === "ArrowLeft") (s ? backPose() : go(-1));
       else if (k === " ") {
         e.preventDefault();
-        setPlaying((p) => !p);
-      } else if (k === "s") setShuffle((s) => !s);
+        if (s) togglePause();
+        else setPlaying((p) => !p);
+      } else if (k === "Escape" && s) endSession(s);
+      else if (k === "n" && !s) openPractice();
+      else if (k === "k") toggleFavourite();
+      else if (k === "x") changeStudy({ mirror: !study.mirror });
+      else if (k === "u") changeStudy({ upside: !study.upside });
+      else if (k === "g") changeStudy({ grey: !study.grey, tones: 0 });
+      else if (k === "v") changeStudy({ tones: nextOf(TONES, study.tones) });
+      else if (k === "b") changeStudy({ squint: !study.squint });
+      else if (k === "o") changeStudy({ grid: nextOf(GRIDS, study.grid) });
+      else if (k === "0") setStudy(NO_STUDY);
+      else if (k === "?") openDialog(shortcutsRef.current);
+      else if (k === "s") setShuffle((s) => !s);
       else if (k === "f") toggleFullscreen();
       else if (k === "h") patch({ controlsHidden: !settings.controlsHidden });
       else if (k === "t") setRailOpen((o) => !o);
@@ -543,7 +799,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, slide, fullscreen]);
+  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, slide, fullscreen, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
@@ -754,9 +1010,21 @@ export function App() {
         activeLabel={activeLabel}
         slides={visible}
         index={safeIndex}
-        playing={playing}
+        playing={session ? !session.paused && !session.waiting : playing}
         shuffle={shuffle}
-        slideSeconds={seconds}
+        slideSeconds={session ? poseMs(session) / 1000 : seconds}
+        cover={settings.fit === "cover"}
+        study={study}
+        studyMenuOpen={studyOpen}
+        onToggleStudyMenu={toggleStudy}
+        onStudy={changeStudy}
+        onResetStudy={() => setStudy(NO_STUDY)}
+        session={sessionView}
+        onSession={() => (session ? endSession(session) : openPractice())}
+        favourite={favourite}
+        onToggleFavourite={toggleFavourite}
+        imageSize={natural && natural.id === slide?.block_id ? natural : undefined}
+        onImageLoad={onImageLoad}
         tick={tick}
         status={status}
         refresh={refresh}
@@ -837,9 +1105,9 @@ export function App() {
         onToggleRail={() => setRailOpen((o) => !o)}
         onOpenSettings={openSettings}
         onOpenLink={onOpenLink}
-        onPrev={() => go(-1)}
-        onNext={() => go(1)}
-        onTogglePlay={() => setPlaying((p) => !p)}
+        onPrev={() => (session ? backPose() : go(-1))}
+        onNext={() => (session ? advancePose("skip") : go(1))}
+        onTogglePlay={() => (session ? togglePause() : setPlaying((p) => !p))}
         onToggleShuffle={() => setShuffle((s) => !s)}
         onRefresh={onRefresh}
         onImageError={(id) => {
@@ -888,6 +1156,44 @@ export function App() {
         onOpenLink={onOpenLink}
         about={about}
       />
+      <PracticePanel
+        ref={practiceRef}
+        view={practiceView}
+        planId={settings.practicePlan}
+        customRounds={settings.customRounds}
+        sound={settings.practiceSound}
+        from={activeLabel || "All"}
+        images={visible.length}
+        result={result}
+        favourites={drawnFavs}
+        kept={kept}
+        busy={keeping}
+        onPlan={(id) => patch({ practicePlan: id })}
+        onCustom={(rounds) => patch({ customRounds: rounds })}
+        onSound={(on) => patch({ practiceSound: on })}
+        onStart={startSession}
+        onToggleFavourite={(id) => {
+          setFavourite(id, !drawnFavs.includes(id)).catch((e) => setKept(message(e)));
+        }}
+        onKeep={keepSession}
+        onAgain={() => {
+          resumable.current = null;
+          setPracticeView("plan");
+          setKept(undefined);
+        }}
+        onResume={
+          resumable.current
+            ? () => {
+                const s = resumable.current;
+                resumable.current = null;
+                practiceRef.current?.close();
+                setResult(null);
+                if (s) commit({ ...s, paused: false });
+              }
+            : undefined
+        }
+      />
+      <ShortcutsPanel ref={shortcutsRef} />
       <RefreshDetails
         ref={refreshDetailsRef}
         failed={refreshFailed.list}
