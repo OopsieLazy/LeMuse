@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useMemo, useState, type FormEvent } from "react";
-import type { ChannelPreview, RelatedChannels, TopicInfo, Vocabulary } from "./api";
+import type { ChannelPreview, FollowedPage, FollowedPick, RelatedChannels, TopicInfo, Vocabulary } from "./api";
 import type { PanelStatus } from "./LibraryPanel";
 
 // "Find channels" (ADR-0015), a native <dialog> like Settings.
@@ -21,7 +21,7 @@ export interface RelatedState {
 
 /** "Channels you follow" (ADR-0024): null until asked for. */
 export interface FollowingState {
-  result: RelatedChannels | null;
+  result: FollowedPage | null;
 }
 
 export interface DiscoverPanelProps {
@@ -38,6 +38,8 @@ export interface DiscoverPanelProps {
   following?: FollowingState | null;
   onShowFollowing?: () => void;
   onMoreFollowing?: () => void;
+  /** Add followed channels to topics (one, or all the new ones). */
+  onAddFollowed?: (picks: FollowedPick[]) => void;
   busy?: boolean;
   status?: PanelStatus;
   /** Render with the `open` attribute (W3C/layout snapshots). */
@@ -58,6 +60,8 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
   const [link, setLink] = useState(p.previewLink ?? "");
   const [topic, setTopic] = useState(p.defaultTopic ?? p.topics[0]?.name ?? NEW_TOPIC);
   const [newTopic, setNewTopic] = useState("");
+  /** "Add all new" target: "" = each one's suggested topic. */
+  const [followTarget, setFollowTarget] = useState("");
   useEffect(() => {
     if (p.previewLink !== undefined) setLink(p.previewLink);
   }, [p.previewLink]);
@@ -72,6 +76,7 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
   const allWords = useMemo(() => [...new Set(lists.flatMap((l) => l.words))].sort(), [lists]);
   const chosen = lists.find((l) => l.label === list);
   const app = p.mode === "app";
+  const newFollowed = (p.following?.result?.channels ?? []).filter((c) => c.in_topics.length === 0);
 
   const onSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -231,28 +236,72 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
                 </div>
               ) : p.following.result ? (
                 p.following.result.channels.length ? (
-                  <ul className="channel-list related-list">
-                    {p.following.result.channels.map((c) => (
-                      <li key={c.slug}>
-                        <span className="channel-slug">
-                          <span className="related-title">{c.title}</span>
-                          <span className="related-meta">
-                            {c.owner ?? "Are.na"}
-                            {c.contents != null ? ` · ${fmt(c.contents)} items` : ""}
+                  <>
+                    <ul className="channel-list related-list">
+                      {p.following.result.channels.map((c) => (
+                        <li key={c.slug}>
+                          <span className="channel-slug">
+                            <span className="related-title">{c.title}</span>
+                            <span className="related-meta">
+                              {c.owner ?? "Are.na"}
+                              {c.contents != null ? ` · ${fmt(c.contents)} items` : ""}
+                              {c.in_topics.length ? ` · in ${c.in_topics.join(", ")}` : ` · new: would go to ${c.suggested}`}
+                            </span>
                           </span>
-                        </span>
+                          <span className="row-actions">
+                            <button
+                              type="button"
+                              className="text-btn"
+                              disabled={p.busy}
+                              onClick={() => p.onPreview?.(c.slug)}
+                              aria-label={`Preview ${c.title}`}
+                            >
+                              Preview
+                            </button>
+                            {c.in_topics.length === 0 && (
+                              <button
+                                type="button"
+                                className="text-btn"
+                                disabled={p.busy}
+                                onClick={() => p.onAddFollowed?.([{ slug: c.slug, title: c.title, topic: null }])}
+                                aria-label={`Add ${c.title} to ${c.suggested}`}
+                              >
+                                Add
+                              </button>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {newFollowed.length > 0 && (
+                      <div className="form-row follow-all">
+                        <label htmlFor="follow-target">
+                          {newFollowed.length === 1 ? "1 isn't" : `${newFollowed.length} aren't`} in a topic yet. Add to
+                        </label>
+                        <select id="follow-target" value={followTarget} onChange={(e) => setFollowTarget(e.target.value)}>
+                          <option value="">Each one's suggested topic</option>
+                          {p.topics.map((t) => (
+                            <option key={t.name} value={t.name}>
+                              {t.name}
+                            </option>
+                          ))}
+                          {!p.topics.some((t) => t.name === "Following") && <option value="Following">New topic: Following</option>}
+                        </select>
                         <button
                           type="button"
-                          className="text-btn"
+                          className="primary-btn"
                           disabled={p.busy}
-                          onClick={() => p.onPreview?.(c.slug)}
-                          aria-label={`Preview ${c.title}`}
+                          onClick={() =>
+                            p.onAddFollowed?.(
+                              newFollowed.map((c) => ({ slug: c.slug, title: c.title, topic: followTarget || null })),
+                            )
+                          }
                         >
-                          Preview
+                          Add {newFollowed.length === 1 ? "it" : `all ${newFollowed.length}`}
                         </button>
-                      </li>
-                    ))}
-                  </ul>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <p className="list-label">You don't follow any channels on Are.na yet.</p>
                 )

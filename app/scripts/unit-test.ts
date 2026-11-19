@@ -4,7 +4,7 @@
 // No network, no files outside .snapshot/ (git-ignored).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { redact, reportUrl } from "../src/api";
+import { redact, reportUrl, withContentDefaults } from "../src/api";
 import {
   balanceExponent,
   clock,
@@ -22,11 +22,17 @@ import {
   startSession,
   stopSession,
   tickSession,
+  weeklyLog,
+  weekStart,
+  logSince,
   sanitizeRounds,
   SESSION_PLANS,
   studyActive,
   studyFilter,
   toneTable,
+  focusTable,
+  valueStrip,
+  filterGraph,
   TONES,
 } from "../src/practice";
 import { DEFAULTS, sanitize } from "../src/settings";
@@ -61,7 +67,8 @@ test("study aids: filters, tones, balance, cycling", () => {
   assert.equal(toneTable(5), "0 0.25 0.5 0.75 1");
   assert.equal(balanceExponent(0), 1);
   assert.ok(balanceExponent(1) < 1 && balanceExponent(-1) > 1);
-  assert.equal(nextOf(TONES, 5), 0);
+  assert.equal(nextOf(TONES, 5), 7);
+  assert.equal(nextOf(TONES, 9), 0);
   assert.equal(studyActive({ ...NO_STUDY, mirror: true, grid: "thirds" }), 2);
 });
 
@@ -162,4 +169,81 @@ test("skips, early stops and restarts count fairly", () => {
   assert.equal(back.since, 42);
   // One image only: nothing to wait for.
   assert.equal(startSession(plan, "One", false, 0).waiting, false);
+});
+
+test("values: up to 9 tones, isolating darks, lights or both", () => {
+  assert.equal(toneTable(9).split(" ").length, 9);
+  assert.equal(focusTable(5, "all"), "0 0.25 0.5 0.75 1");
+  assert.equal(focusTable(9, "darks"), "0 1 1 1 1 1 1 1 1");
+  assert.equal(focusTable(9, "lights"), "0 0 0 0 0 0 0 0 1");
+  assert.equal(focusTable(5, "extremes"), "0 0.5 0.5 0.5 1");
+  // Notan has nothing to isolate.
+  assert.equal(focusTable(2, "darks"), "0 1");
+  assert.deepEqual(valueStrip(3, "all"), [0, 0.5, 1]);
+});
+
+test("the study filter graph: values, lines, strokes, cross-hatch", () => {
+  const tags = (s: Partial<typeof NO_STUDY>) => filterGraph({ ...NO_STUDY, ...s }).map((n) => n.tag);
+  // Always luma then balance; the discrete step only with tones.
+  assert.deepEqual(tags({ tones: 0 }), ["feColorMatrix", "feComponentTransfer"]);
+  assert.equal(tags({ tones: 5 }).length, 3);
+  const toned = filterGraph({ ...NO_STUDY, tones: 9, focus: "darks" })[2];
+  assert.equal(toned.children?.[0].attrs.tableValues, "0 1 1 1 1 1 1 1 1");
+  // Lines: blur, edge kernel, ink; blended over the values when they're on.
+  assert.deepEqual(tags({ effect: "lines" }).slice(2), ["feGaussianBlur", "feConvolveMatrix", "feComponentTransfer"]);
+  assert.equal(tags({ effect: "lines", tones: 3 }).at(-1), "feBlend");
+  // Strokes: vertical noise is fine across, long along (x freq > y freq).
+  const v = filterGraph({ ...NO_STUDY, effect: "vertical" }).find((n) => n.tag === "feTurbulence");
+  const [fx, fy] = String(v?.attrs.baseFrequency).split(" ").map(Number);
+  assert.ok(fx > fy * 10);
+  // The composite keeps alpha at 1: k2 + k3 + k4 ≥ 1.
+  const c = filterGraph({ ...NO_STUDY, effect: "horizontal" }).find((n) => n.tag === "feComposite");
+  assert.ok(Number(c?.attrs.k2) + Number(c?.attrs.k3) + Number(c?.attrs.k4) >= 1);
+  // Cross-hatch: two stroke layers multiplied.
+  assert.equal(tags({ effect: "cross" }).filter((t) => t === "feTurbulence").length, 2);
+  assert.equal(tags({ effect: "cross" }).at(-1), "feBlend");
+  // Effects use the SVG filter; plain greyscale doesn't.
+  assert.equal(studyFilter({ ...NO_STUDY, effect: "lines" }), "url(#lemuse-values)");
+  assert.equal(studyActive({ ...NO_STUDY, effect: "cross" }), 1);
+});
+
+test("practice log: local weeks, oldest first, empty weeks kept", () => {
+  // Wed 19 Nov 2026, 15:00 local.
+  const now = new Date(2026, 10, 19, 15, 0).getTime();
+  const monday = new Date(2026, 10, 16).getTime();
+  assert.equal(weekStart(now), monday);
+  const sec = (d: Date) => Math.floor(d.getTime() / 1000);
+  const log = weeklyLog(
+    [
+      { started_at: sec(new Date(2026, 10, 18, 9)), drawings: 10, seconds: 300 },
+      { started_at: sec(new Date(2026, 10, 16, 0, 5)), drawings: 4, seconds: 240 },
+      // Sunday the week before.
+      { started_at: sec(new Date(2026, 10, 15, 23, 50)), drawings: 18, seconds: 1800 },
+      // Too old for 8 weeks: ignored.
+      { started_at: sec(new Date(2026, 5, 1)), drawings: 99, seconds: 99 },
+    ],
+    now,
+  );
+  assert.equal(log.length, 8);
+  assert.equal(log[7].start, monday);
+  assert.deepEqual([log[7].sessions, log[7].drawings, log[7].seconds], [2, 14, 540]);
+  assert.equal(log[6].drawings, 18);
+  assert.equal(log.slice(0, 6).reduce((n, w) => n + w.drawings, 0), 0);
+  assert.equal(logSince(now), Math.floor(log[0].start / 1000));
+});
+
+test("content defaults: hidden always out, nudity unless shown, named filters respected", () => {
+  assert.deepEqual(withContentDefaults({ include: [], exclude: [] }, false).exclude, ["hidden", "nudity"]);
+  assert.deepEqual(withContentDefaults({ include: [], exclude: [] }, true).exclude, ["hidden"]);
+  assert.deepEqual(withContentDefaults({ include: ["nudity"], exclude: [] }, false).exclude, ["hidden"]);
+  assert.deepEqual(withContentDefaults({ include: [], exclude: ["wood"] }, false).exclude, ["wood", "hidden", "nudity"]);
+});
+
+test("new settings are sanitized", () => {
+  const s = sanitize({ showNudity: "yes", lastUpdateCheck: -5, singleKeys: false, checkUpdates: 1 });
+  assert.equal(s.showNudity, false);
+  assert.equal(s.lastUpdateCheck, null);
+  assert.equal(s.singleKeys, false);
+  assert.equal(s.checkUpdates, true);
+  assert.equal(sanitize({ lastUpdateCheck: 1_700_000_000_000.4 }).lastUpdateCheck, 1_700_000_000_000);
 });

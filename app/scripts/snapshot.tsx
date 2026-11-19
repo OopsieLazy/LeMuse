@@ -11,12 +11,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ChannelPreview, Playlist, Slide, TopicInfo, Vocabulary } from "../src/api";
 import { DiscoverPanel, type DiscoverPanelProps } from "../src/DiscoverPanel";
 import { LibraryPanel, type LibraryPanelProps } from "../src/LibraryPanel";
-import { SettingsPanel, type ArenaTokenView } from "../src/SettingsPanel";
+import { SettingsPanel, type ArenaTokenView, type SettingsPanelProps } from "../src/SettingsPanel";
 import { ErrorScreen } from "../src/ErrorScreen";
 import { RefreshDetails } from "../src/RefreshDetails";
 import { PracticePanel, type PracticePanelProps } from "../src/PracticePanel";
 import { ShortcutsPanel } from "../src/ShortcutsPanel";
-import { NO_STUDY, type SessionResult } from "../src/practice";
+import { NO_STUDY, weeklyLog, type SessionResult } from "../src/practice";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
 import { SlideshowView, type SlideshowViewProps } from "../src/SlideshowView";
 import sample from "./sample-data.json";
@@ -139,6 +139,8 @@ interface State {
   compactBar?: boolean;
   /** The timed-session planner or summary (ADR-0025). */
   practice?: Partial<PracticePanelProps>;
+  /** Extra Settings props (Content, Updates; ADR-0027, ADR-0028). */
+  settingsExtra?: Partial<SettingsPanelProps>;
   shortcuts?: boolean;
 }
 
@@ -150,6 +152,7 @@ const wide: Slide = { ...slides[0], block_id: 9002, width: 4000, height: 900, ti
 const studyOn = { ...NO_STUDY, mirror: true, tones: 3 as const, balance: 0.2, grid: "thirds" as const };
 const running = { planName: "Class", pose: 7, poses: 18, round: 1, rounds: 4, left: 24, paused: false };
 const sessionResult: SessionResult = {
+  startedAt: Date.UTC(2026, 10, 19, 14, 5),
   planName: "Gesture warm-up",
   from: topics[0].name,
   drawn: slides.slice(0, 8).map((s) => ({
@@ -199,6 +202,42 @@ export const STATES: Record<string, State> = {
     practice: { view: "summary", result: { ...sessionResult, drawn: [], seconds: 0, finished: false }, onResume: () => undefined },
   },
   shortcuts: { props: base, shortcuts: true },
+  // Session 17 (ADR-0026, ADR-0027, ADR-0028).
+  "study-9-darks": { props: { ...base, study: { ...NO_STUDY, tones: 9, focus: "darks" } } },
+  "study-5-extremes": { props: { ...base, slides: [tall], index: 0, study: { ...NO_STUDY, tones: 5, focus: "extremes" } } },
+  "study-strokes": { props: { ...base, study: { ...NO_STUDY, effect: "vertical", tones: 4, squint: true } } },
+  "study-lines-cover": { props: { ...base, study: { ...NO_STUDY, effect: "lines", tones: 3, grid: "thirds" } }, settings: { fit: "cover" } },
+  "study-menu-effects": {
+    props: { ...base, studyMenuOpen: true, study: { ...NO_STUDY, tones: 7, focus: "lights", effect: "cross" } },
+  },
+  "update-available": { props: { ...base, update: { version: "1.0.0", url: "https://github.com/OopsieLazy/LeMuse/releases/tag/v1.0.0" } } },
+  "settings-content-updates": {
+    props: base,
+    panel: true,
+    about: { version: "0.10.0", licence: "MIT", repository: "https://github.com/OopsieLazy/LeMuse" },
+    settingsExtra: {
+      marks: { hidden: 12, nudity: 3 },
+      contentNote: "Cleared 4 practice sessions.",
+      update: {
+        state: "available",
+        release: { version: "1.0.0", name: "LeMuse 1.0.0", url: "https://github.com/OopsieLazy/LeMuse/releases/tag/v1.0.0", published_at: null, newer: true },
+      },
+    },
+    settings: { showNudity: false, singleKeys: false },
+  },
+  "practice-plan-log": {
+    props: base,
+    practice: {
+      log: weeklyLog(
+        [
+          { started_at: Date.UTC(2026, 10, 18) / 1000, drawings: 24, seconds: 1800 },
+          { started_at: Date.UTC(2026, 10, 12) / 1000, drawings: 10, seconds: 300 },
+          { started_at: Date.UTC(2026, 9, 30) / 1000, drawings: 36, seconds: 3600 },
+        ],
+        Date.UTC(2026, 10, 19, 12),
+      ),
+    },
+  },
   paused: { props: { ...base, playing: false, index: 0 } },
   refreshing: { props: { ...base, refresh: { label: "Refreshing topics", busy: true, tone: "idle" } } },
   "empty-topic": { props: { ...base, active: { kind: "topic", name: "Molds" }, activeLabel: "Molds", slides: [], index: 0 } },
@@ -308,8 +347,9 @@ export const STATES: Record<string, State> = {
       following: {
         result: {
           channels: [
-            { slug: "chairs-xyz", title: "Chairs", owner: "Example Person", contents: 412 },
-            { slug: "joinery-abc", title: "Joinery details", owner: null, contents: 88 },
+            { slug: "chairs-xyz", title: "Chairs", owner: "Example Person", contents: 412, in_topics: [topics[0].name], suggested: topics[0].name },
+            { slug: "joinery-abc", title: "Joinery details", owner: null, contents: 88, in_topics: [], suggested: "Following" },
+            { slug: "a-very-long-channel-name-for-wrapping", title: "A very long followed channel title that has to wrap neatly", owner: "Someone", contents: 1203, in_topics: [], suggested: topics[1].name },
           ],
           total: 21,
           next_page: 2,
@@ -414,7 +454,9 @@ function documentFor(name: string, st: State, extraHead = "") {
   const body =
     renderToStaticMarkup(<SlideshowView {...st.props} controlsHidden={settings.controlsHidden} cover={settings.fit === "cover"} />) +
     (st.panel
-      ? renderToStaticMarkup(<SettingsPanel settings={settings} arena={st.arena} about={st.about} staticOpen />)
+      ? renderToStaticMarkup(
+          <SettingsPanel settings={settings} arena={st.arena} about={st.about} staticOpen {...st.settingsExtra} />,
+        )
       : "") +
     (st.refreshDetails ? renderToStaticMarkup(<RefreshDetails {...st.refreshDetails} staticOpen />) : "") +
     (st.practice ? renderToStaticMarkup(<PracticePanel {...practiceBase} {...st.practice} staticOpen />) : "") +

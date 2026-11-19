@@ -49,6 +49,16 @@ export interface UiSettings {
   practicePlan: PlanId;
   customRounds: Round[];
   practiceSound: boolean;
+  /** Content (ADR-0027): show images the nudity sensor flagged. Off by default. */
+  showNudity: boolean;
+  /** The practice log in the session planner (ADR-0027). */
+  showPracticeLog: boolean;
+  /** Look for a newer LeMuse on GitHub at launch, at most daily (ADR-0028). */
+  checkUpdates: boolean;
+  /** When it last looked (ms since 1970), or null. */
+  lastUpdateCheck: number | null;
+  /** Single-letter shortcuts (WCAG 2.1.4: can be turned off). Arrows, Space and Esc always work. */
+  singleKeys: boolean;
 }
 
 /** Ranges for every slider: [min, max, step]. One table feeds clamping and the UI. */
@@ -87,6 +97,11 @@ export const DEFAULTS: UiSettings = {
   practicePlan: "gesture",
   customRounds: DEFAULT_CUSTOM,
   practiceSound: true,
+  showNudity: false,
+  showPracticeLog: true,
+  checkUpdates: true,
+  lastUpdateCheck: null,
+  singleKeys: true,
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -145,6 +160,14 @@ export function sanitize(raw: unknown): UiSettings {
     practicePlan: oneOf(PLAN_IDS, r.practicePlan, d.practicePlan),
     customRounds: r.customRounds === undefined ? d.customRounds : sanitizeRounds(r.customRounds),
     practiceSound: bool(r.practiceSound, d.practiceSound),
+    showNudity: bool(r.showNudity, d.showNudity),
+    showPracticeLog: bool(r.showPracticeLog, d.showPracticeLog),
+    checkUpdates: bool(r.checkUpdates, d.checkUpdates),
+    lastUpdateCheck:
+      typeof r.lastUpdateCheck === "number" && Number.isFinite(r.lastUpdateCheck) && r.lastUpdateCheck > 0
+        ? Math.round(r.lastUpdateCheck)
+        : null,
+    singleKeys: bool(r.singleKeys, d.singleKeys),
   };
 }
 

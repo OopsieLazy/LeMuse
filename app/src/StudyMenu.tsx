@@ -1,4 +1,4 @@
-import { GRID_LABELS, GRIDS, studyActive, TONES, type StudyAids } from "./practice";
+import { EFFECT_LABELS, EFFECTS, FOCI, FOCUS_LABELS, GRID_LABELS, GRIDS, studyActive, TONES, type StudyAids } from "./practice";
 
 // Study aids menu (ADR-0025): a popover above the controls, like the filter
 // menu. Pure view; the app owns the state. Each aid also has a key.
@@ -53,10 +53,20 @@ export function StudyMenu(p: StudyMenuProps) {
           {TONES.map((t) => (
             <label key={t} className="choice-option">
               <input type="radio" name="study-tones" checked={s.tones === t} onChange={() => set({ tones: t })} />
-              <span>{t === 0 ? "Off" : t === 2 ? "2 · notan" : String(t)}</span>
+              <span>{t === 0 ? "Off" : t === 2 ? "2 · notan" : t === 9 ? "9 · full scale" : String(t)}</span>
             </label>
           ))}
         </div>
+        {s.tones > 2 && (
+          <div className="choice-options study-focus" role="group" aria-label="Show which values (I)">
+            {FOCI.map((f) => (
+              <label key={f} className="choice-option">
+                <input type="radio" name="study-focus" checked={s.focus === f} onChange={() => set({ focus: f })} />
+                <span>{FOCUS_LABELS[f]}</span>
+              </label>
+            ))}
+          </div>
+        )}
         {s.tones > 0 && (
           <label className="study-balance">
             <span>Darker</span>
@@ -83,6 +93,21 @@ export function StudyMenu(p: StudyMenuProps) {
             </label>
           ))}
         </div>
+      </fieldset>
+      <fieldset className="choice study-set">
+        <legend>Drawing effect (E)</legend>
+        <div className="choice-options">
+          {EFFECTS.map((f) => (
+            <label key={f} className="choice-option">
+              <input type="radio" name="study-effect" checked={s.effect === f} onChange={() => set({ effect: f })} />
+              <span>{EFFECT_LABELS[f]}</span>
+            </label>
+          ))}
+        </div>
+        <p className="menu-empty">
+          The picture redrawn as marks that follow its values: strokes ↕ for grass, hair and rain, ↔ for water and
+          wood grain. Draw the effect, not every blade. Works with Values and Squint.
+        </p>
       </fieldset>
     </div>
   );

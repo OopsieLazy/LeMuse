@@ -1225,6 +1225,7 @@ ul.channel-list {
 .chip {
   display: inline-flex;
   align-items: center;
+  min-height: var(--target-min);
   gap: var(--space-2);
   max-width: 100%;
   padding: var(--space-1) var(--space-3);
@@ -1903,4 +1904,133 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* The value strip on the badge: the tones the value view uses, dark to light
+   (ADR-0026). Nine fixed greys; each swatch says its tone, not a colour. */
+.value-strip {
+  display: inline-flex;
+  margin-right: var(--space-2);
+  vertical-align: middle;
+  border: 1px solid var(--line);
+}
+
+.value-swatch {
+  display: inline-block;
+  width: var(--value-swatch);
+  height: var(--value-swatch);
+}
+.value-swatch[data-tone="0"] {
+  background: var(--tone-0);
+}
+
+.value-swatch[data-tone="1"] {
+  background: var(--tone-1);
+}
+
+.value-swatch[data-tone="2"] {
+  background: var(--tone-2);
+}
+
+.value-swatch[data-tone="3"] {
+  background: var(--tone-3);
+}
+
+.value-swatch[data-tone="4"] {
+  background: var(--tone-4);
+}
+
+.value-swatch[data-tone="5"] {
+  background: var(--tone-5);
+}
+
+.value-swatch[data-tone="6"] {
+  background: var(--tone-6);
+}
+
+.value-swatch[data-tone="7"] {
+  background: var(--tone-7);
+}
+
+.value-swatch[data-tone="8"] {
+  background: var(--tone-8);
+}
+
+/* The practice log (ADR-0027): eight weekly bars, oldest first. Heights are
+   levels 0–8 of the busiest week; an empty week is a thin line, not a gap. */
+.log-bars {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-2);
+  height: var(--log-bar-height);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-week {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+}
+
+.log-bar {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--accent);
+}
+
+.log-bar[data-level="0"] {
+  height: 0%;
+}
+
+.log-bar[data-level="1"] {
+  height: 12%;
+}
+
+.log-bar[data-level="2"] {
+  height: 25%;
+}
+
+.log-bar[data-level="3"] {
+  height: 38%;
+}
+
+.log-bar[data-level="4"] {
+  height: 50%;
+}
+
+.log-bar[data-level="5"] {
+  height: 62%;
+}
+
+.log-bar[data-level="6"] {
+  height: 75%;
+}
+
+.log-bar[data-level="7"] {
+  height: 88%;
+}
+
+.log-bar[data-level="8"] {
+  height: 100%;
+}
+
+.update-line {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+/* "Add all new" from Channels you follow (ADR-0026). */
+.follow-all select {
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
 }

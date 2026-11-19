@@ -17,7 +17,10 @@ import {
   type Slide,
   type SlideSource,
   type About,
-  type RelatedChannels,
+  type FollowedPage,
+  type FollowedPick,
+  type BlockFlag,
+  withContentDefaults,
   type TokenStatus,
   type TopicInfo,
   type Vocabulary,
@@ -25,7 +28,7 @@ import {
 import { DiscoverPanel, type FollowingState, type RelatedState } from "./DiscoverPanel";
 import { RefreshDetails } from "./RefreshDetails";
 import { LibraryPanel, type PanelStatus } from "./LibraryPanel";
-import { SettingsPanel, type ArenaTokenView } from "./SettingsPanel";
+import { SettingsPanel, type ArenaTokenView, type UpdateView } from "./SettingsPanel";
 import { applyToDocument, DEFAULTS, sanitize, type UiSettings } from "./settings";
 import { SlideshowView, type RefreshState } from "./SlideshowView";
 import { PracticePanel } from "./PracticePanel";
@@ -33,6 +36,8 @@ import { ShortcutsPanel } from "./ShortcutsPanel";
 import {
   FAVOURITES,
   finishPose,
+  EFFECTS,
+  FOCI,
   GRIDS,
   nextOf,
   NO_STUDY,
@@ -41,7 +46,10 @@ import {
   poseMs,
   posesBefore,
   restartPose,
+  logSince,
   sessionPlaylistName,
+  weeklyLog,
+  type LogWeek,
   startSession as firstPose,
   stopSession,
   tickSession,
@@ -180,6 +188,12 @@ export function App() {
   const [keeping, setKeeping] = useState(false);
   const [drawnFavs, setDrawnFavs] = useState<number[]>([]);
   const practiceRef = useRef<HTMLDialogElement>(null);
+  // Content marks, the practice log and updates (ADR-0027, ADR-0028).
+  const [marks, setMarks] = useState<{ hidden: number; nudity: number }>({ hidden: 0, nudity: 0 });
+  const [contentNote, setContentNote] = useState<string | undefined>();
+  const [log, setLog] = useState<LogWeek[] | null>(null);
+  const [update, setUpdate] = useState<UpdateView>({ state: "idle" });
+  const [settingsReady, setSettingsReady] = useState(false);
   const shortcutsRef = useRef<HTMLDialogElement>(null);
   const refreshDetailsRef = useRef<HTMLDialogElement>(null);
   const settingsRef = useRef<HTMLDialogElement>(null);
@@ -264,6 +278,7 @@ export function App() {
       .catch(() => setSettings(DEFAULTS))
       .finally(() => {
         loaded.current = true;
+        setSettingsReady(true);
       });
   }, []);
 
@@ -331,14 +346,16 @@ export function App() {
 
   // Load one page of what's playing, its total and the category counts;
   // reload when a refresh, a playlist edit, the page or the filter changes.
-  const fKey = filterKey(filter);
+  // What every view shows: your filter plus the content defaults (ADR-0027).
+  const viewFilter = useMemo(() => withContentDefaults(filter, settings.showNudity), [filter, settings.showNudity]);
+  const fKey = filterKey(viewFilter);
   useEffect(() => {
     if (!active) return;
     let stale = false;
     Promise.all([
-      api.slides(active, filter, PAGE_SIZE, page * PAGE_SIZE),
-      api.slideCount(active, filter),
-      api.categoryCounts(active, filter),
+      api.slides(active, viewFilter, PAGE_SIZE, page * PAGE_SIZE),
+      api.slideCount(active, viewFilter),
+      api.categoryCounts(active, viewFilter),
     ])
       .then(([s, n, c]) => {
         if (stale) return;
@@ -593,11 +610,22 @@ export function App() {
     setSession(s);
   }, []);
 
+  const loadLog = useCallback(() => {
+    if (!settings.showPracticeLog) return setLog(null);
+    const now = Date.now();
+    api
+      .practiceSessions(logSince(now))
+      .then((list) => setLog(weeklyLog(list, now)))
+      .catch(() => setLog(null));
+  }, [settings.showPracticeLog]);
+  useEffect(loadLog, [loadLog]);
+
   const openPractice = useCallback(() => {
     setPracticeView("plan");
     setKept(undefined);
+    loadLog();
     openDialog(practiceRef.current);
-  }, [openDialog]);
+  }, [openDialog, loadLog]);
 
   /** Show the summary (the plan finished, or the session was stopped). */
   const showResult = useCallback(
@@ -606,12 +634,25 @@ export function App() {
       resumable.current = r.finished || !before ? null : { ...before, paused: true };
       commit(null);
       setResult(r);
+      // The practice log keeps sessions that drew something (ADR-0027).
+      api
+        .recordPractice({
+          started_at: Math.floor(r.startedAt / 1000),
+          seconds: Math.round(r.seconds),
+          skipped: r.skipped,
+          plan: r.planName.slice(0, 80),
+          source: r.from.slice(0, 120),
+          finished: r.finished,
+          drawn: r.drawn.map((d) => ({ block_id: d.block_id, seconds: d.seconds })),
+        })
+        .then(() => loadLog())
+        .catch(() => undefined);
       setPracticeView("summary");
       setKept(undefined);
       if (r.finished && settings.practiceSound) cue.finish();
       openDialog(practiceRef.current);
     },
-    [commit, openDialog, settings.practiceSound],
+    [commit, openDialog, settings.practiceSound, loadLog],
   );
   const endSession = useCallback((s: Running) => showResult(stopSession(s, slideRef.current), s), [showResult]);
 
@@ -752,7 +793,7 @@ export function App() {
   }, [slide, favourite, setFavourite, say]);
 
   // Keyboard: ← → Space S F H T P C R D M L A , Esc, and the practice keys
-  // N K X U G V B O 0 ? (ShortcutsPanel lists them all). Ignored while typing or in a dialog.
+  // N K X U G V I E B O 0 ? (ShortcutsPanel lists them all). Ignored while typing or in a dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -764,6 +805,8 @@ export function App() {
         return;
       }
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, dialog")) return;
+      // Single-letter shortcuts can be turned off (WCAG 2.1.4); Space stays.
+      if (!settings.singleKeys && e.key.length === 1 && e.key !== " ") return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const s = sessionRef.current;
       if (k === "ArrowRight") (s ? advancePose("skip") : go(1));
@@ -780,6 +823,9 @@ export function App() {
       else if (k === "g") changeStudy({ grey: !study.grey, tones: 0 });
       else if (k === "v") changeStudy({ tones: nextOf(TONES, study.tones) });
       else if (k === "b") changeStudy({ squint: !study.squint });
+      else if (k === "e") changeStudy({ effect: nextOf(EFFECTS, study.effect) });
+      // Isolating darks or lights needs at least 3 values; start from 5.
+      else if (k === "i") changeStudy({ focus: nextOf(FOCI, study.focus), tones: study.tones > 2 ? study.tones : 5 });
       else if (k === "o") changeStudy({ grid: nextOf(GRIDS, study.grid) });
       else if (k === "0") setStudy(NO_STUDY);
       else if (k === "?") openDialog(shortcutsRef.current);
@@ -799,7 +845,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, slide, fullscreen, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
+  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, slide, fullscreen, settings.singleKeys, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
@@ -831,7 +877,7 @@ export function App() {
   const loadFollowing = useCallback(async (nextPage: number) => {
     setDiscoverBusy(true);
     try {
-      const r: RelatedChannels = await api.followedChannels(nextPage);
+      const r: FollowedPage = await api.followedChannels(nextPage);
       setFollowing((prev) => ({
         result: {
           ...r,
@@ -847,6 +893,43 @@ export function App() {
       setDiscoverBusy(false);
     }
   }, []);
+
+  // "Add" / "Add all new" from Channels you follow (ADR-0026): no reads; one refresh after.
+  const addFollowed = async (picks: FollowedPick[]) => {
+    setDiscoverBusy(true);
+    setDiscoverStatus({ tone: "idle", text: `Adding ${picks.length === 1 ? picks[0].title : `${picks.length} channels`}` });
+    try {
+      const done = await api.addFollowed(picks);
+      const added = done.filter((a) => a.added);
+      const where = new Map(done.map((a) => [a.slug, a.topic]));
+      setFollowing((prev) =>
+        prev?.result
+          ? {
+              result: {
+                ...prev.result,
+                channels: prev.result.channels.map((c) => {
+                  const t = where.get(c.slug);
+                  return t && !c.in_topics.includes(t) ? { ...c, in_topics: [...c.in_topics, t] } : c;
+                }),
+              },
+            }
+          : prev,
+      );
+      const topicsUsed = [...new Set(added.map((a) => a.topic))];
+      setDiscoverStatus({
+        tone: "ok",
+        text: added.length
+          ? `Added ${added.length === 1 ? added[0].title : `${added.length} channels`} to ${topicsUsed.join(", ")}. Their images are loading now.`
+          : "They were already in those topics.",
+      });
+      if (added.length) setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
+      await loadLibrary();
+    } catch (e) {
+      setDiscoverStatus({ tone: "error", text: message(e) });
+    } finally {
+      setDiscoverBusy(false);
+    }
+  };
 
   // ---- Are.na token (ADR-0023): checked by Are.na, kept in Credential Manager ----
   useEffect(() => {
@@ -878,6 +961,60 @@ export function App() {
       setArenaBusy(false);
     }
   };
+
+  // ---- Content marks (ADR-0027) ----
+  const loadMarks = useCallback(() => {
+    api
+      .flagCounts()
+      .then((rows) => {
+        const n = Object.fromEntries(rows);
+        setMarks({ hidden: n.hidden ?? 0, nudity: n.nudity ?? 0 });
+      })
+      .catch(() => undefined);
+  }, []);
+  useEffect(loadMarks, [loadMarks]);
+  const markCurrent = async (flag: BlockFlag) => {
+    if (!slide) return;
+    const id = slide.block_id;
+    try {
+      await api.setBlockFlag(id, flag, true);
+      // Gone from this view at once (unless nudity is shown).
+      if (flag === "hidden" || !settings.showNudity) setSource((list) => list.filter((x) => x.block_id !== id));
+      say(flag === "hidden" ? "Hidden. Settings → Content shows it again." : "Marked as nudity.");
+      loadMarks();
+    } catch (e) {
+      say(message(e));
+    }
+  };
+  const clearMarks = async (flag: BlockFlag) => {
+    try {
+      const n = await api.clearBlockFlags(flag);
+      setContentNote(flag === "hidden" ? `${n} hidden image${n === 1 ? " is" : "s are"} back.` : `Forgot ${n} nudity mark${n === 1 ? "" : "s"}.`);
+      loadMarks();
+      loadLibrary();
+    } catch (e) {
+      setContentNote(message(e));
+    }
+  };
+
+  // ---- Updates (ADR-0028): at most once a day, only if switched on ----
+  const checkUpdate = useCallback(() => {
+    setUpdate({ state: "checking" });
+    api
+      .checkUpdate()
+      .then((r) => {
+        setUpdate({ state: !r ? "none" : r.newer ? "available" : "latest", release: r });
+        patch({ lastUpdateCheck: Date.now() });
+      })
+      .catch((e) => setUpdate({ state: "error", text: `Couldn't reach GitHub: ${message(e)}` }));
+  }, [patch]);
+  const updateChecked = useRef(false);
+  useEffect(() => {
+    if (!settingsReady || updateChecked.current || api.kind !== "app" || !settings.checkUpdates) return;
+    updateChecked.current = true;
+    const last = settings.lastUpdateCheck ?? 0;
+    if (Date.now() - last > 24 * 3600 * 1000) checkUpdate();
+  }, [settingsReady, settings.checkUpdates, settings.lastUpdateCheck, checkUpdate]);
 
   const onRefresh = () => {
     setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
@@ -1084,6 +1221,9 @@ export function App() {
         contextMenu={contextMenu}
         onContextMenu={(x, y) => setContextMenu({ x, y })}
         onCloseContextMenu={() => setContextMenu(null)}
+        onHideImage={() => markCurrent("hidden")}
+        onMarkNudity={() => markCurrent("nudity")}
+        update={update.state === "available" && update.release ? update.release : null}
         toast={toast}
         onSelect={(next) => {
           setFailed(new Set());
@@ -1133,6 +1273,7 @@ export function App() {
           loadFollowing(1);
         }}
         onMoreFollowing={() => loadFollowing(followingPage + 1)}
+        onAddFollowed={addFollowed}
         busy={discoverBusy}
         status={discoverStatus}
         onSearch={searchArena}
@@ -1155,10 +1296,27 @@ export function App() {
         onClearArenaToken={clearArenaToken}
         onOpenLink={onOpenLink}
         about={about}
+        marks={marks}
+        onShowHidden={() => clearMarks("hidden")}
+        onForgetNudityMarks={() => clearMarks("nudity")}
+        onClearPractice={() => {
+          api
+            .clearPractice()
+            .then((n) => {
+              setContentNote(`Cleared ${n} practice session${n === 1 ? "" : "s"}.`);
+              loadLog();
+            })
+            .catch((e) => setContentNote(message(e)));
+        }}
+        contentNote={contentNote}
+        update={update}
+        onCheckUpdate={checkUpdate}
       />
       <PracticePanel
         ref={practiceRef}
         view={practiceView}
+        log={settings.showPracticeLog ? log : null}
+        onHideLog={() => patch({ showPracticeLog: false })}
         planId={settings.practicePlan}
         customRounds={settings.customRounds}
         sound={settings.practiceSound}

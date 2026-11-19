@@ -11,6 +11,7 @@ import {
   type PlanId,
   type Round,
   type SessionPlan,
+  type LogWeek,
   type SessionResult,
 } from "./practice";
 import { altText } from "./SlideshowView";
@@ -34,6 +35,9 @@ export interface PracticePanelProps {
   /** A short note after "Keep as a playlist". */
   kept?: string;
   busy?: boolean;
+  /** The practice log: the last 8 weeks, oldest first (ADR-0027); null while hidden. */
+  log?: LogWeek[] | null;
+  onHideLog?: () => void;
   /** Render with the `open` attribute (W3C/layout snapshots). */
   staticOpen?: boolean;
   onPlan?: (id: PlanId) => void;
@@ -189,6 +193,45 @@ function Summary(p: PracticePanelProps & { result: SessionResult }) {
   );
 }
 
+/** "This week: 14 drawings · 9 min · 2 sessions", then 8 weekly bars. Never a streak. */
+function PracticeLog(p: { log: LogWeek[]; onHide?: () => void }) {
+  const week = p.log[p.log.length - 1];
+  const most = Math.max(1, ...p.log.map((w) => w.drawings));
+  const day = (t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return (
+    <section className="settings-section" aria-labelledby="sec-log">
+      <div className="menu-head">
+        <h3 id="sec-log">Your practice</h3>
+        <button type="button" className="text-btn" onClick={p.onHide}>
+          Hide
+        </button>
+      </div>
+      <p className="session-stats">
+        <span>
+          This week <strong>{week.drawings}</strong> {week.drawings === 1 ? "drawing" : "drawings"}
+        </span>
+        <span>
+          <strong>{duration(week.seconds)}</strong>
+        </span>
+        <span>
+          <strong>{week.sessions}</strong> {week.sessions === 1 ? "session" : "sessions"}
+        </span>
+      </p>
+      <ol className="log-bars" aria-label="Drawings per week, the last 8 weeks">
+        {p.log.map((w) => (
+          <li key={w.start} className="log-week" title={`Week of ${day(w.start)}: ${w.drawings} drawings, ${duration(w.seconds)}`}>
+            <span className="log-bar" data-level={Math.ceil((w.drawings / most) * 8)} />
+            <span className="visually-hidden">
+              Week of {day(w.start)}: {w.drawings} drawings, {duration(w.seconds)}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="settings-note">Any week you draw counts. Missed weeks are fine; they're just short bars.</p>
+    </section>
+  );
+}
+
 export const PracticePanel = forwardRef<HTMLDialogElement, PracticePanelProps>(function PracticePanel(p, ref) {
   const summary = p.view === "summary" && p.result;
   return (
@@ -213,6 +256,7 @@ export const PracticePanel = forwardRef<HTMLDialogElement, PracticePanelProps>(f
             <Summary {...p} result={summary} />
           ) : (
             <>
+              {p.log && <PracticeLog log={p.log} onHide={p.onHideLog} />}
               <section className="settings-section" aria-labelledby="sec-plan">
                 <h3 id="sec-plan">Plan</h3>
                 <p className="settings-note">

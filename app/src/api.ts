@@ -161,6 +161,82 @@ export interface RelatedChannels {
   next_page: number | null;
 }
 
+/** A channel you follow, marked against your topics (ADR-0026). */
+export interface FollowedChannel extends ChannelSummary {
+  /** Topics that already have it; empty means not imported yet. */
+  in_topics: string[];
+  /** Where "Add" puts it unless told otherwise. */
+  suggested: string;
+}
+
+export interface FollowedPage {
+  channels: FollowedChannel[];
+  total: number | null;
+  next_page: number | null;
+}
+
+export interface FollowedPick {
+  slug: string;
+  title: string;
+  /** null: the suggested topic. */
+  topic: string | null;
+}
+
+/** The user's marks on an image (ADR-0027); each is also a category id. */
+export type BlockFlag = "hidden" | "nudity";
+
+/** A timed session to keep in the practice log (ADR-0027). */
+export interface PracticeRecord {
+  /** Unix seconds. */
+  started_at: number;
+  seconds: number;
+  skipped: number;
+  plan: string;
+  source: string;
+  finished: boolean;
+  drawn: { block_id: number; seconds: number }[];
+}
+
+export interface PracticeSession {
+  id: number;
+  started_at: number;
+  seconds: number;
+  drawings: number;
+  skipped: number;
+  plan: string;
+  source: string;
+  finished: boolean;
+}
+
+/** The newest LeMuse release on GitHub (ADR-0028). */
+export interface Release {
+  version: string;
+  name: string;
+  url: string;
+  published_at: string | null;
+  newer: boolean;
+}
+
+/**
+ * The content defaults every view starts from (ADR-0027): images you hid,
+ * never; likely nudity, only when you choose to show it. A filter that names
+ * one of them itself is left alone. Mirrors CategoryFilter::with_content_defaults.
+ */
+export function withContentDefaults(f: CategoryFilter, showNudity: boolean): CategoryFilter {
+  const named = (id: string) => f.include.includes(id) || f.exclude.includes(id);
+  const exclude = [...f.exclude];
+  if (!named("hidden")) exclude.push("hidden");
+  if (!showNudity && !named("nudity")) exclude.push("nudity");
+  return { include: f.include, exclude };
+}
+
+export interface AddedFollowed {
+  slug: string;
+  title: string;
+  topic: string;
+  added: boolean;
+}
+
 /** Are.na's own search page for a word, opened in the system browser
  * (the search API is Premium-only, ADR-0015). Built with URL, not by
  * splicing text. */
@@ -260,7 +336,19 @@ export interface Backend {
   setArenaToken(token: string): Promise<ArenaAccount>;
   clearArenaToken(): Promise<boolean>;
   /** Channels the token's account follows: one page, one read (ADR-0024). */
-  followedChannels(page: number): Promise<RelatedChannels>;
+  followedChannels(page: number): Promise<FollowedPage>;
+  /** Add followed channels to topics (no API reads), then one refresh. */
+  addFollowed(picks: FollowedPick[]): Promise<AddedFollowed[]>;
+  /** Hide an image, or mark nudity the sensor missed. */
+  setBlockFlag(blockId: number, flag: BlockFlag, on: boolean): Promise<void>;
+  flagCounts(): Promise<[string, number][]>;
+  clearBlockFlags(flag: BlockFlag): Promise<number>;
+  /** Keep a session in the practice log (only if something was drawn). */
+  recordPractice(record: PracticeRecord): Promise<number | null>;
+  practiceSessions(since: number): Promise<PracticeSession[]>;
+  clearPractice(): Promise<number>;
+  /** The newest release on GitHub, or null when none is published. */
+  checkUpdate(): Promise<Release | null>;
   about(): Promise<About>;
   libraryStatus(): Promise<LibraryStatus>;
   topics(): Promise<TopicInfo[]>;
@@ -455,7 +543,15 @@ function tauriBackend(): Backend {
     arenaTokenStatus: () => invoke<TokenStatus>("arena_token_status"),
     setArenaToken: (token) => invoke<ArenaAccount>("set_arena_token", { token }),
     clearArenaToken: () => invoke<boolean>("clear_arena_token"),
-    followedChannels: (page) => invoke<RelatedChannels>("followed_channels", { page }),
+    followedChannels: (page) => invoke<FollowedPage>("followed_channels", { page }),
+    addFollowed: (picks) => invoke<AddedFollowed[]>("add_followed", { picks }),
+    setBlockFlag: (blockId, flag, on) => invoke<void>("set_block_flag", { blockId, flag, on }),
+    flagCounts: () => invoke<[string, number][]>("flag_counts"),
+    clearBlockFlags: (flag) => invoke<number>("clear_block_flags", { flag }),
+    recordPractice: (record) => invoke<number | null>("record_practice", { record }),
+    practiceSessions: (since) => invoke<PracticeSession[]>("practice_sessions", { since }),
+    clearPractice: () => invoke<number>("clear_practice"),
+    checkUpdate: () => invoke<Release | null>("check_update"),
     about: () => invoke<About>("about"),
     async openExternal(url) {
       if (!isOpenable(url)) throw new Error("LeMuse only opens Are.na and museum pages.");
@@ -527,10 +623,13 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
       list = (lists.get(source.id)?.ids ?? []).flatMap((id) => byId.get(id) ?? []);
     }
     return list.filter((s) => {
-      const cats = s.categories ?? [];
+      const cats = [...(s.categories ?? []), ...(flags.get(s.block_id) ?? [])];
       return filter.include.every((c) => cats.includes(c)) && !filter.exclude.some((c) => cats.includes(c));
     });
   };
+  // Marks and the practice log live in memory for this page view, like playlists.
+  const flags = new Map<number, Set<string>>();
+  const sessions: PracticeSession[] = [];
   const checkName = (name: string, except?: number) => {
     const problem = nameProblem("playlist", name);
     if (problem) throw new Error(problem);
@@ -646,6 +745,34 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     followedChannels: async () => {
       throw new AppError("unsupported", "Channels you follow need the desktop app and your Are.na token.");
     },
+    addFollowed: async () => {
+      throw new AppError("unsupported", "Adding channels needs the desktop app.");
+    },
+    setBlockFlag: async (blockId, flag, on) => {
+      const set = flags.get(blockId) ?? new Set<string>();
+      if (on) set.add(flag);
+      else set.delete(flag);
+      flags.set(blockId, set);
+    },
+    flagCounts: async () => {
+      const n = new Map<string, number>();
+      for (const set of flags.values()) for (const f of set) n.set(f, (n.get(f) ?? 0) + 1);
+      return [...n];
+    },
+    clearBlockFlags: async (flag) => {
+      let n = 0;
+      for (const set of flags.values()) if (set.delete(flag)) n++;
+      return n;
+    },
+    recordPractice: async (r) => {
+      if (!r.drawn.length) return null;
+      const id = sessions.length + 1;
+      sessions.unshift({ id, started_at: r.started_at, seconds: r.seconds, drawings: r.drawn.length, skipped: r.skipped, plan: r.plan, source: r.source, finished: r.finished });
+      return id;
+    },
+    practiceSessions: async (since) => sessions.filter((x) => x.started_at >= since),
+    clearPractice: async () => sessions.splice(0).length,
+    checkUpdate: async () => null,
     about: async () => ({ version: "preview", licence: "MIT", repository: PROJECT_URL }),
     // The browser can't resize itself: the preview shows the mini layout only.
     setMini: async () => null,

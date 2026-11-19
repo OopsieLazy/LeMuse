@@ -12,16 +12,22 @@ import {
   type TopicInfo,
   type Vocabulary,
 } from "./api";
+import { createElement } from "react";
 import {
-  balanceExponent,
   clock,
+  EFFECT_LABELS,
   FAVOURITES,
+  filterGraph,
+  FILTER_REGION,
+  FOCUS_LABELS,
   gridLines,
   NO_STUDY,
   studyActive,
   studyFilter,
-  toneTable,
+  usesStudyFilter,
+  valueStrip,
   VALUES_FILTER_ID,
+  type FilterNode,
   type SessionView,
   type StudyAids,
 } from "./practice";
@@ -148,6 +154,11 @@ export interface SlideshowViewProps {
   onSession?: () => void;
   /** The image fills the frame (settings: fit = cover); the grid follows. */
   cover?: boolean;
+  /** Right-click: never show this image again / mark nudity the sensor missed (ADR-0027). */
+  onHideImage?: () => void;
+  onMarkNudity?: () => void;
+  /** A newer LeMuse is published (ADR-0028). */
+  update?: { version: string; url: string } | null;
   /** ♥: the current image is in Favourites. */
   favourite?: boolean;
   onToggleFavourite?: () => void;
@@ -184,11 +195,18 @@ function studyBadge(s: StudyAids): string {
     s.mirror && "Mirrored",
     s.upside && "Upside down",
     s.tones === 2 ? "Notan" : s.tones > 0 ? `${s.tones} values` : s.grey && "Greyscale",
+    s.tones > 2 && s.focus !== "all" && FOCUS_LABELS[s.focus].toLowerCase(),
+    s.effect !== "off" && EFFECT_LABELS[s.effect],
     s.squint && "Squint",
     s.grid !== "off" && "Grid",
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** One filter primitive from practice.ts's graph, as an SVG element (fixed tags only). */
+function renderNode(n: FilterNode, i: number): ReturnType<typeof createElement> {
+  return createElement(n.tag, { key: i, ...n.attrs }, n.children?.map(renderNode));
 }
 
 /** Inline icons: geometry, not style. Stroke and size come from tokens. */
@@ -406,6 +424,19 @@ export function SlideshowView(p: SlideshowViewProps) {
               </>
             )}
           </p>
+          {p.update && (
+            <p className="update-line">
+              <a
+                className="text-link"
+                href={p.update.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                onClick={(e) => p.update && p.onOpenLink?.(e, p.update.url)}
+              >
+                LeMuse {p.update.version} is available
+              </a>
+            </p>
+          )}
           <p className="library-line">
             {p.status ? `${p.status.blocks.toLocaleString("en-US")} images in catalog` : "Opening library"}
           </p>
@@ -483,30 +514,27 @@ export function SlideshowView(p: SlideshowViewProps) {
                 )}
               </div>
             )}
-            {study.tones > 0 && (
-              // The value view: luminance in sRGB, a balance curve, then N flat tones.
+            {usesStudyFilter(study) && (
+              // Values and drawing effects: one SVG filter built by practice.ts
+              // (luma in sRGB → balance → tones → marks), drawn by the GPU.
               <svg className="study-defs" width="0" height="0" aria-hidden="true" focusable="false">
-                <filter id={VALUES_FILTER_ID} colorInterpolationFilters="sRGB">
-                  <feColorMatrix
-                    type="matrix"
-                    values="0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0 0 0 1 0"
-                  />
-                  <feComponentTransfer>
-                    <feFuncR type="gamma" exponent={balanceExponent(study.balance)} />
-                    <feFuncG type="gamma" exponent={balanceExponent(study.balance)} />
-                    <feFuncB type="gamma" exponent={balanceExponent(study.balance)} />
-                  </feComponentTransfer>
-                  <feComponentTransfer>
-                    <feFuncR type="discrete" tableValues={toneTable(study.tones)} />
-                    <feFuncG type="discrete" tableValues={toneTable(study.tones)} />
-                    <feFuncB type="discrete" tableValues={toneTable(study.tones)} />
-                  </feComponentTransfer>
+                <filter id={VALUES_FILTER_ID} colorInterpolationFilters="sRGB" {...FILTER_REGION}>
+                  {filterGraph(study).map(renderNode)}
                 </filter>
               </svg>
             )}
             {slide && studying > 0 && (
               // Never forget a flip: the reference is shown changed (research: art review).
-              <p className="study-badge">{studyBadge(study)}</p>
+              <p className="study-badge">
+                {study.tones > 0 && (
+                  <span className="value-strip" aria-hidden="true">
+                    {valueStrip(study.tones, study.focus).map((v, i) => (
+                      <span key={i} className="value-swatch" data-tone={Math.round(v * 8)} />
+                    ))}
+                  </span>
+                )}
+                {studyBadge(study)}
+              </p>
             )}
             {session && (
               <p
@@ -608,6 +636,26 @@ export function SlideshowView(p: SlideshowViewProps) {
                   }}
                 >
                   Copy link
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    p.onCloseContextMenu?.();
+                    p.onHideImage?.();
+                  }}
+                >
+                  Hide this image
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    p.onCloseContextMenu?.();
+                    p.onMarkNudity?.();
+                  }}
+                >
+                  Mark as nudity
                 </button>
                 {slide.page_url && isHttps(slide.page_url) && (
                   <a
