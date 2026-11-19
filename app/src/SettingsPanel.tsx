@@ -1,5 +1,5 @@
 import { forwardRef, useRef, type MouseEvent } from "react";
-import { ARENA_TOKEN_PAGE, type TokenStatus } from "./api";
+import { ARENA_TOKEN_PAGE, type About, type TokenStatus } from "./api";
 import {
   FITS,
   FONTS,
@@ -26,6 +26,7 @@ export interface ArenaTokenView {
 export interface SettingsPanelProps {
   settings: UiSettings;
   arena?: ArenaTokenView;
+  about?: About | null;
   onSaveArenaToken?: (token: string) => void;
   onClearArenaToken?: () => void;
   onOpenLink?: (e: MouseEvent<HTMLAnchorElement>, url: string) => void;
@@ -251,6 +252,36 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
                   {p.arena.message?.text ??
                     (p.arena.mode === "preview" ? "Saving the token works in the desktop app." : "")}
                 </p>
+              </div>
+            </section>
+          )}
+
+          {p.about && (
+            <section className="settings-section" aria-labelledby="sec-about">
+              <h3 id="sec-about">About</h3>
+              <p className="settings-note">
+                LeMuse {p.about.version} · open source under the {p.about.licence} licence. Images stream from their
+                sources and belong to their creators; each one shows its credit and a link back.
+              </p>
+              <div className="form-row">
+                <a
+                  className="text-link"
+                  href={p.about.repository}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={(e) => p.about && p.onOpenLink?.(e, p.about.repository)}
+                >
+                  Source code
+                </a>
+                <a
+                  className="text-link"
+                  href={`${p.about.repository}/issues/new`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={(e) => p.about && p.onOpenLink?.(e, `${p.about.repository}/issues/new`)}
+                >
+                  Report a problem
+                </a>
               </div>
             </section>
           )}

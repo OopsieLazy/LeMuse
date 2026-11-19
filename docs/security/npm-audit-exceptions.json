@@ -1,9 +1,1 @@
-[
-  {
-    "id": "GHSA-fc5q-39xc-vjpf",
-    "package": "picomatch",
-    "reason": "ReDoS on crafted extglob patterns; no fixed release yet (affects <=4.0.7). Dev-only: Vite build tooling globs our own fixed patterns, never user or remote input, and it is not bundled into the app. Review 0008 D-42.",
-    "added": "2026-11-17",
-    "expires": "2026-12-15"
-  }
-]
+[]

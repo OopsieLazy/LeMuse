@@ -902,6 +902,87 @@ input {
   gap: var(--space-2);
 }
 
+/* ============ Errors and their pages (ADR-0024) ============ */
+
+.error-screen {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.error-card {
+  display: grid;
+  gap: var(--space-4);
+  width: min(100%, 40rem);
+  padding: var(--space-6);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--dialog-shadow);
+}
+
+.error-card h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.error-code {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--error);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.error-detail {
+  margin: 0;
+  max-height: 30vh;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.failed-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* "Details" inside the refresh line: a link-sized button. */
+.inline-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.inline-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.empty .primary-btn {
+  justify-self: center;
+  margin-top: var(--space-4);
+}
+
 /* Are.na account in Settings (ADR-0023) */
 .settings-note {
   margin: 0;

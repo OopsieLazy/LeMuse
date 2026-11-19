@@ -172,8 +172,45 @@ export function arenaSearchUrl(word: string): string {
 
 export type RefreshEvent =
   | { state: "running"; trigger: string }
-  | { state: "done"; trigger: string; blocks_upserted: number; errors: number; note?: string }
-  | { state: "error"; trigger: string; message: string };
+  | {
+      state: "done";
+      trigger: string;
+      blocks_upserted: number;
+      errors: number;
+      note?: string;
+      /** What failed and why (first 20), for Refresh details. */
+      failed?: string[];
+    }
+  | { state: "error"; trigger: string; code?: string; message: string };
+
+/**
+ * A failure with a stable code (ADR-0024): `invalid`, `not_found`, `busy`,
+ * `rate_limited`, `network`, `source`, `token`, `io`, `catalog`,
+ * `unsupported` or `internal`. The message is for people.
+ */
+export class AppError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AppError";
+  }
+}
+
+/** The code of any thrown value (`internal` when it has none). */
+export function errorCode(e: unknown): string {
+  return e instanceof AppError ? e.code : "internal";
+}
+
+export interface About {
+  version: string;
+  licence: string;
+  repository: string;
+}
+
+/** The project's own pages, the only GitHub links LeMuse opens. */
+export const PROJECT_URL = "https://github.com/OopsieLazy/LeMuse";
 
 export interface Backend {
   kind: "app" | "preview";
@@ -198,6 +235,9 @@ export interface Backend {
   /** Check a pasted token with Are.na, then keep it in Credential Manager. */
   setArenaToken(token: string): Promise<ArenaAccount>;
   clearArenaToken(): Promise<boolean>;
+  /** Channels the token's account follows: one page, one read (ADR-0024). */
+  followedChannels(page: number): Promise<RelatedChannels>;
+  about(): Promise<About>;
   libraryStatus(): Promise<LibraryStatus>;
   topics(): Promise<TopicInfo[]>;
   /** Image count for "All". */
@@ -275,7 +315,10 @@ const OPEN_HOSTS = new Set(["www.are.na", "are.na", "clevelandart.org", "www.cle
 export function isOpenable(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.protocol === "https:" && !u.username && !u.password && !u.port && OPEN_HOSTS.has(u.hostname);
+    if (u.protocol !== "https:" || u.username || u.password || u.port) return false;
+    // GitHub only for LeMuse's own pages (About, Report a problem; ADR-0024).
+    if (u.hostname === "github.com") return u.pathname === "/OopsieLazy/LeMuse" || u.pathname.startsWith("/OopsieLazy/LeMuse/");
+    return OPEN_HOSTS.has(u.hostname);
   } catch {
     return false;
   }
@@ -291,8 +334,20 @@ let restore: (MiniBounds & { maximized: boolean }) | null = null;
 
 function tauriBackend(): Backend {
   // Lazy imports keep @tauri-apps/api out of the preview's critical path.
-  const invoke = async <T,>(cmd: string, args?: Record<string, unknown>) =>
-    (await import("@tauri-apps/api/core")).invoke<T>(cmd, args);
+  // Commands reject with `{ code, message }` (ADR-0024); turn that into an
+  // AppError so callers get a message and a code.
+  const invoke = async <T,>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+    const core = await import("@tauri-apps/api/core");
+    try {
+      return await core.invoke<T>(cmd, args);
+    } catch (e) {
+      if (e && typeof e === "object" && "message" in e) {
+        const o = e as { code?: unknown; message?: unknown };
+        throw new AppError(typeof o.code === "string" ? o.code : "internal", String(o.message));
+      }
+      throw new AppError("internal", String(e));
+    }
+  };
   return {
     kind: "app",
     libraryStatus: () => invoke<LibraryStatus>("library_status"),
@@ -376,6 +431,8 @@ function tauriBackend(): Backend {
     arenaTokenStatus: () => invoke<TokenStatus>("arena_token_status"),
     setArenaToken: (token) => invoke<ArenaAccount>("set_arena_token", { token }),
     clearArenaToken: () => invoke<boolean>("clear_arena_token"),
+    followedChannels: (page) => invoke<RelatedChannels>("followed_channels", { page }),
+    about: () => invoke<About>("about"),
     async openExternal(url) {
       if (!isOpenable(url)) throw new Error("LeMuse only opens Are.na and museum pages.");
       const { openUrl } = await import("@tauri-apps/plugin-opener");
@@ -562,6 +619,10 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
       throw new Error("The Are.na token is saved by the desktop app, in Windows Credential Manager.");
     },
     clearArenaToken: async () => false,
+    followedChannels: async () => {
+      throw new AppError("unsupported", "Channels you follow need the desktop app and your Are.na token.");
+    },
+    about: async () => ({ version: "preview", licence: "MIT", repository: PROJECT_URL }),
     // The browser can't resize itself: the preview shows the mini layout only.
     setMini: async () => null,
     copyText: async (text) => {

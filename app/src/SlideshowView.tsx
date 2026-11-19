@@ -24,6 +24,8 @@ export interface RefreshState {
   label: string;
   busy: boolean;
   tone: "idle" | "ok" | "error";
+  /** Some sources failed: offer Refresh details (ADR-0024). */
+  details?: boolean;
 }
 
 export interface SlideshowViewProps {
@@ -50,6 +52,12 @@ export interface SlideshowViewProps {
   /** Topic drawer open (only used by layouts without a docked topic list). */
   railOpen?: boolean;
   notice?: string;
+  /** The PC is offline (navigator.onLine). */
+  offline?: boolean;
+  /** Images in this view that couldn't load from any stored size. */
+  imagesFailed?: number;
+  onRetryImages?: () => void;
+  onShowRefreshDetails?: () => void;
   /** Playlists holding the current image. */
   inPlaylists?: number[];
   /** The add-to-playlist menu above the controls. */
@@ -197,7 +205,17 @@ function RailItem(p: { label: string; count: number; current: boolean; onClick?:
 }
 
 function emptyText(p: SlideshowViewProps): [string, string] {
+  if (p.offline)
+    return [
+      "You're offline",
+      "Images stream from their sources, so they come back when you're online again. Your topics, playlists and saved images are safe.",
+    ];
   if (p.notice) return [`No images for ${p.activeLabel} yet`, p.notice];
+  if (p.imagesFailed)
+    return [
+      "These images can't load right now",
+      "Their source didn't answer. Try again, or pick another topic.",
+    ];
   const f = p.filter ?? NO_FILTER;
   if (f.include.length || f.exclude.length)
     return ["No images match this filter", "Change or clear the category filter to see more."];
@@ -312,6 +330,14 @@ export function SlideshowView(p: SlideshowViewProps) {
         <div className="rail-foot">
           <p className={`refresh-label tone-${p.refresh.tone}`} role="status">
             {p.refresh.label}
+            {p.refresh.details && p.onShowRefreshDetails && (
+              <>
+                {" "}
+                <button type="button" className="inline-btn" onClick={p.onShowRefreshDetails}>
+                  Details
+                </button>
+              </>
+            )}
           </p>
           <p className="library-line">
             {p.status ? `${p.status.blocks.toLocaleString("en-US")} images in catalog` : "Opening library"}
@@ -358,6 +384,11 @@ export function SlideshowView(p: SlideshowViewProps) {
               <div className="empty">
                 <p className="empty-title">{emptyTitle}</p>
                 <p className="empty-body">{emptyBody}</p>
+                {!p.offline && !p.notice && Boolean(p.imagesFailed) && p.onRetryImages && (
+                  <button type="button" className="primary-btn" onClick={p.onRetryImages}>
+                    Try again
+                  </button>
+                )}
               </div>
             )}
             <button

@@ -19,6 +19,11 @@ export interface RelatedState {
   result: RelatedChannels | null;
 }
 
+/** "Channels you follow" (ADR-0024): null until asked for. */
+export interface FollowingState {
+  result: RelatedChannels | null;
+}
+
 export interface DiscoverPanelProps {
   mode: "app" | "preview";
   vocabulary: Vocabulary | null;
@@ -28,6 +33,11 @@ export interface DiscoverPanelProps {
   /** The link or slug the preview is for (what Add uses). */
   previewLink?: string;
   related?: RelatedState | null;
+  /** A token is saved, so the followed channels can be listed. */
+  canFollow?: boolean;
+  following?: FollowingState | null;
+  onShowFollowing?: () => void;
+  onMoreFollowing?: () => void;
   busy?: boolean;
   status?: PanelStatus;
   /** Render with the `open` attribute (W3C/layout snapshots). */
@@ -201,6 +211,56 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
               )}
               {p.related.result?.next_page != null && (
                 <button type="button" className="text-btn" disabled={p.busy} onClick={p.onMoreRelated}>
+                  Show more channels
+                </button>
+              )}
+            </section>
+          )}
+
+          {app && (
+            <section className="settings-section" aria-labelledby="sec-following">
+              <h3 id="sec-following">Channels you follow</h3>
+              {!p.canFollow ? (
+                <p className="list-label">Save your Are.na token in Settings to list the channels you follow.</p>
+              ) : !p.following ? (
+                <div className="form-row">
+                  <button type="button" className="text-btn" disabled={p.busy} onClick={p.onShowFollowing}>
+                    Show the channels I follow
+                  </button>
+                  <p className="list-label">One read of your Are.na account, only when you ask.</p>
+                </div>
+              ) : p.following.result ? (
+                p.following.result.channels.length ? (
+                  <ul className="channel-list related-list">
+                    {p.following.result.channels.map((c) => (
+                      <li key={c.slug}>
+                        <span className="channel-slug">
+                          <span className="related-title">{c.title}</span>
+                          <span className="related-meta">
+                            {c.owner ?? "Are.na"}
+                            {c.contents != null ? ` · ${fmt(c.contents)} items` : ""}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          className="text-btn"
+                          disabled={p.busy}
+                          onClick={() => p.onPreview?.(c.slug)}
+                          aria-label={`Preview ${c.title}`}
+                        >
+                          Preview
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="list-label">You don't follow any channels on Are.na yet.</p>
+                )
+              ) : (
+                <p className="list-label">Asking Are.na</p>
+              )}
+              {p.following?.result?.next_page != null && (
+                <button type="button" className="text-btn" disabled={p.busy} onClick={p.onMoreFollowing}>
                   Show more channels
                 </button>
               )}

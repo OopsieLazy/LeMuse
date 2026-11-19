@@ -12,6 +12,8 @@ import type { ChannelPreview, Playlist, Slide, TopicInfo, Vocabulary } from "../
 import { DiscoverPanel, type DiscoverPanelProps } from "../src/DiscoverPanel";
 import { LibraryPanel, type LibraryPanelProps } from "../src/LibraryPanel";
 import { SettingsPanel, type ArenaTokenView } from "../src/SettingsPanel";
+import { ErrorScreen } from "../src/ErrorScreen";
+import { RefreshDetails } from "../src/RefreshDetails";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
 import { SlideshowView, type SlideshowViewProps } from "../src/SlideshowView";
 import sample from "./sample-data.json";
@@ -121,6 +123,12 @@ interface State {
   panel?: boolean;
   /** The Are.na account section of Settings (ADR-0023). */
   arena?: ArenaTokenView;
+  /** Settings → About (ADR-0024). */
+  about?: { version: string; licence: string; repository: string };
+  /** The crash page instead of the app (ADR-0024). */
+  crash?: { code: string; message: string };
+  /** Refresh details dialog (ADR-0024). */
+  refreshDetails?: { failed: string[]; total: number };
   library?: Partial<LibraryPanelProps>;
   discover?: Partial<DiscoverPanelProps>;
   mini?: boolean;
@@ -211,6 +219,48 @@ export const STATES: Record<string, State> = {
       message: { text: "Are.na didn't accept that token. Make a new one and paste it again.", tone: "error" },
     },
   },
+  "settings-about": {
+    props: base,
+    panel: true,
+    arena: { mode: "app", status: { saved: true, account: "example-person" } },
+    about: { version: "0.8.0", licence: "MIT", repository: "https://github.com/OopsieLazy/LeMuse" },
+  },
+  "crash-screen": {
+    props: base,
+    crash: { code: "ui_crash", message: "Cannot read properties of undefined (reading 'display_url')" },
+  },
+  "refresh-details": {
+    props: {
+      ...base,
+      refresh: { label: "Updated 120 images, 2 sources failed", busy: false, tone: "error", details: true },
+    },
+    refreshDetails: {
+      failed: [
+        "arena: That channel is private. Save your Are.na token in Settings to open your own private channels.",
+        "temporary problem reaching cleveland: timed out after 3 tries",
+      ],
+      total: 2,
+    },
+  },
+  offline: { props: { ...base, slides: [], offline: true } },
+  "images-failed": { props: { ...base, slides: [], imagesFailed: 12 } },
+  "discover-following": {
+    props: base,
+    discover: {
+      canFollow: true,
+      following: {
+        result: {
+          channels: [
+            { slug: "chairs-xyz", title: "Chairs", owner: "Example Person", contents: 412 },
+            { slug: "joinery-abc", title: "Joinery details", owner: null, contents: 88 },
+          ],
+          total: 21,
+          next_page: 2,
+        },
+      },
+    },
+  },
+  "discover-following-no-token": { props: base, discover: { canFollow: false } },
   "settings-token-preview": { props: { ...base, mode: "preview" }, panel: true, arena: { mode: "preview", status: null } },
   // ---- Compact windows (tablets, small windows); wide sizes are unaffected ----
   "compact-bar": { props: { ...base, compactBarOpen: true }, compactBar: true },
@@ -301,9 +351,15 @@ function documentFor(name: string, st: State, extraHead = "") {
   const styleText = Object.entries(style)
     .map(([k, v]) => `${k}: ${v}`)
     .join("; ");
+  if (st.crash) {
+    return page(name, attrText, styleText, renderToStaticMarkup(<ErrorScreen {...st.crash} />), extraHead);
+  }
   const body =
     renderToStaticMarkup(<SlideshowView {...st.props} controlsHidden={settings.controlsHidden} />) +
-    (st.panel ? renderToStaticMarkup(<SettingsPanel settings={settings} arena={st.arena} staticOpen />) : "") +
+    (st.panel
+      ? renderToStaticMarkup(<SettingsPanel settings={settings} arena={st.arena} about={st.about} staticOpen />)
+      : "") +
+    (st.refreshDetails ? renderToStaticMarkup(<RefreshDetails {...st.refreshDetails} staticOpen />) : "") +
     (st.library
       ? renderToStaticMarkup(
           <LibraryPanel
@@ -326,6 +382,10 @@ function documentFor(name: string, st: State, extraHead = "") {
           />,
         )
       : "");
+  return page(name, attrText, styleText, body, extraHead);
+}
+
+function page(name: string, attrText: string, styleText: string, body: string, extraHead: string) {
   return `<!doctype html>
 <html lang="en"${attrText} style="${esc(styleText)}">
 <head>

@@ -16,11 +16,14 @@ import {
   type RefreshEvent,
   type Slide,
   type SlideSource,
+  type About,
+  type RelatedChannels,
   type TokenStatus,
   type TopicInfo,
   type Vocabulary,
 } from "./api";
-import { DiscoverPanel, type RelatedState } from "./DiscoverPanel";
+import { DiscoverPanel, type FollowingState, type RelatedState } from "./DiscoverPanel";
+import { RefreshDetails } from "./RefreshDetails";
 import { LibraryPanel, type PanelStatus } from "./LibraryPanel";
 import { SettingsPanel, type ArenaTokenView } from "./SettingsPanel";
 import { applyToDocument, DEFAULTS, sanitize, type UiSettings } from "./settings";
@@ -47,7 +50,7 @@ function shuffled<T>(items: T[]): T[] {
 /** Errors from the core arrive as strings; keep the readable part. */
 function message(e: unknown): string {
   const s = e instanceof Error ? e.message : String(e);
-  return s.replace(/^(invalid config|arena): /, "");
+  return s.replace(/^arena: /, "");
 }
 
 function refreshLabel(e: RefreshEvent): RefreshState {
@@ -55,7 +58,7 @@ function refreshLabel(e: RefreshEvent): RefreshState {
     case "running":
       return { label: "Refreshing topics", busy: true, tone: "idle" };
     case "done":
-      if (e.note) return { label: e.note, busy: false, tone: "error" };
+      if (e.note) return { label: e.note, busy: false, tone: "error", details: e.errors > 0 };
       return {
         label:
           e.errors > 0
@@ -63,9 +66,24 @@ function refreshLabel(e: RefreshEvent): RefreshState {
             : `Up to date · ${e.blocks_upserted} new or changed`,
         busy: false,
         tone: e.errors > 0 ? "error" : "ok",
+        details: e.errors > 0,
       };
     case "error":
-      return { label: `Refresh failed: ${e.message}`, busy: false, tone: "error" };
+      return { label: refreshFailure(e.code, e.message), busy: false, tone: "error" };
+  }
+}
+
+/** A whole refresh that failed, in words that say what to do (ADR-0024). */
+function refreshFailure(code: string | undefined, msg: string): string {
+  switch (code) {
+    case "network":
+      return "Can't reach the sources right now. LeMuse tries again at the next refresh.";
+    case "busy":
+      return "Another refresh is already running (the command line or Task Scheduler).";
+    case "rate_limited":
+      return "Are.na asked LeMuse to slow down. The next refresh carries on.";
+    default:
+      return `Refresh failed: ${msg}`;
   }
 }
 
@@ -119,6 +137,13 @@ export function App() {
   const [relatedFor, setRelatedFor] = useState<{ blockId: number; page: number } | null>(null);
   const [discoverBusy, setDiscoverBusy] = useState(false);
   const [discoverStatus, setDiscoverStatus] = useState<PanelStatus | undefined>();
+  const [following, setFollowing] = useState<FollowingState | null>(null);
+  const [followingPage, setFollowingPage] = useState(1);
+  // Refresh details and the network state (ADR-0024).
+  const [refreshFailed, setRefreshFailed] = useState<{ list: string[]; total: number }>({ list: [], total: 0 });
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [about, setAbout] = useState<About | null>(null);
+  const refreshDetailsRef = useRef<HTMLDialogElement>(null);
   const settingsRef = useRef<HTMLDialogElement>(null);
   const libraryRef = useRef<HTMLDialogElement>(null);
   const discoverRef = useRef<HTMLDialogElement>(null);
@@ -166,6 +191,7 @@ export function App() {
     loadLibrary();
     return api.onRefresh((e) => {
       setRefresh(refreshLabel(e));
+      if (e.state === "done") setRefreshFailed({ list: e.failed ?? [], total: e.errors });
       if (e.state !== "running") loadLibrary();
     });
   }, [loadLibrary]);
@@ -526,6 +552,46 @@ export function App() {
     api.openExternal(url).catch((err) => setNotice(message(err)));
   };
 
+  // ---- Offline and back online: retry the images that failed (ADR-0024) ----
+  useEffect(() => {
+    const on = () => {
+      setOnline(true);
+      setFailed(new Set());
+      setAttempts(new Map());
+    };
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+  useEffect(() => {
+    api.about().then(setAbout, () => setAbout(null));
+  }, []);
+
+  // ---- Channels you follow on Are.na (token; one read per page) ----
+  const loadFollowing = useCallback(async (nextPage: number) => {
+    setDiscoverBusy(true);
+    try {
+      const r: RelatedChannels = await api.followedChannels(nextPage);
+      setFollowing((prev) => ({
+        result: {
+          ...r,
+          channels: nextPage > 1 && prev?.result ? [...prev.result.channels, ...r.channels] : r.channels,
+        },
+      }));
+      setFollowingPage(nextPage);
+      setDiscoverStatus(undefined);
+    } catch (e) {
+      setFollowing(null);
+      setDiscoverStatus({ tone: "error", text: message(e) });
+    } finally {
+      setDiscoverBusy(false);
+    }
+  }, []);
+
   // ---- Are.na token (ADR-0023): checked by Are.na, kept in Credential Manager ----
   useEffect(() => {
     api.arenaTokenStatus().then(setArenaToken, () => setArenaToken(null));
@@ -548,6 +614,7 @@ export function App() {
     try {
       await api.clearArenaToken();
       setArenaToken({ saved: false, account: null });
+      setFollowing(null);
       setArenaMessage({ text: "Removed. Refreshes run as a guest.", tone: "ok" });
     } catch (e) {
       setArenaMessage({ text: message(e), tone: "error" });
@@ -694,6 +761,13 @@ export function App() {
         status={status}
         refresh={refresh}
         notice={notice}
+        offline={!online}
+        imagesFailed={visible.length ? 0 : failed.size}
+        onRetryImages={() => {
+          setFailed(new Set());
+          setAttempts(new Map());
+        }}
+        onShowRefreshDetails={() => openDialog(refreshDetailsRef.current)}
         fullscreen={fullscreen}
         controlsHidden={settings.controlsHidden}
         railOpen={railOpen}
@@ -784,6 +858,13 @@ export function App() {
         preview={preview}
         previewLink={previewLink}
         related={related}
+        canFollow={Boolean(arenaToken?.saved)}
+        following={following}
+        onShowFollowing={() => {
+          setFollowing({ result: null });
+          loadFollowing(1);
+        }}
+        onMoreFollowing={() => loadFollowing(followingPage + 1)}
         busy={discoverBusy}
         status={discoverStatus}
         onSearch={searchArena}
@@ -805,6 +886,16 @@ export function App() {
         onSaveArenaToken={saveArenaToken}
         onClearArenaToken={clearArenaToken}
         onOpenLink={onOpenLink}
+        about={about}
+      />
+      <RefreshDetails
+        ref={refreshDetailsRef}
+        failed={refreshFailed.list}
+        total={refreshFailed.total}
+        onRetry={() => {
+          refreshDetailsRef.current?.close();
+          onRefresh();
+        }}
       />
       <LibraryPanel
         ref={libraryRef}
