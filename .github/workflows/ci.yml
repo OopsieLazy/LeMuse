@@ -95,6 +95,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Typecheck UI
         run: npm run typecheck
+      - name: UI unit tests (practice tools, redaction; ADR-0025)
+        run: npm run test:unit
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
