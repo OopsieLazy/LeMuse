@@ -6,11 +6,27 @@ Every command accepts `--json` and then prints exactly **one** JSON document on 
 { "lemuse": 1, "command": "status", "ok": true, "data": { … } }
 ```
 
-On failure, `ok` is `false`, `error` holds the message, and the exit code is 1:
+On failure, `ok` is `false`, `code` is a stable error code (ADR-0024), `error` holds the message for people,
+and the exit code says the same as `code`:
 
 ```json
-{ "lemuse": 1, "command": "slides", "ok": false, "error": "invalid config: no topic named `Nope`" }
+{ "lemuse": 1, "command": "slides", "ok": false, "code": "not_found", "error": "no topic named `Nope`" }
 ```
+
+| `code` | Meaning | Exit code |
+|---|---|---|
+| `invalid` | Bad input or a bad `lemuse.toml` | 3 |
+| `not_found` | No such topic, playlist, channel or image | 4 |
+| `busy` | Another refresh holds the library (try again later) | 5 |
+| `rate_limited` | A source asked LeMuse to slow down | 6 |
+| `network` | Can't reach a source, or it answered 5xx (worth retrying) | 7 |
+| `source` | A source answered with a problem (a private channel, odd data) | 8 |
+| `token` | The Are.na token was refused or can't be read | 9 |
+| `io`, `catalog` | Files or the database in the library | 10 |
+| `unsupported` | Not built yet | 1 |
+
+Exit code 2 means the command line itself was wrong (unknown command or flag). Codes are only ever added, never
+renamed.
 
 `lemuse` is the envelope version. It changes only for breaking changes; new fields may appear at any time. Use
 `--library <folder>` or `LEMUSE_LIBRARY` to pick a library.
@@ -34,6 +50,8 @@ On failure, `ok` is `false`, `error` holds the message, and the exit code is 1:
 | `save <block-id> [--topic T \| --playlist P]` | `{ block_id, view, bytes, already_stored }`; `view` is relative to the library |
 | `arena-token status` | `{ saved, account }` (never the token) |
 | `arena-token set` | `{ slug, name, tier }` once Are.na accepts it. Reads the token from the terminal (hidden) or a pipe, never an argument |
+| `arena-token check` | `{ slug, name, tier }` when Are.na still accepts the saved token (one read); code `token` if not |
+| `arena-token following [--page N]` | `{ channels: [{ slug, title, owner, contents }], total, next_page }`: channels your account follows (one read) |
 | `arena-token clear` | `{ removed }` |
 | `preview-data` | Always JSON (for the UI preview), without the envelope |
 

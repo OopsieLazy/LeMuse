@@ -8,6 +8,14 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Polish (work item 19, ADR-0024):
+  - error codes everywhere: `--json` has `code`, the CLI exits 3–10 by kind, the app shows what to do;
+  - error pages: the dashboard answers with real HTML pages and the right headers, the app has a crash page
+    instead of a blank window, plus offline, "can't load" and Refresh details states;
+  - the window stays responsive: nothing runs on the UI thread, and Find channels and Add channel wait their
+    turn during a refresh instead of refusing;
+  - **Channels you follow** in Find channels; `lemuse arena-token check` and `following`;
+  - one running copy (a second launch focuses it); Settings → About; version 0.8.0.
 - Are.na token (work item 18, ADR-0023): paste a personal access token (free accounts too) in Settings →
   Are.na account, or run `lemuse arena-token set`. It's checked with Are.na, then kept in Windows Credential
   Manager, never in a file. Refreshes go about 4× faster (120 reads a minute), your private channels open,

@@ -5,6 +5,20 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-19 (session 15): polish for a complete app (work item 19)
+
+**Branch:** `feat/0019-polish` (pushed, stacked on #18) · **Status:** awaiting owner review
+
+- **Token tested live:** accepted (free tier); 21 followed channels. `Pictures\LeMuse` filled on its first real
+  refresh (7,366 images, 0 errors).
+- **Built (ADR-0024):** error codes (CLI exits 3–10, `--json` `code`, app `{ code, message }`); dashboard error
+  pages and headers; crash page, offline, "can't load" and Refresh details; nothing on the UI thread; reads wait
+  during a refresh (D-74); Channels you follow; single instance; About; v0.8.0.
+- **Checks:** 109 tests; W3C 64; layout 372; cargo audit and npm gate; secret scan clean.
+- **Next:** path to 1.0 in PLAN (practice tools first).
+
+---
+
 ## 2026-11-18 (session 14): Are.na token (work item 18); is there a SaaS product?
 
 **Branch:** `feat/0018-arena-token` (pushed, stacked on #17) · **Status:** awaiting owner review

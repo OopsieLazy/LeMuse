@@ -26,7 +26,33 @@ v0.7.0 is on `main`. Merge order: **#16 `feat/0016-compact-layout`** (with the C
 | 3 | **Save originals** (v0.8 starts): host allow-list (A-37), magic bytes, retries (D-2), `lemuse save`; right-click menu; re-saves shown once; next page at a page's end (#17) | ✅ pushed |
 | 4 | **Are.na token** in Credential Manager: Settings and `lemuse arena-token`; checked each refresh; private channels; 120 reads a minute (#18, ADR-0023) | ✅ pushed |
 | 5 | Owner: Dependency graph; lock `main`; Q21–Q23 | ⏳ owner |
-| 6 | Next: import followed channels, single instance, queue reads during refresh (D-74) | ⏳ next PR |
+| 6 | First-refresh fill: images appear as they arrive (#18, D-103) | ✅ pushed |
+
+### Session 15: polish for a complete app (work item 19, `feat/0019-polish`, stacked on #18)
+
+Owner: "close to complete, will keep open source; error handling and error pages with proper codes,
+responsiveness, polish; test the token".
+
+| # | Work | Status |
+|---|---|---|
+| 1 | Token tested live (free tier; 21 followed channels); `lemuse arena-token check` and `following`; D-101 closed | ✅ pushed |
+| 2 | **Responsiveness:** every command off the UI thread; UI reads wait their turn during a refresh (D-74), spaced by tier | ✅ pushed |
+| 3 | **Error codes:** `Error::code()`; CLI `--json` `code` and exit codes 3–10; app `{ code, message }` (ADR-0024) | ✅ pushed |
+| 4 | **Error pages:** dashboard HTML pages with `Allow`/`WWW-Authenticate`/`Retry-After`; crash page; offline and "can't load" states; Refresh details | ✅ pushed |
+| 5 | **Channels you follow** in Find channels (one page per click) | ✅ pushed |
+| 6 | Single instance (`tauri-plugin-single-instance` 2.5.5, cooldown passed) | ✅ pushed |
+| 7 | **v0.8.0** everywhere; Settings → About | ✅ pushed |
+
+### Path to 1.0 (owner, session 15: "close to complete; let's complete it")
+
+Claude's recommended order, one PR each. Details are in the roadmap below.
+1. **Practice tools** (v0.10, moved up): mirror, greyscale, value view, grid overlay, timed sessions, ♥ favourites.
+   This is the core drawing use.
+2. **Browse:** grid view, a search box over the existing index, a Saved view, rename and remove topics.
+3. **Local folders** as a source (your own reference files, nothing leaves the PC).
+4. **Desktop finish:** tray icon, start with Windows, `lemuse backup`, an accessibility pass.
+5. **1.0 release:** README with screenshots taken at release time (not kept in the repo), a short user guide,
+   and tag v1.0.0. A signed installer needs a paid certificate (owner decision).
 
 ## Roadmap
 
@@ -55,9 +81,10 @@ Claude's recommendation; the owner can reorder.
       allow-list (A-37); retries (D-2) (#17, ADR-0022). Streaming download with hash-on-write (D-1) still open
 - [ ] **Are.na token** in Windows Credential Manager (Settings field + `lemuse auth set|clear`):
       private channels, and 120 reads/min instead of 30
-- [ ] **Import the channels you follow** (needs the token)
+- [x] **Channels you follow** in Find channels (#19, ADR-0024)
 - [ ] **Load more:** fetch a channel's next pages when a slideshow runs low (ADR-0007 #3, D-23)
-- [ ] Single-instance app (a second launch focuses the first window)
+- [x] Single-instance app (a second launch focuses the first window) (#19)
+- [x] Error codes, error pages, a responsive window, About (#19, ADR-0024)
 
 ### v0.9: Browse and organize (M2)
 
@@ -177,11 +204,9 @@ Claude's recommendation; the owner can reorder.
 | D-42 | Review 0008 | npm audit exception for picomatch GHSA-fc5q-39xc-vjpf (dev-only, no fixed release) | Re-check by 2026-12-15; the gate fails on expiry |
 | D-53 | Review 0009 | Shuffle mixes the current page only | M2: shuffle across pages (random order in SQL) |
 | D-54 | Review 0009 | Word-based categories mislabel some images; untitled images rely on channel names | M2: manual corrections; later maybe a local image model (ADR-0015 option B) |
-| D-74 | Review 0013 | Add channel and Find channels are refused during a long refresh | v0.8: queue them |
 | D-75 | Review 0013 | The installer doesn't ship `lemuse.exe` (needed for Task Scheduler) | v0.8: bundle the CLI as a sidecar |
 | D-78 | Review 0014 | The dashboard page loads the newest 300 per topic | Page through `/api/v1/slides` |
 | D-80 | Review 0014 | The app doesn't start the dashboard; the token isn't kept between runs | Settings switch; token in Credential Manager (v0.8) |
 | D-94 | Review 0017 | Save Are.na attachments (STEP, DXF, PDF) | With a file-type allow-list |
-| D-101 | Review 0018 | `/v3/me` fixture is schema-shaped, not a trimmed real answer | Once the owner has saved a token |
 | A-50 | Review 0010 | CI actions pinned to Node 20 releases (deprecated); ubuntu-latest moving to Ubuntu 26 | Next CI touch: bump pinned SHAs (14-day cooldown) |
 | A-39 | Review 0009 | In-app Are.na search needs Premium | Only if the owner buys Premium (Q10 = no) |

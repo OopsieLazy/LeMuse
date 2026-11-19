@@ -21,7 +21,7 @@ or is planned (CLAUDE.md). The reasoning behind the table is in ADR-0016 and ADR
 
 | Source | Status | Audiences | Licence and notes |
 |---|---|---|---|
-| Are.na channels | ✅ | All | Content belongs to its creators; attribution and link always shown; whole channels load across refreshes (ADR-0017); 🛠 your token (free account) opens your private channels and 4× the read limit (ADR-0023) |
+| Are.na channels | ✅ | All | Content belongs to its creators; attribution and link always shown; whole channels load across refreshes (ADR-0017); ✅ your token (free account) opens your private channels, the channels you follow, and 4× the read limit (ADR-0023, ADR-0024) |
 | Cleveland Museum of Art | ✅ | Artists, teachers, architects | CC0 objects only |
 | Art Institute of Chicago | ⏸ built, held back | Artists, teachers | CC0; images behind a challenge (D-18) |
 | Local folders | 🗺 1st | Everyone | Your own files; nothing leaves the PC |
