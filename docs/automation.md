@@ -45,7 +45,7 @@ renamed.
 | `related <block-id> [--page N]` | `{ channels: [{ slug, title, owner, contents }], total, next_page }` |
 | `export-links [--topic T \| --playlist P]` | `[{ block_id, connector, title, creator, page_url, origin_url, images: [[role, url]] }]` |
 | `init` | `{ root, config }` |
-| `sheet [--topic T \| --playlist P] [--count N] [--seed S]` | `{ heading, seed, count, html }` (without `--json`: the HTML itself) |
+| `sheet [--topic T \| --playlist P] [--count N] [--seed S] [--show-nudity]` | `{ heading, seed, count, html }` (without `--json`: the HTML itself). Hidden images never appear; likely nudity only with `--show-nudity` (ADR-0027) |
 | `sync --full` | Same as `sync`, reading every channel to its end |
 | `save <block-id> [--topic T \| --playlist P]` | `{ block_id, view, bytes, already_stored }`; `view` is relative to the library |
 | `arena-token status` | `{ saved, account }` (never the token) |
@@ -53,6 +53,8 @@ renamed.
 | `arena-token check` | `{ slug, name, tier }` when Are.na still accepts the saved token (one read); code `token` if not |
 | `arena-token following [--page N]` | `{ channels: [{ slug, title, owner, contents }], total, next_page }`: channels your account follows (one read) |
 | `arena-token clear` | `{ removed }` |
+| `import-following [--topic T] [--dry-run]` | `{ followed, already, dry_run, planned: [{ slug, title, topic }], added: [{ slug, title, topic, added }] }`: adds the channels you follow that aren't in a topic yet, each to its best-matching topic or `Following` (or all to `--topic`). One read per page of the list, nothing else; run `sync` after (ADR-0026) |
+| `update-check` | `{ current, latest: { version, name, url, published_at, newer } \| null }`: one request to GitHub's Releases API, no token; nothing is downloaded (ADR-0028) |
 | `preview-data` | Always JSON (for the UI preview), without the envelope |
 
 Without `--json`, `export-links --format csv|json|txt` writes a CSV (escaped and guarded against formula
@@ -135,7 +137,7 @@ The same JSON as the CLI, over HTTP (`Authorization: Bearer <token>`):
 | `/api/v1/status` | `{ schema, blocks, loading }` (no file paths) |
 | `/api/v1/topics` | `[{ name, images, slide_seconds, shuffle }]` |
 | `/api/v1/playlists` | `[{ id, name, items }]` |
-| `/api/v1/slides?source=all\|topic:<name>\|playlist:<id>&page=0&include=wood&exclude=painting` | `{ source, page, page_size, total, slides }` |
+| `/api/v1/slides?source=all\|topic:<name>\|playlist:<id>&page=0&include=wood&exclude=painting[&nudity=show]` | `{ source, page, page_size, total, slides }`. Hidden images never; likely nudity only with `nudity=show` (ADR-0027) |
 | `/api/v1/preview-data?per_topic=300` | The page's own data (no envelope) |
 
 ```powershell

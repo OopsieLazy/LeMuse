@@ -19,7 +19,8 @@ app/src-tauri/        the desktop shell: commands the UI can call, capabilities 
 app/src/              the UI (React + TypeScript)
   SlideshowView.tsx     the main screen. A *pure view*: it only draws what its props say
   App.tsx               state and behaviour: loads data, runs the slideshow and sessions, handles keys
-  practice.ts           practice tools as plain functions: study aids, session plans, the pose clock
+  practice.ts           practice tools as plain functions: study aids, the value/effect filter graph,
+                        session plans, the pose clock, the practice log's weeks
   StudyMenu.tsx, PracticePanel.tsx, ShortcutsPanel.tsx   the practice menus and dialogs
   settings.ts           look-and-feel settings (every saved value is checked before use)
   theme/tokens.css      every colour, size and timing. Change the look here, not in components
@@ -67,7 +68,7 @@ npm run typecheck
 npm run test:unit
 # Every UI state through the W3C checker (needs Java)
 npm run validate:w3c
-# Every UI state at six window sizes in headless Edge
+# Every UI state at six window sizes in headless Edge: layout, 24 px targets, text contrast
 npm run test:layout
 # Back in the repo root: core tests and lint
 cd ..
@@ -94,7 +95,11 @@ lines in `gridLines` (golden ratio: split at 0.382 and 0.618 of each side). Chec
 **D. Rebind a key.** Keys live in `App.tsx` (the `onKey` handler) and are listed for people in
 `ShortcutsPanel.tsx`. Change both, or the ? sheet will lie. Check: press ? in the app.
 
-**E. Change a word.** Every sentence the app says is in the `.tsx` files as plain text. Search for it, change
+**E. Tune a drawing effect.** In `practice.ts`, `strokes()` sets the stroke noise (`baseFrequency`: fine across,
+long along) and the ramp; `filterGraph()` chains them. Change the vertical frequency, run `npm run test:unit`, then
+press E in the app.
+
+**F. Change a word.** Every sentence the app says is in the `.tsx` files as plain text. Search for it, change
 it, and run `npm run validate:w3c`.
 
 ## 5. Shipping a change

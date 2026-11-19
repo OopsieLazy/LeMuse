@@ -5,6 +5,26 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-19 (session 17): road to 1.0 (work item 21)
+
+**Branch:** `feat/0021-road-to-1-0` (pushed, stacked on #20) · **Status:** awaiting owner review
+
+- **Followed channels, live:** 27 followed, 7 were in topics. `import-following` added 20 (best-matching topics or
+  Following), and a refresh brought 3,968 images with 0 errors. The app shows "in …" or "new: would go to …" with
+  Add all (ADR-0026).
+- **Built:**
+  - values 2–9 with darks/lights isolation;
+  - drawing effects (lines, strokes, cross-hatch; SVG, checked visually);
+  - a nudity sensor (18 of 15,602 flagged after tuning) with Hide / Mark;
+  - the practice log;
+  - an update check and a release workflow;
+  - 24 px and contrast gates (84 fixes);
+  - a single-key switch.
+- **Answers:** Q25 (check now, updater later), Q26 (desk search clean), Q27–Q29 done. Q24 signing still open.
+- **Checks:** 117 Rust; 14 UI unit; W3C 86; layout 8,702; secret scan clean.
+
+---
+
 ## 2026-11-19 (session 16): practice tools; design and art review (work item 20)
 
 **Branch:** `feat/0020-practice-tools` (pushed, stacked on #19) · **Status:** awaiting owner review

@@ -8,6 +8,20 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Road to 1.0 (work item 21, ADR-0026, ADR-0027, ADR-0028):
+  - **values** in 2, 3, 4, 5, 7 or 9 tones, and **darks only / lights only / darks + lights** (I) to find the
+    absolute darks and their light counterparts; a value strip on the image;
+  - **drawing effects** (E), on screen only: lines, strokes ↕ (grass, hair, rain), strokes ↔ (water, wood grain),
+    cross-hatch. Marks follow the picture's values;
+  - **Channels you follow** shows where each channel is and adds the new ones (Add, Add all) to the best-matching
+    topic or a Following topic; `lemuse import-following`;
+  - a **nudity sensor**: likely nudity is hidden by default (app, dashboard, sheets); right-click Hide this image
+    or Mark as nudity; Settings → Content;
+  - a **practice log** in the session planner: this week and eight weekly bars, no streaks;
+  - an **update check** (Settings → About, daily at most, can be off) and `lemuse update-check`; a release workflow
+    with SHA256SUMS, an SBOM and build provenance;
+  - single-key shortcuts can be turned off; every control is at least 24 px and text meets contrast (checked in
+    every state); docs: privacy statement, user guide, release guide; version 0.10.0.
 - Practice tools (work item 20, ADR-0025):
   - **timed sessions** (N): gesture warm-up, relaxed, class (30 min), long class (1 h), sketches, long study or
     your own plan. The clock starts when the image has loaded and pauses when LeMuse is minimised. Soft ticks

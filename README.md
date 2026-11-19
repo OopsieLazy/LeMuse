@@ -6,12 +6,13 @@ collections (CC0 open access) and the [Are.na](https://www.are.na) channels you 
 no AI feed.
 
 - **Practise:** timed sessions (gesture warm-ups, classes, long studies, or your own plan) that end with a sheet
-  of what you drew; mirror, upside down, greyscale, values and notan, squint and grids, on screen only.
+  of what you drew, and a practice log without streaks; mirror, upside down, greyscale, values (2–9, or just the
+  darks or lights), drawing effects (lines, strokes, cross-hatch), squint and grids, all on screen only.
 - **Collect:** ♥ favourites and playlists; Save keeps the full-size original as a local file for Explorer,
   PureRef, Krita or your CAD tool.
 - **Calm by design:** each image shows who made it and links back to its source.
 
-> Status: **v0.9, on the way to 1.0.** See [docs/PLAN.md](docs/PLAN.md). Repo:
+> Status: **v0.10, on the way to 1.0.** See [docs/PLAN.md](docs/PLAN.md). Repo:
 > <https://github.com/OopsieLazy/LeMuse> · Licence: [MIT](LICENSE).
 
 ## How it works
@@ -46,7 +47,7 @@ cargo run -p lemuse-cli -- --library ./library init
 cd app && npm ci --ignore-scripts && npm run tauri dev   # desktop app
 ```
 
-New here? Start with the hands-on map: [docs/guide/hands-on.md](docs/guide/hands-on.md) (where things live, the
+Using it: [docs/guide/user-guide.md](docs/guide/user-guide.md). New to the code? Start with the hands-on map: [docs/guide/hands-on.md](docs/guide/hands-on.md) (where things live, the
 guardrails, first exercises). More commands are in [CLAUDE.md](CLAUDE.md#commands); how it's built and why is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/adr/](docs/adr/). Contribution rules are in
 [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
@@ -54,7 +55,8 @@ guardrails, first exercises). More commands are in [CLAUDE.md](CLAUDE.md#command
 ## Privacy
 
 LeMuse has no accounts and no tracking. It talks only to the sources whose images you see (Are.na and the
-Cleveland Museum of Art's open-access API and image servers). Your Are.na token is kept in Windows Credential
+Cleveland Museum of Art's open-access API and image servers), and, once a day if you leave it on, to GitHub to
+see whether a newer LeMuse exists. Details: [docs/privacy.md](docs/privacy.md). Your Are.na token is kept in Windows Credential
 Manager, never in a file. Everything else (topics, playlists, favourites, settings, saved images) stays in your
 library folder on your PC.
 

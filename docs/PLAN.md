@@ -4,8 +4,8 @@
 drawing, design and CAD practice. Topics are fed by Are.na channels you choose and free museum collections.
 Images stream from the source; only Save writes files.
 
-**Where we are:** **v0.7.0** is released (2026-11-18). PRs #16–#20 (compact windows, Save, Are.na token,
-polish, practice tools; v0.9.0) await review. Next: the path to 1.0 below.
+**Where we are:** **v0.7.0** is released (2026-11-18). PRs #16–#21 (compact windows, Save, Are.na token,
+polish, practice tools, road to 1.0; v0.10.0) await review. Next: the path to 1.0 below.
 
 **How work reaches `main` (from session 8):**
 - Claude works on a branch, commits small, and pushes the branch to GitHub. That is the off-machine backup, and
@@ -59,21 +59,40 @@ major company worry about (e.g. the app opening its own GitHub)?
 | 6 | Research (5 tracks) → report → **Design Analyst / Art Specialist pass**; quick wins fixed, the rest planned | ✅ pushed |
 | 7 | ADR-0025, review 0020 (admin, developer, design/art), v0.9.0, PR #20; first UI unit tests (CI) | ✅ pushed |
 
+### Session 17: road to 1.0 (work item 21, `feat/0021-road-to-1-0`, stacked on #20)
+
+Owner: settle the fixes before 1.0; more value options (darks and their light counterparts); a drawing effect
+("the effect of grass over the grass of the picture"); Q25 how hard are auto updates; Q26 yes; Q27 yes, a
+nudity sensor; Q28 yes; Q29 good; check the newly followed channels import; testing first, hands-off.
+
+| # | Work | Status |
+|---|---|---|
+| 1 | **Followed channels:** live check (27 followed, 7 in topics, refresh OK); show which topic each is in; **Add all new** with a suggested topic; `lemuse import-following`. Live: 20 added, 3,968 images, 0 errors | ✅ pushed |
+| 2 | **Values:** 2–9 tones (Munsell-like 9), **darks only / lights only / darks + lights**, a value strip | ✅ pushed |
+| 3 | **Drawing effects** (SVG filters, on screen only): lines, strokes ↕ ↔, cross-hatch; checked visually | ✅ pushed |
+| 4 | **Content safety (Q27):** a nudity sensor from titles, descriptions, museum types and channel names (18 of 15,602 flagged); hidden by default; Hide this image; Mark as nudity; Settings → Content | ✅ pushed |
+| 5 | **Practice log (Q28):** sessions kept locally; this week and 8 weeks, no streaks; can be hidden or cleared | ✅ pushed |
+| 6 | **Updates (Q25):** check GitHub Releases on launch (setting), "update available" with a link; release workflow with `SHA256SUMS`, provenance and SBOM; full auto-update path documented | ✅ pushed |
+| 7 | **Accessibility:** single-key shortcuts switch (WCAG 2.1.4); layout test checks 24 px targets and text contrast (84 fixed) | ✅ pushed |
+| 8 | **Name check (Q26):** desk search for "LeMuse": no conflict found (docs/product/name-check.md) | ✅ pushed |
+| 9 | Docs: ADR-0026/0027/0028, review 0021, privacy statement, user guide, release guide; v0.10.0; PR #21 | ✅ pushed |
+
 ### Path to 1.0 (owner, session 15: "close to complete; let's complete it")
 
 Claude's recommended order, one PR each. Updated after the art review (session 16): craft before breadth.
 1. ~~**Practice tools**~~ ✅ #20.
-2. **Session craft and view comfort:** large timer ring (hideable), visual flash cue, crossfade after
+2. ~~Road to 1.0 essentials~~ ✅ #21 (values, effects, content, log, updates, release pipeline, a11y gates).
+3. **Session craft and view comfort:** large timer ring (hideable), visual flash cue, crossfade after
    `decode()`; surround picker (5 neutral steps); remember topic, position, plan and aids; Undo toasts; a switch
    for single-key shortcuts (WCAG 2.1.4); first run "What are you drawing today?" (DA-13, DA-6, DA-14, DA-17).
-3. **Museum label and sharpness:** tombstone label (creator, *title*, date, medium, dimensions, credit line),
+4. **Museum label and sharpness:** tombstone label (creator, *title*, date, medium, dimensions, credit line),
    CC0 / "rights belong to the creator" badges; Cleveland print (3,400 px) on large windows (DA-11, DA-12).
-4. **Browse:** grid view, a search box over the existing index, a Saved view, rename and remove topics.
-5. **Local folders** as a source; **content controls** (hide image or channel; Q27) (DA-15).
-6. **Desktop finish:** tray icon, start with Windows, `lemuse backup`; Save provenance sidecar (source, creator,
+5. **Browse:** grid view, a search box over the existing index, a Saved view, rename and remove topics.
+6. **Local folders** as a source; hide a whole channel (DA-15).
+7. **Desktop finish:** tray icon, start with Windows, `lemuse backup`; Save provenance sidecar (source, creator,
    licence).
-7. **1.0 release:** release pipeline (`SHA256SUMS`, build attestation, CycloneDX SBOM, third-party notices),
-   signing (Q24), a short user guide, the trademark search (Q26), tag v1.0.0.
+8. **1.0 release:** signing (Q24), third-party notices, the Tauri auto-updater (ADR-0028 §2), tag v1.0.0 and
+   publish the draft the release workflow makes (docs/release.md).
 
 ## Roadmap
 
@@ -201,12 +220,12 @@ Claude's recommendation; the owner can reorder.
 | Q21 | Host LeMuse Web (stage 1, static, no user data) on the friend's domain? Which name, and who runs the server? | **Open** (ADR-0020); supersedes Q18 if yes |
 | Q22 | Which email account sends the daily mailer (app password in Credential Manager)? | **Open** (ADR-0021) |
 | Q23 | Contact Are.na before a public stage 2 or any paid tier? | **Open**, recommended yes (ADR-0020) |
-| Q24 | Signing identity for the installer: SignPath Foundation (free, SignPath named as publisher) or an OV certificate (~$150–300/yr, your name)? | **Open** (report §enterprise); keep one identity forever |
-| Q25 | Auto-update (Tauri updater needs a permanent private key) or manual updates via GitHub Releases / winget? | **Open** |
-| Q26 | Run the "LeMuse" trademark search (USPTO, EUIPO, UKIPO; classes 9 and 42) before 1.0 branding? | **Open** (A-19) |
-| Q27 | Nudity default: hide by default with a per-topic opt-in, or show all with a hide action? | **Open** |
-| Q28 | Keep any practice history (a local log) at all? | **Open** |
-| Q29 | Conduct reports: GitHub's private reporting form (current), or another contact? | **Open** |
+| Q24 | Signing identity for the installer: SignPath Foundation (free, SignPath named as publisher) or an OV certificate (~$150–300/yr, your name)? | **Open** (report §enterprise); keep one identity forever. The release workflow has the slot |
+| Q25 | Auto-update (Tauri updater needs a permanent private key) or manual updates via GitHub Releases / winget? | ✅ (2026-11-19) "How hard? At least detect new versions." Update check built (#21); the updater is one PR after the first published release (ADR-0028 §2) |
+| Q26 | Run the "LeMuse" trademark search (USPTO, EUIPO, UKIPO; classes 9 and 42) before 1.0 branding? | ✅ "Sure; likely will use regardless." Desk search clean (docs/product/name-check.md); formal search only before paid distribution |
+| Q27 | Nudity default: hide by default with a per-topic opt-in, or show all with a hide action? | ✅ "Yes, needs a nudity sensor": hidden by default, text sensor + your marks (#21, ADR-0027) |
+| Q28 | Keep any practice history (a local log) at all? | ✅ Yes: local log, weeks not streaks (#21) |
+| Q29 | Conduct reports: GitHub's private reporting form (current), or another contact? | ✅ Good as is |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register
@@ -240,4 +259,7 @@ Claude's recommendation; the owner can reorder.
 | A-108 | Review 0020 | Favourites is found by its name | Browse PR: a `role` column if renames bite |
 | DA-6, DA-13, DA-14, DA-17 | Review 0020 | Surround picker; timer ring, flash cue, crossfade; first run, remember position; shortcut switch | Path to 1.0 #2 |
 | DA-11, DA-12 | Review 0020 | Cleveland 900 px images; museum label | Path to 1.0 #3 |
-| DA-15, DA-16 | Review 0020 | Content controls; practice log | Path to 1.0 #5; Q27, Q28 |
+| DA-15 | Review 0020 | Hide a whole channel | Path to 1.0 #6 (hide image and nudity done in #21) |
+| A-121 | Review 0021 | Image-model nudity sensor | Only if it fits the installer budget and needs no stored images (ADR-0027) |
+| ADR-0028 §2 | Review 0021 | Tauri auto-updater | After the first published release; key in Actions secrets |
+| ADR-0026 | Review 0021 | Diagonal strokes, stroke size, exact L* / auto-threshold (CORS check) | Session craft PR |

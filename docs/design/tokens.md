@@ -16,7 +16,8 @@ at the bottom.
 | Shape | `--radius-base` → `--radius-sm/md/lg`, `--border`, `--focus-ring --focus-offset` | Corner rounding slider |
 | Elevation | `--image-shadow-strength` → `--image-shadow`, `--dialog-shadow` | Image shadow slider |
 | Motion | `--dur-fast --dur-med --ease` | Also turned off by `prefers-reduced-motion` |
-| Practice (ADR-0025) | `--squint-blur --grid-line --grid-shade --grid-line-width --study-menu-width --session-clock-size --drawn-thumb` | Fixed; the grid's two strokes read on any image. Studio's `--stage` is zero-chroma (art review) |
+| Accessibility (ADR-0028) | `--target-min` (24 px, WCAG 2.5.8) | Fixed; the layout test checks every control and text contrast |
+| Practice (ADR-0025, ADR-0026, ADR-0027) | `--squint-blur --grid-line --grid-shade --grid-line-width --study-menu-width --session-clock-size --drawn-thumb --value-swatch --tone-0…--tone-8 --log-bar-height` | Fixed; the grid's two strokes read on any image. Studio's `--stage` is zero-chroma (art review) |
 | Layers | `--z-reveal --z-menu --z-drawer` | none (fixed) |
 
 **Layout presets** (Studio, Topics on the right, Controls on top, Cinema, Minimal) and **toggles** (timer, specs,
