@@ -454,7 +454,7 @@ async fn clear_arena_token() -> Cmd<bool> {
 /// The channels the token's Are.na account follows: one page, one read,
 /// only when asked (ADR-0024). Nothing is followed further or stored.
 #[tauri::command]
-async fn followed_channels(app: AppHandle, page: u32) -> Cmd<arena::RelatedChannels> {
+async fn followed_channels(app: AppHandle, page: u32) -> Cmd<lemuse_core::import::FollowedPage> {
     blocking(move || {
         let account = lemuse_core::credentials::arena_status()?
             .account
@@ -469,9 +469,34 @@ async fn followed_channels(app: AppHandle, page: u32) -> Cmd<arena::RelatedChann
         let http = lemuse_core::sync::production_client(&cfg);
         let result = arena::followed_channels(http.as_ref(), &account, page);
         note_rate_limit(&app, started, &result);
-        Ok(result?)
+        // Mark which topics already have each channel, and where Add puts it.
+        Ok(lemuse_core::import::annotate_followed(&cfg, result?))
     })
     .await
+}
+
+/// "Add all new" from Channels you follow (ADR-0026): no API reads, one
+/// lemuse.toml edit per channel, then one refresh for all of them.
+#[tauri::command]
+async fn add_followed(
+    app: AppHandle,
+    picks: Vec<lemuse_core::import::FollowedPick>,
+) -> Cmd<Vec<lemuse_core::import::AddedFollowed>> {
+    let added = blocking({
+        let app = app.clone();
+        move || {
+            let edits = app.state::<ConfigEdits>();
+            let _edit = edits.edit.lock().map_err(poisoned)?;
+            let paths = library_paths();
+            Ok(lemuse_core::import::add_followed(&paths.config(), &picks)?)
+        }
+    })
+    .await?;
+    if added.iter().any(|a| a.added) {
+        let flag = app.state::<Refreshing>().0.clone();
+        spawn_refresh(app, flag, Trigger::Manual);
+    }
+    Ok(added)
 }
 
 // ── Discover (ADR-0015) ─────────────────────────────────────────────────
@@ -629,6 +654,57 @@ async fn playlists_with(block_id: i64) -> Cmd<Vec<i64>> {
     blocking(move || Ok(catalog()?.playlists_with(block_id)?)).await
 }
 
+/// Is there a newer LeMuse? One GET to GitHub's Releases API, without the
+/// Are.na token; nothing is downloaded (ADR-0028).
+#[tauri::command]
+async fn check_update() -> Cmd<Option<lemuse_core::update::Release>> {
+    blocking(|| {
+        let http = lemuse_core::update::client();
+        Ok(lemuse_core::update::latest_release(
+            http.as_ref(),
+            env!("CARGO_PKG_VERSION"),
+        )?)
+    })
+    .await
+}
+
+// ── Content marks and the practice log (ADR-0027) ───────────────────────
+
+/// Hide an image, or mark nudity the sensor missed (right-click menu).
+#[tauri::command]
+async fn set_block_flag(block_id: i64, flag: String, on: bool) -> Cmd<()> {
+    blocking(move || Ok(catalog()?.set_block_flag(block_id, &flag, on)?)).await
+}
+
+/// How many images you hid or marked, for Settings → Content.
+#[tauri::command]
+async fn flag_counts() -> Cmd<Vec<(String, i64)>> {
+    blocking(|| Ok(catalog()?.flag_counts()?)).await
+}
+
+/// "Show hidden images again" / "Forget my nudity marks".
+#[tauri::command]
+async fn clear_block_flags(flag: String) -> Cmd<usize> {
+    blocking(move || Ok(catalog()?.clear_block_flags(&flag)?)).await
+}
+
+/// Keep a finished or stopped timed session (only if something was drawn).
+#[tauri::command]
+async fn record_practice(record: lemuse_core::store::catalog::PracticeRecord) -> Cmd<Option<i64>> {
+    blocking(move || Ok(catalog()?.record_practice(&record)?)).await
+}
+
+/// Sessions since `since` (Unix seconds), newest first.
+#[tauri::command]
+async fn practice_sessions(since: i64) -> Cmd<Vec<lemuse_core::store::catalog::PracticeSession>> {
+    blocking(move || Ok(catalog()?.practice_sessions(since)?)).await
+}
+
+#[tauri::command]
+async fn clear_practice() -> Cmd<usize> {
+    blocking(|| Ok(catalog()?.clear_practice()?)).await
+}
+
 /// The Settings panel's saved look and feel (ADR-0012). Opaque JSON; the
 /// UI validates and clamps every value it reads.
 #[tauri::command]
@@ -768,6 +844,14 @@ pub fn run() {
             set_arena_token,
             clear_arena_token,
             followed_channels,
+            add_followed,
+            check_update,
+            set_block_flag,
+            flag_counts,
+            clear_block_flags,
+            record_practice,
+            practice_sessions,
+            clear_practice,
             add_channel,
             remove_channel,
             playlists,
