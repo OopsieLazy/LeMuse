@@ -100,16 +100,28 @@ enum Command {
     /// is downloaded (ADR-0028).
     UpdateCheck,
     /// Add the Are.na channels you follow that aren't in a topic yet (needs
-    /// the token; one read per page of the list, nothing else). Each goes to
-    /// the best-matching topic, or "Following". Then run `lemuse sync`.
+    /// the token; one read per page of the list, nothing else). Each becomes
+    /// its own topic, named after the channel, under "Following on Are.na".
+    /// Then run `lemuse sync`.
     ImportFollowing {
         /// Put them all in this topic instead (created if needed).
-        #[arg(long)]
+        #[arg(long, conflicts_with = "r#match")]
         topic: Option<String>,
+        /// Put each into the existing topic that fits it best instead.
+        #[arg(long = "match")]
+        r#match: bool,
         /// Only show what would be added.
         #[arg(long)]
         dry_run: bool,
     },
+    /// Remove an Are.na channel from a topic (its images stay in playlists).
+    RemoveChannel {
+        channel: String,
+        #[arg(long)]
+        topic: String,
+    },
+    /// Remove a topic that has no channels or keywords left.
+    RemoveTopic { name: String },
     /// Every stored link of a topic, a playlist, or All (default), to stdout.
     /// Links only; no image is downloaded.
     ExportLinks {
@@ -186,6 +198,8 @@ impl Command {
             Command::AddChannel { .. } => "add-channel",
             Command::PreviewChannel { .. } => "preview-channel",
             Command::ImportFollowing { .. } => "import-following",
+            Command::RemoveChannel { .. } => "remove-channel",
+            Command::RemoveTopic { .. } => "remove-topic",
             Command::UpdateCheck => "update-check",
             Command::ExportLinks { .. } => "export-links",
             Command::Related { .. } => "related",
@@ -774,7 +788,32 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             };
             Ok(out(json!({ "current": current, "latest": latest }), text))
         }
-        Command::ImportFollowing { topic, dry_run } => {
+        Command::RemoveChannel { channel, topic } => {
+            ensure_library(paths)?;
+            let removed =
+                lemuse_core::config_edit::remove_channel(&paths.config(), &topic, &channel)?;
+            let text = if removed {
+                format!("Removed {channel} from {topic}.\n")
+            } else {
+                format!("{channel} wasn't in {topic}.\n")
+            };
+            Ok(out(json!({ "removed": removed }), text))
+        }
+        Command::RemoveTopic { name } => {
+            ensure_library(paths)?;
+            let removed = lemuse_core::config_edit::remove_empty_topic(&paths.config(), &name)?;
+            let text = if removed {
+                format!("Removed the topic {name}.\n")
+            } else {
+                format!("There's no topic named {name}.\n")
+            };
+            Ok(out(json!({ "removed": removed }), text))
+        }
+        Command::ImportFollowing {
+            topic,
+            r#match,
+            dry_run,
+        } => {
             let cfg = ensure_library(paths)?;
             if let Some(t) = &topic {
                 lemuse_core::config::check_topic_name(t)?;
@@ -803,9 +842,23 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
                 .map(|f| lemuse_core::import::FollowedPick {
                     slug: f.channel.slug.clone(),
                     title: f.channel.title.clone(),
-                    topic: Some(topic.clone().unwrap_or_else(|| f.suggested.clone())),
+                    owner: f.channel.owner.clone(),
+                    // None: its own topic (the default).
+                    topic: topic
+                        .clone()
+                        .or_else(|| r#match.then(|| f.suggested.clone())),
                 })
                 .collect();
+            // For the dry-run listing: where each one would go.
+            let target = |p: &lemuse_core::import::FollowedPick| {
+                p.topic.clone().unwrap_or_else(|| {
+                    followed
+                        .iter()
+                        .find(|f| f.channel.slug == p.slug)
+                        .map(|f| f.own_topic.clone())
+                        .unwrap_or_default()
+                })
+            };
             let already = followed.len() - picks.len();
             let added = if dry_run {
                 Vec::new()
@@ -818,7 +871,7 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
                 followed.len()
             );
             for p in &picks {
-                let to = p.topic.as_deref().unwrap_or("?");
+                let to = target(p);
                 let verb = if dry_run { "would add" } else { "added" };
                 text.push_str(&format!(
                     "  {verb} {} ({}) → {to}
@@ -839,7 +892,7 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             }
             Ok(out(
                 json!({ "followed": followed.len(), "already": already, "dry_run": dry_run,
-                        "planned": picks.iter().map(|p| json!({"slug": p.slug, "title": p.title, "topic": p.topic})).collect::<Vec<_>>(),
+                        "planned": picks.iter().map(|p| json!({"slug": p.slug, "title": p.title, "topic": target(p)})).collect::<Vec<_>>(),
                         "added": added }),
                 text,
             ))
