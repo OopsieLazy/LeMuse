@@ -100,6 +100,10 @@ pub struct Topic {
     /// no explicit `query` runs one search per keyword (ADR-0008).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keywords: Vec<String>,
+    /// A heading the topic list shows it under (ADR-0026 addendum), e.g.
+    /// "Following on Are.na" for channels imported from the follow list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
     #[serde(default, rename = "source")]
     pub sources: Vec<TopicSource>,
 }
@@ -341,6 +345,9 @@ impl Config {
                 return Err(Error::Config("every [[topic]] needs a `name`".into()));
             }
             check_topic_name(&t.name)?;
+            if let Some(g) = &t.group {
+                check_name("group", g)?;
+            }
             if t.sources.len() > MAX_SOURCES {
                 return Err(Error::Config(format!(
                     "topic `{}`: at most {MAX_SOURCES} sources",

@@ -60,8 +60,11 @@ pub fn add_channel(
 // unless the owner asks; following a channel on Are.na never adds it by
 // itself (ADR-0004: only channels the user chooses).
 
-/// Topic for followed channels that match no existing topic.
+/// Topic for followed channels that match no existing topic (best-match mode).
 pub const FOLLOWING_TOPIC: &str = "Following";
+
+/// The topic-list heading for channels imported as their own topics.
+pub const FOLLOWING_GROUP: &str = "Following on Are.na";
 
 /// Most channels one "Add all" may add.
 pub const MAX_FOLLOWED_ADD: usize = 100;
@@ -73,8 +76,10 @@ pub struct FollowedChannel {
     pub channel: ChannelSummary,
     /// Topics that already have this channel (empty: not imported yet).
     pub in_topics: Vec<String>,
-    /// The topic "Add" picks unless told otherwise.
+    /// The existing topic that fits best ("Each into its best-matching topic").
     pub suggested: String,
+    /// The channel's own topic: its title, made unique (the default for Add).
+    pub own_topic: String,
 }
 
 /// One page of followed channels, annotated against `lemuse.toml`.
@@ -90,7 +95,11 @@ pub struct FollowedPage {
 pub struct FollowedPick {
     pub slug: String,
     pub title: String,
-    /// None: the suggested topic.
+    /// The channel's owner, used only to tell two same-named channels apart.
+    #[serde(default)]
+    pub owner: Option<String>,
+    /// None: its own topic, named after the channel, under
+    /// [`FOLLOWING_GROUP`]. Some: that topic (created if needed).
     #[serde(default)]
     pub topic: Option<String>,
 }
@@ -187,6 +196,58 @@ pub fn suggest_topic(cfg: &Config, title: &str, slug: &str) -> String {
     best.map_or_else(|| FOLLOWING_TOPIC.to_string(), |(n, _)| n.to_string())
 }
 
+/// A topic name for a channel of its own: its title as one clean line of at
+/// most 60 characters (the slug if the title is empty). If another topic
+/// already has that name, the channel's owner is added ("Jewellery · Ana"),
+/// then a number. A topic that already holds this very channel keeps its name.
+pub fn own_topic_name(cfg: &Config, title: &str, slug: &str, owner: Option<&str>) -> String {
+    let clean = |s: &str| -> String {
+        let one_line: String = s
+            .chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect::<String>()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let cut: String = one_line
+            .chars()
+            .take(crate::config::MAX_TOPIC_NAME)
+            .collect();
+        cut.trim().to_string()
+    };
+    let base = Some(clean(title))
+        .filter(|t| !t.is_empty() && crate::config::check_topic_name(t).is_ok())
+        .unwrap_or_else(|| clean(slug));
+    let free = |name: &str| {
+        cfg.topics
+            .iter()
+            .find(|t| t.name.eq_ignore_ascii_case(name))
+            .is_none_or(|t| {
+                t.sources
+                    .iter()
+                    .any(|s| s.source == "arena" && s.channel.as_deref() == Some(slug))
+            })
+    };
+    if free(&base) {
+        return base;
+    }
+    let fit = |suffix: String| {
+        let room = crate::config::MAX_TOPIC_NAME.saturating_sub(suffix.chars().count());
+        let head: String = base.chars().take(room).collect();
+        format!("{}{suffix}", head.trim_end())
+    };
+    if let Some(o) = owner.map(clean).filter(|o| !o.is_empty()) {
+        let named = fit(format!(" · {o}"));
+        if free(&named) {
+            return named;
+        }
+    }
+    (2..1000)
+        .map(|n| fit(format!(" {n}")))
+        .find(|n| free(n))
+        .unwrap_or_else(|| clean(slug))
+}
+
 /// Mark each followed channel with the topics that have it and a suggestion.
 pub fn annotate_followed(cfg: &Config, page: RelatedChannels) -> FollowedPage {
     let channels = page
@@ -204,10 +265,12 @@ pub fn annotate_followed(cfg: &Config, page: RelatedChannels) -> FollowedPage {
                 .map(|t| t.name.clone())
                 .collect();
             let suggested = suggest_topic(cfg, &c.title, &c.slug);
+            let own_topic = own_topic_name(cfg, &c.title, &c.slug, c.owner.as_deref());
             FollowedChannel {
                 channel: c,
                 in_topics,
                 suggested,
+                own_topic,
             }
         })
         .collect();
@@ -227,14 +290,19 @@ pub fn add_followed(config_path: &Path, picks: &[FollowedPick]) -> Result<Vec<Ad
             "add at most {MAX_FOLLOWED_ADD} channels at once"
         )));
     }
-    let cfg = Config::load(config_path)?;
     let mut out = Vec::with_capacity(picks.len());
     for p in picks {
-        let topic = match &p.topic {
-            Some(t) => t.clone(),
-            None => suggest_topic(&cfg, &p.title, &p.slug),
+        // Reload each time: a channel added a moment ago may now own a name.
+        let cfg = Config::load(config_path)?;
+        let (topic, group) = match &p.topic {
+            Some(t) => (t.clone(), None),
+            None => (
+                own_topic_name(&cfg, &p.title, &p.slug, p.owner.as_deref()),
+                Some(FOLLOWING_GROUP),
+            ),
         };
-        let (outcome, stored) = config_edit::add_channel(config_path, &topic, &p.slug, true)?;
+        let (outcome, stored) =
+            config_edit::add_channel_in_group(config_path, &topic, &p.slug, true, group)?;
         out.push(AddedFollowed {
             slug: p.slug.clone(),
             title: p.title.clone(),
@@ -372,57 +440,111 @@ keywords = ["chair", "joinery"]
         assert_eq!(page.channels[1].suggested, FOLLOWING_TOPIC);
     }
 
+    fn pick(slug: &str, title: &str, owner: Option<&str>, topic: Option<&str>) -> FollowedPick {
+        FollowedPick {
+            slug: slug.into(),
+            title: title.into(),
+            owner: owner.map(Into::into),
+            topic: topic.map(Into::into),
+        }
+    }
+
     #[test]
-    fn add_followed_adds_without_reads_and_is_idempotent() {
+    fn followed_channels_become_their_own_topics_by_default() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("lemuse.toml");
         std::fs::write(&path, LIB).unwrap();
         let picks = vec![
-            FollowedPick {
-                slug: "chair-studies".into(),
-                title: "Chair studies".into(),
-                topic: None,
-            },
-            FollowedPick {
-                slug: "brutalism".into(),
-                title: "Brutalism".into(),
-                topic: None,
-            },
-            FollowedPick {
-                slug: "old-computers".into(),
-                title: "Old computers".into(),
-                topic: Some("Vintage tech".into()),
-            },
+            pick("chair-studies", "Chair studies", None, None),
+            pick("brutalism", "  Brutalism\n(archive) ", None, None),
+            // Same title as another followed channel, and as an existing topic.
+            pick("jewellery-a", "Jewellery", Some("Ana"), None),
+            pick("jewellery-b", "Jewellery", Some("Ben"), None),
+            pick("tech-x", "Tech", Some("Cy"), None),
+            // Asked for a topic: goes there, no group.
+            pick("old-computers", "Old computers", None, Some("Vintage tech")),
+            pick("chairs-2", "More chairs", None, Some("Wood objects")),
         ];
         let out = add_followed(&path, &picks).unwrap();
-        assert_eq!(out[0].topic, "Wood objects");
-        assert_eq!(out[1].topic, FOLLOWING_TOPIC);
-        assert!(out[0].added && out[1].added);
-        assert!(!out[2].added, "already in Vintage tech");
-        let cfg = Config::load(&path).unwrap();
-        assert!(
-            cfg.topic(FOLLOWING_TOPIC).is_some(),
-            "Following was created"
+        let topics: Vec<&str> = out.iter().map(|a| a.topic.as_str()).collect();
+        assert_eq!(
+            topics,
+            [
+                "Chair studies",
+                "Brutalism (archive)",
+                "Jewellery",
+                "Jewellery · Ben",
+                "Tech · Cy",
+                "Vintage tech",
+                "Wood objects"
+            ]
         );
-        // Running it again adds nothing.
+        assert!(!out[5].added, "already in Vintage tech");
+        let cfg = Config::load(&path).unwrap();
+        // Own topics sit under the Following heading; asked-for topics keep theirs.
+        assert_eq!(
+            cfg.topic("Jewellery · Ben").unwrap().group.as_deref(),
+            Some(FOLLOWING_GROUP)
+        );
+        assert_eq!(cfg.topic("Wood objects").unwrap().group, None);
+        assert!(
+            cfg.topic(FOLLOWING_TOPIC).is_none(),
+            "no catch-all topic any more"
+        );
+        // Running it again adds nothing and makes no new topics.
+        let n = cfg.topics.len();
         assert!(add_followed(&path, &picks)
             .unwrap()
             .iter()
             .all(|a| !a.added));
+        assert_eq!(Config::load(&path).unwrap().topics.len(), n);
+        // The name a channel already owns stays its own.
+        let cfg = Config::load(&path).unwrap();
+        assert_eq!(
+            own_topic_name(&cfg, "Jewellery", "jewellery-b", Some("Ben")),
+            "Jewellery · Ben"
+        );
         // Bad slugs and too many picks are refused before any edit.
-        let bad = [FollowedPick {
-            slug: "../evil".into(),
-            title: "x".into(),
-            topic: None,
-        }];
-        assert!(add_followed(&path, &bad).is_err());
+        assert!(add_followed(&path, &[pick("../evil", "x", None, None)]).is_err());
         let many: Vec<_> = (0..=MAX_FOLLOWED_ADD)
-            .map(|i| FollowedPick {
-                slug: format!("c-{i}"),
-                title: "x".into(),
-                topic: None,
-            })
+            .map(|i| pick(&format!("c-{i}"), "x", None, None))
             .collect();
         assert!(add_followed(&path, &many).is_err());
+    }
+
+    #[test]
+    fn own_topic_names_are_clean_unique_and_short() {
+        let cfg = Config::from_toml_str(LIB).unwrap();
+        // Existing topic "Tech": the owner is added, then a number.
+        assert_eq!(own_topic_name(&cfg, "tech", "t", Some("Dee")), "tech · Dee");
+        assert_eq!(own_topic_name(&cfg, "Tech", "t", None), "Tech 2");
+        // Long titles are cut to 60, with room for the suffix.
+        let long = "x".repeat(80);
+        assert_eq!(own_topic_name(&cfg, &long, "s", None).chars().count(), 60);
+        // Empty or invisible titles fall back to the slug.
+        assert_eq!(
+            own_topic_name(&cfg, " \u{200b} ", "my-slug", None),
+            "my-slug"
+        );
+    }
+
+    #[test]
+    fn empty_topics_can_be_removed_others_cannot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lemuse.toml");
+        std::fs::write(&path, LIB).unwrap();
+        assert!(config_edit::remove_empty_topic(&path, "Tech").unwrap());
+        assert!(
+            !config_edit::remove_empty_topic(&path, "Tech").unwrap(),
+            "gone"
+        );
+        assert!(
+            config_edit::remove_empty_topic(&path, "Vintage tech").is_err(),
+            "has a channel"
+        );
+        assert!(
+            config_edit::remove_empty_topic(&path, "Wood objects").is_err(),
+            "has keywords"
+        );
     }
 }

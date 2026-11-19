@@ -560,6 +560,7 @@ mod tests {
             slide_seconds: 8,
             shuffle: false,
             keywords: vec![],
+            group: None,
             sources: vec![refs_source()],
         }
     }
@@ -611,6 +612,7 @@ mod tests {
             slide_seconds: 8,
             shuffle: true,
             keywords: vec!["wooden chair".into()],
+            group: None,
             sources: vec![TopicSource {
                 source: "aic".into(),
                 channel: None,
