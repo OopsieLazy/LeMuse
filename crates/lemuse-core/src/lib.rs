@@ -28,6 +28,7 @@ pub mod serve;
 pub mod store;
 pub mod sync;
 pub mod ui_settings;
+pub mod update;
 
 pub use error::{Error, Result};
 

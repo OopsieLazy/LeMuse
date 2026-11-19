@@ -20,6 +20,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0005_categories.sql"),
     include_str!("../../migrations/0006_resume_cursor.sql"),
     include_str!("../../migrations/0007_block_dupes.sql"),
+    include_str!("../../migrations/0008_flags_practice.sql"),
 ];
 
 /// Caps that keep a scripted or runaway UI from growing local state without
@@ -28,6 +29,45 @@ pub const MAX_PLAYLISTS: i64 = 500;
 pub const MAX_PLAYLIST_ITEMS: i64 = 20_000;
 /// Across all playlists (review 0008 A-33).
 pub const MAX_TOTAL_PLAYLIST_ITEMS: i64 = 200_000;
+
+/// The marks a user can put on an image (ADR-0027); each is also a category id.
+pub const BLOCK_FLAGS: &[&str] = &["hidden", "nudity"];
+/// Practice log bounds: the newest sessions are kept.
+pub const MAX_PRACTICE_SESSIONS: i64 = 5_000;
+pub const MAX_PRACTICE_DRAWN: usize = 500;
+
+/// A session to keep (from the app).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub struct PracticeRecord {
+    /// Unix seconds (UTC).
+    pub started_at: i64,
+    pub seconds: i64,
+    #[serde(default)]
+    pub skipped: i64,
+    pub plan: String,
+    pub source: String,
+    pub finished: bool,
+    pub drawn: Vec<PracticeDrawn>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub struct PracticeDrawn {
+    pub block_id: i64,
+    pub seconds: i64,
+}
+
+/// A kept session, as the log shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PracticeSession {
+    pub id: i64,
+    pub started_at: i64,
+    pub seconds: i64,
+    pub drawings: i64,
+    pub skipped: i64,
+    pub plan: String,
+    pub source: String,
+    pub finished: bool,
+}
 
 /// One slideshow frame (ADR-0007). `display_url` is streamed from the source
 /// CDN; `saved` says whether an original is already in the local store.
@@ -140,6 +180,20 @@ impl CategoryFilter {
 
     pub fn is_empty(&self) -> bool {
         self.include.is_empty() && self.exclude.is_empty()
+    }
+
+    /// The content defaults every view starts from (ADR-0027): images you hid
+    /// are never shown, and likely nudity only when asked for. A filter that
+    /// names a category itself (include or exclude) is left as it is.
+    pub fn with_content_defaults(mut self, show_nudity: bool) -> Self {
+        let named = |f: &Self, id: &str| f.include.iter().chain(&f.exclude).any(|c| c == id);
+        if !named(&self, "hidden") {
+            self.exclude.push("hidden".into());
+        }
+        if !show_nudity && !named(&self, "nudity") {
+            self.exclude.push("nudity".into());
+        }
+        self
     }
 }
 
@@ -794,6 +848,13 @@ impl Catalog {
                     rows += 1;
                 }
             }
+            // The user's own marks (ADR-0027) join the derived categories, so
+            // the normal filter hides them. OR IGNORE: the sensor may agree.
+            rows += tx.execute(
+                "INSERT OR IGNORE INTO block_categories (block_id, category)
+                 SELECT block_id, flag FROM block_flags",
+                [],
+            )?;
         }
         tx.execute(
             "INSERT INTO derived_state (key, value) VALUES ('categories', ?1)
@@ -977,6 +1038,164 @@ impl Catalog {
             params![playlist_id, block_id, next],
         )?;
         Ok(())
+    }
+
+    // ── Flags: hide an image, mark nudity the sensor missed (ADR-0027) ──
+
+    /// Set or clear one of the user's marks on an image. It takes effect at
+    /// once (block_categories is updated too) and survives every rebuild.
+    pub fn set_block_flag(&mut self, block_id: i64, flag: &str, on: bool) -> Result<()> {
+        if !BLOCK_FLAGS.contains(&flag) {
+            return Err(Error::Config(format!("unknown mark `{flag}`")));
+        }
+        let tx = self.conn.transaction()?;
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS (SELECT 1 FROM blocks WHERE id = ?1)",
+            [block_id],
+            |r| r.get(0),
+        )?;
+        if !exists {
+            return Err(Error::Config(
+                "that image is no longer in the catalog".into(),
+            ));
+        }
+        if on {
+            tx.execute(
+                "INSERT OR IGNORE INTO block_flags (block_id, flag) VALUES (?1, ?2)",
+                params![block_id, flag],
+            )?;
+            tx.execute(
+                "INSERT OR IGNORE INTO block_categories (block_id, category) VALUES (?1, ?2)",
+                params![block_id, flag],
+            )?;
+        } else {
+            tx.execute(
+                "DELETE FROM block_flags WHERE block_id = ?1 AND flag = ?2",
+                params![block_id, flag],
+            )?;
+            if flag == "hidden" {
+                tx.execute(
+                    "DELETE FROM block_categories WHERE block_id = ?1 AND category = 'hidden'",
+                    [block_id],
+                )?;
+            }
+        }
+        tx.commit()?;
+        // Un-marking nudity: re-sort, so only what the sensor itself found stays.
+        if !on && flag == "nudity" {
+            self.rebuild_categories(categories::vocabulary())?;
+        }
+        Ok(())
+    }
+
+    /// How many images carry each mark.
+    pub fn flag_counts(&self) -> Result<Vec<(String, i64)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT flag, COUNT(*) FROM block_flags GROUP BY flag ORDER BY flag")?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<std::result::Result<Vec<(String, i64)>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Remove every mark of one kind ("Show hidden images again"). Returns how many.
+    pub fn clear_block_flags(&mut self, flag: &str) -> Result<usize> {
+        if !BLOCK_FLAGS.contains(&flag) {
+            return Err(Error::Config(format!("unknown mark `{flag}`")));
+        }
+        let tx = self.conn.transaction()?;
+        let n = tx.execute("DELETE FROM block_flags WHERE flag = ?1", [flag])?;
+        if flag == "hidden" {
+            tx.execute("DELETE FROM block_categories WHERE category = 'hidden'", [])?;
+        }
+        tx.commit()?;
+        if flag == "nudity" && n > 0 {
+            self.rebuild_categories(categories::vocabulary())?;
+        }
+        Ok(n)
+    }
+
+    // ── Practice log (ADR-0027, owner Q28) ──
+
+    /// Keep one finished or stopped session. Sessions with no drawings aren't kept.
+    pub fn record_practice(&mut self, s: &PracticeRecord) -> Result<Option<i64>> {
+        if s.drawn.is_empty() {
+            return Ok(None);
+        }
+        if s.drawn.len() > MAX_PRACTICE_DRAWN
+            || s.plan.chars().count() > 80
+            || s.source.chars().count() > 120
+            || !(0..=24 * 3600).contains(&s.seconds)
+            || s.skipped < 0
+            || s.drawn
+                .iter()
+                .any(|d| !(0..=24 * 3600).contains(&d.seconds))
+        {
+            return Err(Error::Config(
+                "that practice session doesn't look right".into(),
+            ));
+        }
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "INSERT INTO practice_sessions (started_at, seconds, drawings, skipped, plan, source, finished)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                s.started_at,
+                s.seconds,
+                s.drawn.len() as i64,
+                s.skipped,
+                s.plan,
+                s.source,
+                s.finished
+            ],
+        )?;
+        let id = tx.last_insert_rowid();
+        {
+            let mut ins = tx.prepare(
+                "INSERT INTO practice_drawn (session_id, position, block_id, seconds)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for (i, d) in s.drawn.iter().enumerate() {
+                ins.execute(params![id, i as i64, d.block_id, d.seconds])?;
+            }
+        }
+        // Keep the log bounded: the oldest sessions go first.
+        tx.execute(
+            "DELETE FROM practice_sessions WHERE id NOT IN
+             (SELECT id FROM practice_sessions ORDER BY started_at DESC LIMIT ?1)",
+            [MAX_PRACTICE_SESSIONS],
+        )?;
+        tx.commit()?;
+        Ok(Some(id))
+    }
+
+    /// Sessions that started at or after `since` (Unix seconds), newest first.
+    pub fn practice_sessions(&self, since: i64) -> Result<Vec<PracticeSession>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, started_at, seconds, drawings, skipped, plan, source, finished
+             FROM practice_sessions WHERE started_at >= ?1 ORDER BY started_at DESC LIMIT 2000",
+        )?;
+        let rows = stmt
+            .query_map([since], |r| {
+                Ok(PracticeSession {
+                    id: r.get(0)?,
+                    started_at: r.get(1)?,
+                    seconds: r.get(2)?,
+                    drawings: r.get(3)?,
+                    skipped: r.get(4)?,
+                    plan: r.get(5)?,
+                    source: r.get(6)?,
+                    finished: r.get::<_, i64>(7)? == 1,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Forget the whole practice log. Returns how many sessions went.
+    pub fn clear_practice(&mut self) -> Result<usize> {
+        Ok(self.conn.execute("DELETE FROM practice_sessions", [])?)
     }
 
     /// Ids of the playlists that contain `block_id`.
@@ -1391,6 +1610,131 @@ mod tests {
         let id = c.upsert_block(&b).unwrap();
         c.link_block(coll, id, None).unwrap();
         id
+    }
+
+    #[test]
+    fn nudity_sensor_and_hidden_marks_filter_out_and_survive_rebuilds() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        // Distinct images (the shared sample file would group them as re-uploads).
+        let add = |c: &mut Catalog, id: &str, title: &str| {
+            let mut b = sample(id, title);
+            b.media = vec![media("large", &format!("https://images.are.na/{id}.jpg"))];
+            b.files.clear();
+            let bid = c.upsert_block(&b).unwrap();
+            c.link_block(refs, bid, None).unwrap();
+            bid
+        };
+        let nude = add(&mut c, "1", "Seated Nude, study");
+        let chair = add(&mut c, "2", "Oak chair");
+        let planet = add(&mut c, "3", "Venus over the hills");
+        let v = crate::categories::vocabulary();
+        c.rebuild_categories(v).unwrap();
+        let keys = [("arena", "refs")];
+        let scope = Scope::collections(&keys);
+        // The app's default: hide likely nudity and the user's hidden images.
+        let safe = CategoryFilter {
+            include: vec![],
+            exclude: vec!["nudity".into(), "hidden".into()],
+        };
+        let ids = |c: &Catalog| {
+            let mut v: Vec<i64> = c
+                .slides_in(&scope, &safe, 10, 0)
+                .unwrap()
+                .iter()
+                .map(|s| s.block_id)
+                .collect();
+            v.sort();
+            v
+        };
+        // The sensor caught "Nude"; the planet Venus is left alone.
+        assert_eq!(ids(&c), vec![chair, planet]);
+        // Hide the chair; mark the planet as nudity the sensor missed.
+        c.set_block_flag(chair, "hidden", true).unwrap();
+        c.set_block_flag(planet, "nudity", true).unwrap();
+        assert!(ids(&c).is_empty());
+        // Marks survive a full rebuild (a refresh re-sorts every block).
+        c.rebuild_categories(v).unwrap();
+        assert!(ids(&c).is_empty());
+        assert_eq!(
+            c.flag_counts().unwrap(),
+            vec![("hidden".to_string(), 1), ("nudity".to_string(), 1)]
+        );
+        // Unhide one; clearing a nudity mark never un-hides what the sensor found.
+        c.set_block_flag(chair, "hidden", false).unwrap();
+        c.set_block_flag(nude, "nudity", false).unwrap();
+        assert_eq!(ids(&c), vec![chair]);
+        assert_eq!(c.clear_block_flags("nudity").unwrap(), 1);
+        assert_eq!(ids(&c), vec![chair, planet]);
+        // Unknown marks and missing images are refused.
+        assert!(c.set_block_flag(chair, "secret", true).is_err());
+        assert!(c.set_block_flag(999_999, "hidden", true).is_err());
+        assert!(c.clear_block_flags("everything").is_err());
+        let _ = nude;
+    }
+
+    #[test]
+    fn content_defaults_hide_marks_and_nudity_unless_asked() {
+        let d = CategoryFilter::default().with_content_defaults(false);
+        assert_eq!(d.exclude, ["hidden", "nudity"]);
+        assert!(d.check().is_ok(), "both are known categories");
+        let shown = CategoryFilter::default().with_content_defaults(true);
+        assert_eq!(shown.exclude, ["hidden"]);
+        // A filter that names nudity itself is respected (no include+exclude clash).
+        let want = CategoryFilter {
+            include: vec!["nudity".into()],
+            exclude: vec![],
+        }
+        .with_content_defaults(false);
+        assert_eq!(want.exclude, ["hidden"]);
+        assert!(want.check().is_ok());
+    }
+
+    #[test]
+    fn practice_log_keeps_sessions_with_drawings_only() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let a = categorized(&mut c, "1", "Oak chair", refs);
+        let rec = |started_at: i64, drawn: Vec<PracticeDrawn>| PracticeRecord {
+            started_at,
+            seconds: drawn.iter().map(|d| d.seconds).sum(),
+            skipped: 1,
+            plan: "Gesture warm-up".into(),
+            source: "Chairs".into(),
+            finished: true,
+            drawn,
+        };
+        let one = |s| PracticeDrawn {
+            block_id: a,
+            seconds: s,
+        };
+        assert_eq!(
+            c.record_practice(&rec(100, vec![])).unwrap(),
+            None,
+            "nothing drawn, nothing kept"
+        );
+        let id = c
+            .record_practice(&rec(1_000, vec![one(30), one(30)]))
+            .unwrap();
+        assert!(id.is_some());
+        c.record_practice(&rec(2_000, vec![one(60)])).unwrap();
+        let all = c.practice_sessions(0).unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].started_at, 2_000, "newest first");
+        assert_eq!(all[1].drawings, 2);
+        assert_eq!(all[1].seconds, 60);
+        assert_eq!(c.practice_sessions(1_500).unwrap().len(), 1);
+        // Nonsense is refused: a day-long pose, negative skips, a huge source name.
+        let mut bad = rec(3_000, vec![one(90_000)]);
+        assert!(c.record_practice(&bad).is_err());
+        bad = rec(3_000, vec![one(30)]);
+        bad.skipped = -1;
+        assert!(c.record_practice(&bad).is_err());
+        bad = rec(3_000, vec![one(30)]);
+        bad.source = "x".repeat(500);
+        assert!(c.record_practice(&bad).is_err());
+        assert_eq!(c.clear_practice().unwrap(), 2);
+        assert!(c.practice_sessions(0).unwrap().is_empty());
     }
 
     #[test]

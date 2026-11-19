@@ -593,10 +593,13 @@ impl Server {
                 })
                 .unwrap_or_default()
         };
+        // A wall screen or a stream: hidden images never, nudity only with
+        // `nudity=show` (ADR-0027).
         let filter = CategoryFilter {
             include: list("include"),
             exclude: list("exclude"),
-        };
+        }
+        .with_content_defaults(req.param("nudity") == Some("show"));
         let page: u32 = req
             .param("page")
             .map(|p| p.parse().map_err(|_| bad("page must be a number")))
