@@ -24,6 +24,7 @@
 | D-100 | low | Windows FFI | Wide strings are NUL-terminated and kept alive for the call; `CredFree` runs once; the blob is zeroed after writing; `ERROR_NOT_FOUND` means "none". The real-vault round trip test is `#[ignore]`d so `cargo test` never touches the vault; run once on this PC: passed, and nothing was left behind |
 | D-101 | info | The `/v3/me` fixture is shaped from the OpenAPI `Me` schema, not a real answer (no token in the repo or tests) | Register: trim a real one once the owner has saved a token |
 | D-102 | info | The token stays in memory while LeMuse runs | Accepted (ADR-0023); no zeroizing crate added |
+| D-103 | med | Owner opened the release build on `Pictures\LeMuse`, whose catalog had never been refreshed: everything showed 0 until the whole first refresh ended (minutes at the guest rate) | **Fixed:** while a refresh runs and the current view is empty, the app looks again every 10 s (catalog reads only), and the status says "First refresh: images appear as they arrive". A view with images isn't reloaded mid-slideshow |
 
 - [x] 106 tests (6 new) plus 1 ignored vault test (run once: passed) · fmt · clippy `-D warnings` (core, CLI, app)
   · typecheck · W3C 57 files · layout 55 states × 6 sizes = 330 renders.

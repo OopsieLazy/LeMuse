@@ -29,6 +29,9 @@ import { SlideshowView, type RefreshState } from "./SlideshowView";
 /** Debounce for saving settings while a slider is dragged. */
 const SAVE_DELAY_MS = 300;
 
+/** How often an empty view looks again during a refresh (catalog reads only). */
+const FIRST_FILL_POLL_MS = 10_000;
+
 /** How many upcoming images to warm in memory (CLAUDE.md: at most 2). */
 const PRELOAD_AHEAD = 2;
 
@@ -140,7 +143,12 @@ export function App() {
       setStatus(s);
       setTopics(t);
       setAllCount(all);
-      if (s.refreshing) setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
+      if (s.refreshing)
+        setRefresh({
+          label: all === 0 ? "First refresh: images appear as they arrive" : "Refreshing topics",
+          busy: true,
+          tone: "idle",
+        });
     } catch (e) {
       setNotice(message(e));
     }
@@ -168,6 +176,16 @@ export function App() {
   // What changes when new images arrive, so the slideshow reloads.
   const activeCount = active?.kind === "all" ? allCount : (topic?.slides ?? playlist?.items ?? 0);
   const activeKey = sourceKey(active);
+
+  // While a refresh runs and this view is still empty (a new library's
+  // first refresh, or a just-added topic), look again every 10 s so images
+  // show as they arrive instead of zeros until the refresh ends. A view that
+  // already has images isn't reloaded mid-slideshow.
+  useEffect(() => {
+    if (!refresh.busy || activeCount > 0) return;
+    const t = window.setInterval(loadLibrary, FIRST_FILL_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [refresh.busy, activeCount, loadLibrary]);
 
   // A deleted playlist or removed topic falls back to All.
   useEffect(() => {
