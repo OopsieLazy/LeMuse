@@ -77,6 +77,10 @@ pub struct RunSummary {
     pub blocks_unchanged: u32,
     pub files_stored: u32,
     pub errors: Vec<String>,
+    /// Things the person should know that aren't a failed source, such as a
+    /// refused Are.na token (ADR-0023).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]

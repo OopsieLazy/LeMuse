@@ -2151,6 +2151,7 @@ dependencies = [
  "toml_edit 0.22.27",
  "ureq",
  "url",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

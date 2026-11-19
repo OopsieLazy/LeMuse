@@ -18,6 +18,7 @@ pub mod categories;
 pub mod config;
 pub mod config_edit;
 pub mod connectors;
+pub mod credentials;
 pub mod error;
 pub mod export;
 pub mod import;

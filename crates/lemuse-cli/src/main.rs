@@ -14,6 +14,7 @@
 //! lemuse export-links --playlist "Chairs" --format csv > chairs.csv
 //! lemuse sheet --topic "Wood objects" --count 24 > sheet.html
 //! lemuse serve            # dashboard on http://127.0.0.1:47555
+//! lemuse arena-token set  # paste your Are.na token (kept in Credential Manager)
 //! ```
 //!
 //! `--json` makes every command print exactly one JSON document on stdout:
@@ -139,6 +140,13 @@ enum Command {
         #[arg(long)]
         playlist: Option<String>,
     },
+    /// Your Are.na personal access token, kept in Windows Credential Manager,
+    /// never in a file (ADR-0023). Make one at
+    /// https://www.are.na/settings/personal-access-tokens
+    ArenaToken {
+        #[command(subcommand)]
+        action: TokenAction,
+    },
     /// Public Are.na channels a block is also in (1 read per page).
     Related {
         /// Are.na block id (the number in are.na/block/<id>).
@@ -165,9 +173,24 @@ impl Command {
             Command::Serve { .. } => "serve",
             Command::Sheet { .. } => "sheet",
             Command::Save { .. } => "save",
+            Command::ArenaToken { .. } => "arena-token",
         }
     }
 }
+
+#[derive(Subcommand)]
+enum TokenAction {
+    /// Whether a token is saved, and for which account (no network).
+    Status,
+    /// Paste a token (hidden as you type, or piped in). Are.na checks it
+    /// first (one read); nothing is saved if it's refused.
+    Set,
+    /// Remove the saved token; refreshes run as a guest again.
+    Clear,
+}
+
+/// Where Are.na makes personal access tokens (free accounts too).
+const TOKEN_PAGE: &str = "https://www.are.na/settings/personal-access-tokens";
 
 #[derive(Clone, Copy, ValueEnum)]
 enum LinkFormat {
@@ -602,6 +625,53 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
                 saved.view
             );
             Ok(out(to_value!(&saved), text))
+        }
+        Command::ArenaToken { action } => {
+            use lemuse_core::credentials;
+            match action {
+                TokenAction::Status => {
+                    let s = credentials::arena_status()?;
+                    let text = match (&s.saved, &s.account) {
+                        (true, Some(a)) => format!("Are.na token saved for {a}.\n"),
+                        (true, None) => "Are.na token saved.\n".to_string(),
+                        _ => format!(
+                            "No Are.na token saved: refreshes run as a guest (30 reads a minute).\n\
+                             Make one at {TOKEN_PAGE}, then run: lemuse arena-token set\n"
+                        ),
+                    };
+                    Ok(out(to_value!(&s), text))
+                }
+                TokenAction::Set => {
+                    use std::io::IsTerminal;
+                    let cfg = ensure_library(paths)?;
+                    if std::io::stdin().is_terminal() {
+                        eprint!("Paste your Are.na token (it won't show), then press Enter: ");
+                    }
+                    let line = credentials::read_secret_line()
+                        .map_err(|e| lemuse_core::Error::io("stdin", e))?;
+                    if std::io::stdin().is_terminal() {
+                        eprintln!();
+                    }
+                    let account = lemuse_core::sync::save_arena_token(&cfg, &line)?;
+                    let text = format!(
+                        "Saved in Windows Credential Manager for {} ({} account): up to {} reads a \
+                         minute, and your private channels.\n",
+                        account.slug,
+                        account.tier.name(),
+                        account.tier.read_limit_per_min()
+                    );
+                    Ok(out(to_value!(&account), text))
+                }
+                TokenAction::Clear => {
+                    let removed = credentials::clear_arena_token()?;
+                    let text = if removed {
+                        "Removed the Are.na token. Refreshes run as a guest.\n"
+                    } else {
+                        "No Are.na token was saved.\n"
+                    };
+                    Ok(out(json!({ "removed": removed }), text))
+                }
+            }
         }
         Command::Related { block_id, page } => {
             let cfg = ensure_library(paths)?;

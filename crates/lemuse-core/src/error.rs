@@ -32,6 +32,11 @@ pub enum Error {
     #[error("temporary problem reaching {connector}: {message}")]
     Transient { connector: String, message: String },
 
+    /// The Are.na token: a bad paste, a refusal, or Credential Manager
+    /// trouble (ADR-0023). Never contains the token.
+    #[error("{0}")]
+    Token(String),
+
     #[error("not implemented yet: {0}")]
     NotImplemented(&'static str),
 }

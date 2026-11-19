@@ -1,0 +1,15 @@
+{
+  "id": 12345,
+  "type": "User",
+  "name": "Example Person",
+  "slug": "example-person",
+  "username": "example-person",
+  "avatar": "https://d2w9rnfcy7mm78.cloudfront.net/12345/avatar.png",
+  "initials": "EP",
+  "created_at": "2020-01-01T00:00:00Z",
+  "updated_at": "2026-11-01T00:00:00Z",
+  "bio": null,
+  "badge": null,
+  "tier": "free",
+  "counts": { "channels": 12, "followers": 3, "following": 40, "notifications": 0 }
+}
