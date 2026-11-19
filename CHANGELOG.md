@@ -8,6 +8,10 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Are.na token (work item 18, ADR-0023): paste a personal access token (free accounts too) in Settings →
+  Are.na account, or run `lemuse arena-token set`. It's checked with Are.na, then kept in Windows Credential
+  Manager, never in a file. Refreshes go about 4× faster (120 reads a minute), your private channels open,
+  and a refused token falls back to guest with a note.
 - Save (work item 17, ADR-0022): the Save button and `lemuse save` put an image's full-size original into
   `views/<topic or playlist>/`; downloads come only from each source's own image server and must be real
   images; network and 5xx failures are retried. Right-click on the image opens Save original, Copy link and

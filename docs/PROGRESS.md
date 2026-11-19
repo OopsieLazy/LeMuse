@@ -5,6 +5,19 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-18 (session 14): Are.na token (work item 18); is there a SaaS product?
+
+**Branch:** `feat/0018-arena-token` (pushed, stacked on #17) · **Status:** awaiting owner review
+
+- **Owner asked:** where the token goes and whether to git-ignore it. It goes in no file: Settings → Are.na account
+  (or `lemuse arena-token set`) checks it with Are.na, then keeps it in Windows Credential Manager (ADR-0023).
+- **Found:** Are.na quietly treats a bad token as a guest, so each refresh re-checks it (`/v3/me`, slug, name and
+  tier only) and falls back to guest with a note. `.gitignore` and the scanner now refuse token-looking files.
+- **SaaS:** ADR-0020 addendum: not yet; stage 1 web first, group features later, ask Are.na before charging.
+- **Checks:** 106 tests (+1 vault test run once); W3C 57; layout 330; clippy; secret scan clean; no new crate.
+
+---
+
 ## 2026-11-18 (session 13): v0.7.0 merged; compact windows
 
 **Branches:** `feat/0016-compact-layout`, `feat/0017-save-originals` (pushed) · **Status:** awaiting owner review

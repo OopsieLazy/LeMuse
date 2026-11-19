@@ -5,7 +5,7 @@ drawing, design and CAD practice. Topics are fed by Are.na channels you choose a
 Images stream from the source; only Save writes files.
 
 **Where we are:** **v0.7.0** is released (2026-11-18): mini player, whole channels, auto refresh, JSON,
-dashboard, reference sheets. Next: compact windows (PR below), then v0.8 Save and sign in.
+dashboard, reference sheets. Next: compact windows, Save, then the Are.na token (PRs below).
 
 **How work reaches `main` (from session 8):**
 - Claude works on a branch, commits small, and pushes the branch to GitHub. That is the off-machine backup, and
@@ -14,18 +14,19 @@ dashboard, reference sheets. Next: compact windows (PR below), then v0.8 Save an
   test installer) and clicks **Squash and merge**.
 - `main` is locked, so changes reach it only through a reviewed PR.
 
-## Now (session 13, owner's request of 2026-11-18)
+## Now (sessions 13–14, owner's requests of 2026-11-18)
 
 v0.7.0 is on `main`. Merge order: **#16 `feat/0016-compact-layout`** (with the CI fix) → **#17
-`feat/0017-save-originals`** (stacked on #16).
+`feat/0017-save-originals`** → **#18 `feat/0018-arena-token`** (each stacked on the one before).
 
 | # | Work | Status |
 |---|---|---|
 | 1 | Compact windows like the mini player; **smooth** bar slide and rail ease (#16) | ✅ pushed |
 | 2 | CI fix carried in #16 | ✅ pushed |
 | 3 | **Save originals** (v0.8 starts): host allow-list (A-37), magic bytes, retries (D-2), `lemuse save`; right-click menu; re-saves shown once; next page at a page's end (#17) | ✅ pushed |
-| 4 | Next: Are.na token in Credential Manager, import followed channels, single instance, queue reads during refresh (D-74) | ⏳ next PR |
+| 4 | **Are.na token** in Credential Manager: Settings and `lemuse arena-token`; checked each refresh; private channels; 120 reads a minute (#18, ADR-0023) | ✅ pushed |
 | 5 | Owner: Dependency graph; lock `main`; Q21–Q23 | ⏳ owner |
+| 6 | Next: import followed channels, single instance, queue reads during refresh (D-74) | ⏳ next PR |
 
 ## Roadmap
 
@@ -181,5 +182,6 @@ Claude's recommendation; the owner can reorder.
 | D-78 | Review 0014 | The dashboard page loads the newest 300 per topic | Page through `/api/v1/slides` |
 | D-80 | Review 0014 | The app doesn't start the dashboard; the token isn't kept between runs | Settings switch; token in Credential Manager (v0.8) |
 | D-94 | Review 0017 | Save Are.na attachments (STEP, DXF, PDF) | With a file-type allow-list |
+| D-101 | Review 0018 | `/v3/me` fixture is schema-shaped, not a trimmed real answer | Once the owner has saved a token |
 | A-50 | Review 0010 | CI actions pinned to Node 20 releases (deprecated); ubuntu-latest moving to Ubuntu 26 | Next CI touch: bump pinned SHAs (14-day cooldown) |
 | A-39 | Review 0009 | In-app Are.na search needs Premium | Only if the owner buys Premium (Q10 = no) |

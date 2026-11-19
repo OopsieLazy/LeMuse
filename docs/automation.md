@@ -23,7 +23,7 @@ On failure, `ok` is `false`, `error` holds the message, and the exit code is 1:
 | `topics` | `[{ name, images, slide_seconds, shuffle, keywords, sources: [{ source, key }] }]` |
 | `slides "<topic>" [--limit N]` | `[Slide]`: `{ block_id, title, display_url, width, height, page_url, creator, attribution, saved, categories, connector, original_url, fallback_urls }` |
 | `search "<words>"` | `{ query, block_ids }` |
-| `sync [--trigger cli\|schedule]` | `{ targets_seen, targets_skipped, targets_recent, blocks_upserted, blocks_unchanged, files_stored, errors }` |
+| `sync [--trigger cli\|schedule]` | `{ targets_seen, targets_skipped, targets_recent, blocks_upserted, blocks_unchanged, files_stored, errors, notes? }`; `notes` appears when there is something to know, such as a refused Are.na token |
 | `add-channel <link> --topic <name> [--new-topic]` | `{ added: { topic, channel: { slug, title, contents }, added }, refresh: <sync summary> \| null }` |
 | `preview-channel <link>` | `{ channel: { slug, title, contents }, items: [{ title, image_url, kind }] }` |
 | `related <block-id> [--page N]` | `{ channels: [{ slug, title, owner, contents }], total, next_page }` |
@@ -32,6 +32,9 @@ On failure, `ok` is `false`, `error` holds the message, and the exit code is 1:
 | `sheet [--topic T \| --playlist P] [--count N] [--seed S]` | `{ heading, seed, count, html }` (without `--json`: the HTML itself) |
 | `sync --full` | Same as `sync`, reading every channel to its end |
 | `save <block-id> [--topic T \| --playlist P]` | `{ block_id, view, bytes, already_stored }`; `view` is relative to the library |
+| `arena-token status` | `{ saved, account }` (never the token) |
+| `arena-token set` | `{ slug, name, tier }` once Are.na accepts it. Reads the token from the terminal (hidden) or a pipe, never an argument |
+| `arena-token clear` | `{ removed }` |
 | `preview-data` | Always JSON (for the UI preview), without the envelope |
 
 Without `--json`, `export-links --format csv|json|txt` writes a CSV (escaped and guarded against formula

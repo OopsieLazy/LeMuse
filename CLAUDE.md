@@ -142,6 +142,7 @@ cargo run -p lemuse-cli -- --library ./library slides "Topic name"   # what the 
 cargo run -p lemuse-cli -- --library ./library status
 cargo run -p lemuse-cli -- --library ./library sync     # real metadata refresh (no image files)
 cargo run -p lemuse-cli -- --library ./library add-channel https://www.are.na/<user>/<slug> --topic "Name" [--new-topic]
+cargo run -p lemuse-cli -- arena-token status   # Are.na token in Credential Manager (set | clear; never a file)
 
 cd app && npm ci --ignore-scripts     # first time / after lockfile changes (no install hooks)
 cd app && npm run typecheck          # UI type-check
