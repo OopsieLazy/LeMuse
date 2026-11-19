@@ -266,6 +266,13 @@ export function Icon({ d }: { d: string }) {
   );
 }
 
+/** Topics with a heading (e.g. "Following on Are.na"), in order of first appearance. */
+function topicGroups(topics: TopicInfo[]): [string, TopicInfo[]][] {
+  const groups = new Map<string, TopicInfo[]>();
+  for (const t of topics) if (t.group) groups.set(t.group, [...(groups.get(t.group) ?? []), t]);
+  return [...groups];
+}
+
 function RailItem(p: { label: string; count: number; current: boolean; onClick?: () => void }) {
   return (
     <li>
@@ -383,16 +390,36 @@ export function SlideshowView(p: SlideshowViewProps) {
             Topics
           </h2>
           <ul className="topic-list" aria-labelledby="rail-topics">
-            {p.topics.map((t) => (
-              <RailItem
-                key={t.name}
-                label={t.name}
-                count={t.slides}
-                current={current === sourceKey({ kind: "topic", name: t.name })}
-                onClick={() => p.onSelect?.({ kind: "topic", name: t.name })}
-              />
-            ))}
+            {p.topics
+              .filter((t) => !t.group)
+              .map((t) => (
+                <RailItem
+                  key={t.name}
+                  label={t.name}
+                  count={t.slides}
+                  current={current === sourceKey({ kind: "topic", name: t.name })}
+                  onClick={() => p.onSelect?.({ kind: "topic", name: t.name })}
+                />
+              ))}
           </ul>
+          {topicGroups(p.topics).map(([group, list], gi) => (
+            <div key={group}>
+              <h2 className="rail-heading" id={`rail-group-${gi}`}>
+                {group}
+              </h2>
+              <ul className="topic-list" aria-labelledby={`rail-group-${gi}`}>
+                {list.map((t) => (
+                  <RailItem
+                    key={t.name}
+                    label={t.name}
+                    count={t.slides}
+                    current={current === sourceKey({ kind: "topic", name: t.name })}
+                    onClick={() => p.onSelect?.({ kind: "topic", name: t.name })}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))}
           <h2 className="rail-heading" id="rail-playlists">
             Playlists
           </h2>

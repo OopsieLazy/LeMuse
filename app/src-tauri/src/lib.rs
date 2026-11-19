@@ -93,6 +93,8 @@ struct TopicInfo {
     slides: u64,
     /// Are.na channel slugs, for the Add-channel dialog's remove list.
     channels: Vec<String>,
+    /// The topic-list heading it sits under (e.g. "Following on Are.na").
+    group: Option<String>,
 }
 
 /// About LeMuse (Settings → About).
@@ -282,6 +284,7 @@ async fn topics() -> Cmd<Vec<TopicInfo>> {
                         .filter(|s| s.source == arena::ID)
                         .filter_map(|s| s.channel.clone())
                         .collect(),
+                    group: t.group.clone(),
                 })
             })
             .collect()

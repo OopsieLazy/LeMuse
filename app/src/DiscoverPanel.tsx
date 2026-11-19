@@ -52,6 +52,8 @@ export interface DiscoverPanelProps {
 }
 
 const NEW_TOPIC = "__new__";
+/** "Add all" option: each followed channel into its best-matching topic. */
+const MATCH = "__match__";
 const fmt = (n: number) => n.toLocaleString("en-US");
 
 export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(function DiscoverPanel(p, ref) {
@@ -245,7 +247,7 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
                             <span className="related-meta">
                               {c.owner ?? "Are.na"}
                               {c.contents != null ? ` · ${fmt(c.contents)} items` : ""}
-                              {c.in_topics.length ? ` · in ${c.in_topics.join(", ")}` : ` · new: would go to ${c.suggested}`}
+                              {c.in_topics.length ? ` · in ${c.in_topics.join(", ")}` : ` · new: becomes its own topic “${c.own_topic}”`}
                             </span>
                           </span>
                           <span className="row-actions">
@@ -263,8 +265,8 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
                                 type="button"
                                 className="text-btn"
                                 disabled={p.busy}
-                                onClick={() => p.onAddFollowed?.([{ slug: c.slug, title: c.title, topic: null }])}
-                                aria-label={`Add ${c.title} to ${c.suggested}`}
+                                onClick={() => p.onAddFollowed?.([{ slug: c.slug, title: c.title, owner: c.owner, topic: null }])}
+                                aria-label={`Add ${c.title} as its own topic`}
                               >
                                 Add
                               </button>
@@ -276,16 +278,16 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
                     {newFollowed.length > 0 && (
                       <div className="form-row follow-all">
                         <label htmlFor="follow-target">
-                          {newFollowed.length === 1 ? "1 isn't" : `${newFollowed.length} aren't`} in a topic yet. Add to
+                          {newFollowed.length === 1 ? "1 isn't" : `${newFollowed.length} aren't`} in a topic yet. Add them:
                         </label>
                         <select id="follow-target" value={followTarget} onChange={(e) => setFollowTarget(e.target.value)}>
-                          <option value="">Each one's suggested topic</option>
+                          <option value="">Each as its own topic, named after the channel</option>
+                          <option value={MATCH}>Each into the existing topic that fits it best</option>
                           {p.topics.map((t) => (
                             <option key={t.name} value={t.name}>
-                              {t.name}
+                              All into {t.name}
                             </option>
                           ))}
-                          {!p.topics.some((t) => t.name === "Following") && <option value="Following">New topic: Following</option>}
                         </select>
                         <button
                           type="button"
@@ -293,7 +295,12 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
                           disabled={p.busy}
                           onClick={() =>
                             p.onAddFollowed?.(
-                              newFollowed.map((c) => ({ slug: c.slug, title: c.title, topic: followTarget || null })),
+                              newFollowed.map((c) => ({
+                                slug: c.slug,
+                                title: c.title,
+                                owner: c.owner,
+                                topic: followTarget === MATCH ? c.suggested : followTarget || null,
+                              })),
                             )
                           }
                         >

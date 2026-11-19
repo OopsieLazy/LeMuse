@@ -20,6 +20,8 @@ export interface TopicInfo {
   slides: number;
   /** Are.na channel slugs in this topic (Add-channel dialog). */
   channels: string[];
+  /** The topic-list heading it sits under, e.g. "Following on Are.na". */
+  group?: string | null;
 }
 
 /** What the slideshow plays: everything, one topic, or one playlist. */
@@ -165,8 +167,10 @@ export interface RelatedChannels {
 export interface FollowedChannel extends ChannelSummary {
   /** Topics that already have it; empty means not imported yet. */
   in_topics: string[];
-  /** Where "Add" puts it unless told otherwise. */
+  /** The existing topic that fits it best ("best-matching topic"). */
   suggested: string;
+  /** Its own topic, named after the channel: where Add puts it. */
+  own_topic: string;
 }
 
 export interface FollowedPage {
@@ -178,7 +182,9 @@ export interface FollowedPage {
 export interface FollowedPick {
   slug: string;
   title: string;
-  /** null: the suggested topic. */
+  /** Tells two same-named channels apart in their topic names. */
+  owner?: string | null;
+  /** null: its own topic, named after the channel. */
   topic: string | null;
 }
 

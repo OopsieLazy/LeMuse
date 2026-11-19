@@ -202,6 +202,18 @@ export const STATES: Record<string, State> = {
     practice: { view: "summary", result: { ...sessionResult, drawn: [], seconds: 0, finished: false }, onResume: () => undefined },
   },
   shortcuts: { props: base, shortcuts: true },
+  // Followed channels as their own topics, under a heading (ADR-0026 addendum).
+  "rail-following": {
+    props: {
+      ...base,
+      topics: [
+        ...topics,
+        ...["Jewellery", "Jewellery · Ben", "False planets", "Typography :: Retro", "A followed channel with a long name that wraps"].map(
+          (name, i) => ({ name, slide_seconds: 8, shuffle: true, sources: 1, slides: 120 + i * 37, channels: [`c-${i}`], group: "Following on Are.na" }),
+        ),
+      ],
+    },
+  },
   // Session 17 (ADR-0026, ADR-0027, ADR-0028).
   "study-9-darks": { props: { ...base, study: { ...NO_STUDY, tones: 9, focus: "darks" } } },
   "study-5-extremes": { props: { ...base, slides: [tall], index: 0, study: { ...NO_STUDY, tones: 5, focus: "extremes" } } },
@@ -347,9 +359,9 @@ export const STATES: Record<string, State> = {
       following: {
         result: {
           channels: [
-            { slug: "chairs-xyz", title: "Chairs", owner: "Example Person", contents: 412, in_topics: [topics[0].name], suggested: topics[0].name },
-            { slug: "joinery-abc", title: "Joinery details", owner: null, contents: 88, in_topics: [], suggested: "Following" },
-            { slug: "a-very-long-channel-name-for-wrapping", title: "A very long followed channel title that has to wrap neatly", owner: "Someone", contents: 1203, in_topics: [], suggested: topics[1].name },
+            { slug: "chairs-xyz", title: "Chairs", owner: "Example Person", contents: 412, in_topics: [topics[0].name], suggested: topics[0].name, own_topic: "Chairs" },
+            { slug: "joinery-abc", title: "Joinery details", owner: null, contents: 88, in_topics: [], suggested: topics[1].name, own_topic: "Joinery details" },
+            { slug: "a-very-long-channel-name-for-wrapping", title: "A very long followed channel title that has to wrap neatly", owner: "Someone", contents: 1203, in_topics: [], suggested: topics[1].name, own_topic: "A very long followed channel title that has to wrap neatly" },
           ],
           total: 21,
           next_page: 2,
