@@ -1,0 +1,13 @@
+feat: practice tools: timed sessions, study aids, favourites (#20)
+
+✅ Timed sessions: 6 plans + your own; clock waits for the image, pauses when minimised; ticks and tones
+✅ Summary of what you drew: ♥ each, Keep as a playlist, Resume after an early end
+✅ Study aids on screen only: mirror, upside down, greyscale, values/notan + balance, squint, grids; badge
+✅ ♥ Favourites (K) and a ? shortcuts sheet
+✅ Redacted Copy details, version-only bug link, public-issue warning; AIC host removed; CODE_OF_CONDUCT
+✅ Hands-on map (docs/guide/hands-on.md); first UI unit tests in CI; design/art research report
+✅ Unit 9, W3C 78, layout 480, cargo test/clippy pass; version 0.9.0
+⬜ Session craft, surround picker, museum label, sharper Cleveland images (path to 1.0 in PLAN)
+
+Reviewed-by: admin, developer, design/art passes (docs/reviews/0020-practice-tools.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

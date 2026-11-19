@@ -5,6 +5,23 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-19 (session 16): practice tools; design and art review (work item 20)
+
+**Branch:** `feat/0020-practice-tools` (pushed, stacked on #19) · **Status:** awaiting owner review
+
+- **Built (ADR-0025):**
+  - timed sessions (6 plans + your own; the clock waits for the image and pauses when minimised; a summary with
+    ♥, Keep as a playlist and Resume);
+  - study aids on screen only (mirror, upside down, greyscale, values/notan, squint, grids);
+  - ♥ Favourites and a ? sheet; v0.9.0.
+- **Research:** 5 tracks → [report](../reports/LeMuse%20design%20and%20art%20review.md). The missing piece was the
+  session itself. Quick wins fixed; the rest re-ordered the path to 1.0 (craft before breadth). Q24–Q29 opened.
+- **Enterprise:** redacted Copy details, version-only bug link, public-issue warning, CODE_OF_CONDUCT, takedown.
+- **Owner hands-on:** [docs/guide/hands-on.md](guide/hands-on.md); first UI unit tests (in CI).
+- **Checks:** 109 Rust tests; 9 UI unit; W3C 78; layout 480; clippy; secret scan clean.
+
+---
+
 ## 2026-11-19 (session 15): polish for a complete app (work item 19)
 
 **Branch:** `feat/0019-polish` (pushed, stacked on #18) · **Status:** awaiting owner review

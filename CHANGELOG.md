@@ -8,6 +8,19 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Practice tools (work item 20, ADR-0025):
+  - **timed sessions** (N): gesture warm-up, relaxed, class (30 min), long class (1 h), sketches, long study or
+    your own plan. The clock starts when the image has loaded and pauses when LeMuse is minimised. Soft ticks
+    in the last 3 s and a tone on each new pose (can be switched off). Space pause, → skip, ← back, Esc end;
+  - a **summary** of what you drew, with ♥ on each image, **Keep as a playlist**, and **Resume** after an early
+    end;
+  - **study aids**, on screen only: mirror (X), upside down (U), greyscale (G), values 2–5 and notan with a
+    darker/lighter balance (V), squint (B), grids: thirds, 4 × 4, squares, diagonals (O), all off (0). A badge
+    says when one is on;
+  - **♥ Favourites** (K), a playlist made on your first ♥; **?** lists every shortcut;
+  - Settings → About tells what LeMuse is for; alt text includes the creator; Studio's stage is neutral grey;
+  - Copy details hides your Windows user name and token-like text; Report a problem fills in only the version;
+    the bug form warns that issues are public. Code of conduct, privacy and takedown notes; version 0.9.0.
 - Polish (work item 19, ADR-0024):
   - error codes everywhere: `--json` has `code`, the CLI exits 3–10 by kind, the app shows what to do;
   - error pages: the dashboard answers with real HTML pages and the right headers, the app has a crash page

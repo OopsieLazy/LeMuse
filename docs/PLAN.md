@@ -4,8 +4,8 @@
 drawing, design and CAD practice. Topics are fed by Are.na channels you choose and free museum collections.
 Images stream from the source; only Save writes files.
 
-**Where we are:** **v0.7.0** is released (2026-11-18): mini player, whole channels, auto refresh, JSON,
-dashboard, reference sheets. Next: compact windows, Save, then the Are.na token (PRs below).
+**Where we are:** **v0.7.0** is released (2026-11-18). PRs #16–#20 (compact windows, Save, Are.na token,
+polish, practice tools; v0.9.0) await review. Next: the path to 1.0 below.
 
 **How work reaches `main` (from session 8):**
 - Claude works on a branch, commits small, and pushes the branch to GitHub. That is the off-machine backup, and
@@ -43,16 +43,37 @@ responsiveness, polish; test the token".
 | 6 | Single instance (`tauri-plugin-single-instance` 2.5.5, cooldown passed) | ✅ pushed |
 | 7 | **v0.8.0** everywhere; Settings → About | ✅ pushed |
 
+### Session 16: practice tools (work item 20, `feat/0020-practice-tools`, stacked on #19)
+
+Owner: "practice tools seems fun, goal is 1.0; hands-on from here with guardrails, maps, plans and instructions;
+after the usual passes, a final Design Analyst and Art Specialist pass with full research." Also: what would a
+major company worry about (e.g. the app opening its own GitHub)?
+
+| # | Work | Status |
+|---|---|---|
+| 1 | **Study aids** on screen only (CSS/SVG, no pixels read or saved): mirror, upside down, greyscale, values (2–5 tones + balance), squint, grid (thirds, 4 × 4, squares, diagonals); a badge while on | ✅ pushed |
+| 2 | **Timed sessions:** 6 plans + your own; clock waits for the image and pauses when hidden; ticks and tones; pause/skip/back/end; summary with ♥, Keep as a playlist, Resume | ✅ pushed |
+| 3 | **♥ Favourites** (a playlist made on the first ♥) and a **?** shortcuts sheet | ✅ pushed |
+| 4 | **Enterprise concerns:** answered (report); redacted Copy details, version-only report link, public-issue warning, AIC host removed, CODE_OF_CONDUCT, takedown + privacy in README | ✅ pushed |
+| 5 | **Hands-on map:** `docs/guide/hands-on.md` (where things live, guardrails, first exercises) | ✅ pushed |
+| 6 | Research (5 tracks) → report → **Design Analyst / Art Specialist pass**; quick wins fixed, the rest planned | ✅ pushed |
+| 7 | ADR-0025, review 0020 (admin, developer, design/art), v0.9.0, PR #20; first UI unit tests (CI) | ✅ pushed |
+
 ### Path to 1.0 (owner, session 15: "close to complete; let's complete it")
 
-Claude's recommended order, one PR each. Details are in the roadmap below.
-1. **Practice tools** (v0.10, moved up): mirror, greyscale, value view, grid overlay, timed sessions, ♥ favourites.
-   This is the core drawing use.
-2. **Browse:** grid view, a search box over the existing index, a Saved view, rename and remove topics.
-3. **Local folders** as a source (your own reference files, nothing leaves the PC).
-4. **Desktop finish:** tray icon, start with Windows, `lemuse backup`, an accessibility pass.
-5. **1.0 release:** README with screenshots taken at release time (not kept in the repo), a short user guide,
-   and tag v1.0.0. A signed installer needs a paid certificate (owner decision).
+Claude's recommended order, one PR each. Updated after the art review (session 16): craft before breadth.
+1. ~~**Practice tools**~~ ✅ #20.
+2. **Session craft and view comfort:** large timer ring (hideable), visual flash cue, crossfade after
+   `decode()`; surround picker (5 neutral steps); remember topic, position, plan and aids; Undo toasts; a switch
+   for single-key shortcuts (WCAG 2.1.4); first run "What are you drawing today?" (DA-13, DA-6, DA-14, DA-17).
+3. **Museum label and sharpness:** tombstone label (creator, *title*, date, medium, dimensions, credit line),
+   CC0 / "rights belong to the creator" badges; Cleveland print (3,400 px) on large windows (DA-11, DA-12).
+4. **Browse:** grid view, a search box over the existing index, a Saved view, rename and remove topics.
+5. **Local folders** as a source; **content controls** (hide image or channel; Q27) (DA-15).
+6. **Desktop finish:** tray icon, start with Windows, `lemuse backup`; Save provenance sidecar (source, creator,
+   licence).
+7. **1.0 release:** release pipeline (`SHA256SUMS`, build attestation, CycloneDX SBOM, third-party notices),
+   signing (Q24), a short user guide, the trademark search (Q26), tag v1.0.0.
 
 ## Roadmap
 
@@ -97,12 +118,12 @@ Claude's recommendation; the owner can reorder.
 
 ### v0.10: Practice tools (drawing-focused)
 
-- [ ] **Timed sessions:** for example 10 × 30 s, then 5 × 2 min, then 1 × 10 min, with a session summary.
-      Pauses, skips and a final count
-- [ ] **Study aids on the image:** mirror, greyscale, value view (posterize to 3–5 tones), grid overlay
-      (thirds, 4×4, custom), zoom and pan to a detail
+- [x] **Timed sessions** with a summary; pauses, skips, back, Resume (#20, ADR-0025)
+- [x] **Study aids on the image:** mirror, upside down, greyscale, values 2–5 + balance, squint, grids (#20).
+      Still open: zoom and pan to a detail; exact L* / auto-threshold (needs a CORS check on image hosts)
 - [ ] **Compare:** two to four images side by side
-- [ ] **Seen and favorite:** remember what you've seen to avoid repeats; a ♥ that feeds a Favorites playlist
+- [x] **♥ Favourites** playlist (#20) · [ ] remember what you've seen to avoid repeats
+- [ ] **Practice log** (only if Q28 = yes): a forgiving weekly log, hideable, never a streak chain
 - [ ] **Daily set:** a fresh 20 from your topics each day
 
 ### v0.11: iPhone and automation (ADR-0016)
@@ -180,6 +201,12 @@ Claude's recommendation; the owner can reorder.
 | Q21 | Host LeMuse Web (stage 1, static, no user data) on the friend's domain? Which name, and who runs the server? | **Open** (ADR-0020); supersedes Q18 if yes |
 | Q22 | Which email account sends the daily mailer (app password in Credential Manager)? | **Open** (ADR-0021) |
 | Q23 | Contact Are.na before a public stage 2 or any paid tier? | **Open**, recommended yes (ADR-0020) |
+| Q24 | Signing identity for the installer: SignPath Foundation (free, SignPath named as publisher) or an OV certificate (~$150–300/yr, your name)? | **Open** (report §enterprise); keep one identity forever |
+| Q25 | Auto-update (Tauri updater needs a permanent private key) or manual updates via GitHub Releases / winget? | **Open** |
+| Q26 | Run the "LeMuse" trademark search (USPTO, EUIPO, UKIPO; classes 9 and 42) before 1.0 branding? | **Open** (A-19) |
+| Q27 | Nudity default: hide by default with a per-topic opt-in, or show all with a hide action? | **Open** |
+| Q28 | Keep any practice history (a local log) at all? | **Open** |
+| Q29 | Conduct reports: GitHub's private reporting form (current), or another contact? | **Open** |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register
@@ -210,3 +237,7 @@ Claude's recommendation; the owner can reorder.
 | D-94 | Review 0017 | Save Are.na attachments (STEP, DXF, PDF) | With a file-type allow-list |
 | A-50 | Review 0010 | CI actions pinned to Node 20 releases (deprecated); ubuntu-latest moving to Ubuntu 26 | Next CI touch: bump pinned SHAs (14-day cooldown) |
 | A-39 | Review 0009 | In-app Are.na search needs Premium | Only if the owner buys Premium (Q10 = no) |
+| A-108 | Review 0020 | Favourites is found by its name | Browse PR: a `role` column if renames bite |
+| DA-6, DA-13, DA-14, DA-17 | Review 0020 | Surround picker; timer ring, flash cue, crossfade; first run, remember position; shortcut switch | Path to 1.0 #2 |
+| DA-11, DA-12 | Review 0020 | Cleveland 900 px images; museum label | Path to 1.0 #3 |
+| DA-15, DA-16 | Review 0020 | Content controls; practice log | Path to 1.0 #5; Q27, Q28 |
