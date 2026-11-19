@@ -67,6 +67,13 @@ export const FORBIDDEN_FILES = [
   // No screenshots or downloaded images in the repo (ADR-0009); only the app's
   // own icons, which are allowed below.
   /\.(png|jpe?g|webp|gif|bmp|tiff?|heic|avif|ico|icns)$/i,
+  // A token pasted into a file by mistake (ADR-0023: the Are.na token lives
+  // only in Windows Credential Manager).
+  /(^|\/)(token[^/]*|[^/]*tokens?)\.txt$/i,
+  /\.token$/i,
+  /(^|\/)\.arena[^/]*$/i,
+  /(^|\/)arena[-_]token[^/]*$/i,
+  /(^|\/)secrets\//i,
 ];
 export const ALLOWED_FORBIDDEN = [
   /(^|\/)\.env\.example$/,

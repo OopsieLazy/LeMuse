@@ -61,3 +61,14 @@ sheet*.html
 *-links.txt
 /*.csv
 /*.pdf
+
+# The Are.na token lives only in Windows Credential Manager (ADR-0023). If one
+# is ever pasted into a file in this folder by mistake, keep it out of git.
+token*.txt
+*token.txt
+*tokens.txt
+*.token
+.arena*
+arena-token*
+arena_token*
+/secrets/
