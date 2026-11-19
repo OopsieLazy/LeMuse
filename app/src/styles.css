@@ -902,6 +902,25 @@ input {
   gap: var(--space-2);
 }
 
+/* Are.na account in Settings (ADR-0023) */
+.settings-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.text-link {
+  font-size: var(--text-sm);
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+
+.text-link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
 .form-status {
   flex: 1 1 var(--status-min);
   margin: 0;

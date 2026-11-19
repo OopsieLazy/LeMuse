@@ -16,12 +16,13 @@ import {
   type RefreshEvent,
   type Slide,
   type SlideSource,
+  type TokenStatus,
   type TopicInfo,
   type Vocabulary,
 } from "./api";
 import { DiscoverPanel, type RelatedState } from "./DiscoverPanel";
 import { LibraryPanel, type PanelStatus } from "./LibraryPanel";
-import { SettingsPanel } from "./SettingsPanel";
+import { SettingsPanel, type ArenaTokenView } from "./SettingsPanel";
 import { applyToDocument, DEFAULTS, sanitize, type UiSettings } from "./settings";
 import { SlideshowView, type RefreshState } from "./SlideshowView";
 
@@ -51,6 +52,7 @@ function refreshLabel(e: RefreshEvent): RefreshState {
     case "running":
       return { label: "Refreshing topics", busy: true, tone: "idle" };
     case "done":
+      if (e.note) return { label: e.note, busy: false, tone: "error" };
       return {
         label:
           e.errors > 0
@@ -85,6 +87,9 @@ export function App() {
   const [compactBarOpen, setCompactBarOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [arenaToken, setArenaToken] = useState<TokenStatus | null>(null);
+  const [arenaBusy, setArenaBusy] = useState(false);
+  const [arenaMessage, setArenaMessage] = useState<ArenaTokenView["message"]>(undefined);
   const [miniMenuOpen, setMiniMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | undefined>();
   // Per image: how many stored fallback sizes have been tried.
@@ -503,6 +508,36 @@ export function App() {
     api.openExternal(url).catch((err) => setNotice(message(err)));
   };
 
+  // ---- Are.na token (ADR-0023): checked by Are.na, kept in Credential Manager ----
+  useEffect(() => {
+    api.arenaTokenStatus().then(setArenaToken, () => setArenaToken(null));
+  }, []);
+  const saveArenaToken = async (token: string) => {
+    setArenaBusy(true);
+    setArenaMessage({ text: "Checking with Are.na", tone: "idle" });
+    try {
+      const a = await api.setArenaToken(token);
+      setArenaToken({ saved: true, account: a.slug });
+      setArenaMessage({ text: `Saved for ${a.slug} (${a.tier} account). The next refresh uses it.`, tone: "ok" });
+    } catch (e) {
+      setArenaMessage({ text: message(e), tone: "error" });
+    } finally {
+      setArenaBusy(false);
+    }
+  };
+  const clearArenaToken = async () => {
+    setArenaBusy(true);
+    try {
+      await api.clearArenaToken();
+      setArenaToken({ saved: false, account: null });
+      setArenaMessage({ text: "Removed. Refreshes run as a guest.", tone: "ok" });
+    } catch (e) {
+      setArenaMessage({ text: message(e), tone: "error" });
+    } finally {
+      setArenaBusy(false);
+    }
+  };
+
   const onRefresh = () => {
     setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
     api.refreshNow().catch((e) => setRefresh({ label: message(e), busy: false, tone: "error" }));
@@ -743,7 +778,16 @@ export function App() {
           if (relatedFor && next) loadRelated(relatedFor.blockId, next);
         }}
       />
-      <SettingsPanel ref={settingsRef} settings={settings} onChange={patch} onReset={() => setSettings(DEFAULTS)} />
+      <SettingsPanel
+        ref={settingsRef}
+        settings={settings}
+        onChange={patch}
+        onReset={() => setSettings(DEFAULTS)}
+        arena={{ mode: api.kind, status: arenaToken, busy: arenaBusy, message: arenaMessage }}
+        onSaveArenaToken={saveArenaToken}
+        onClearArenaToken={clearArenaToken}
+        onOpenLink={onOpenLink}
+      />
       <LibraryPanel
         ref={libraryRef}
         mode={api.kind}

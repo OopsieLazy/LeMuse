@@ -82,6 +82,20 @@ export interface Saved {
 }
 
 /** Where the mini player sat last time, in physical pixels. */
+/** Where Are.na makes personal access tokens (free accounts too). */
+export const ARENA_TOKEN_PAGE = "https://www.are.na/settings/personal-access-tokens";
+
+export interface TokenStatus {
+  saved: boolean;
+  account: string | null;
+}
+
+export interface ArenaAccount {
+  slug: string;
+  name: string;
+  tier: "guest" | "free" | "premium" | "supporter";
+}
+
 export interface MiniBounds {
   x: number;
   y: number;
@@ -158,7 +172,7 @@ export function arenaSearchUrl(word: string): string {
 
 export type RefreshEvent =
   | { state: "running"; trigger: string }
-  | { state: "done"; trigger: string; blocks_upserted: number; errors: number }
+  | { state: "done"; trigger: string; blocks_upserted: number; errors: number; note?: string }
   | { state: "error"; trigger: string; message: string };
 
 export interface Backend {
@@ -179,6 +193,11 @@ export interface Backend {
   saveImage(blockId: number, source: SlideSource): Promise<Saved>;
   /** Open an https link outside the app (system browser). */
   openExternal(url: string): Promise<void>;
+  /** Whether an Are.na token is saved, and whose (never the token itself; ADR-0023). */
+  arenaTokenStatus(): Promise<TokenStatus>;
+  /** Check a pasted token with Are.na, then keep it in Credential Manager. */
+  setArenaToken(token: string): Promise<ArenaAccount>;
+  clearArenaToken(): Promise<boolean>;
   libraryStatus(): Promise<LibraryStatus>;
   topics(): Promise<TopicInfo[]>;
   /** Image count for "All". */
@@ -354,6 +373,9 @@ function tauriBackend(): Backend {
     },
     copyText: (text) => navigator.clipboard.writeText(text),
     saveImage: (blockId, source) => invoke<Saved>("save_image", { blockId, source }),
+    arenaTokenStatus: () => invoke<TokenStatus>("arena_token_status"),
+    setArenaToken: (token) => invoke<ArenaAccount>("set_arena_token", { token }),
+    clearArenaToken: () => invoke<boolean>("clear_arena_token"),
     async openExternal(url) {
       if (!isOpenable(url)) throw new Error("LeMuse only opens Are.na and museum pages.");
       const { openUrl } = await import("@tauri-apps/plugin-opener");
@@ -534,6 +556,12 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     saveImage: async () => {
       throw new Error("Saving works in the desktop app; it writes into your LeMuse folder.");
     },
+    // The browser has no Credential Manager: the token is desktop-only.
+    arenaTokenStatus: async () => ({ saved: false, account: null }),
+    setArenaToken: async () => {
+      throw new Error("The Are.na token is saved by the desktop app, in Windows Credential Manager.");
+    },
+    clearArenaToken: async () => false,
     // The browser can't resize itself: the preview shows the mini layout only.
     setMini: async () => null,
     copyText: async (text) => {

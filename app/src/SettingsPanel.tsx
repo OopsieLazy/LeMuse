@@ -1,4 +1,5 @@
-import { forwardRef } from "react";
+import { forwardRef, useRef, type MouseEvent } from "react";
+import { ARENA_TOKEN_PAGE, type TokenStatus } from "./api";
 import {
   FITS,
   FONTS,
@@ -14,8 +15,20 @@ import {
 // of UiSettings through onChange; changes apply live. Rendered inside a
 // native <dialog> so focus, Escape and the backdrop come from the platform.
 
+/** The Are.na account section (ADR-0023). The token never comes back to the page. */
+export interface ArenaTokenView {
+  mode: "app" | "preview";
+  status: TokenStatus | null;
+  busy?: boolean;
+  message?: { text: string; tone: "idle" | "ok" | "error" };
+}
+
 export interface SettingsPanelProps {
   settings: UiSettings;
+  arena?: ArenaTokenView;
+  onSaveArenaToken?: (token: string) => void;
+  onClearArenaToken?: () => void;
+  onOpenLink?: (e: MouseEvent<HTMLAnchorElement>, url: string) => void;
   /** Render with the `open` attribute (W3C/layout snapshots). The app opens it with showModal(). */
   staticOpen?: boolean;
   onChange?: (patch: Partial<UiSettings>) => void;
@@ -38,6 +51,15 @@ const UNITS: Record<RangeKey, (v: number) => string> = {
 export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(function SettingsPanel(p, ref) {
   const s = p.settings;
   const set = (patch: Partial<UiSettings>) => p.onChange?.(patch);
+  const tokenRef = useRef<HTMLInputElement>(null);
+  // The pasted token leaves the field as soon as it's handed on.
+  const saveToken = () => {
+    const input = tokenRef.current;
+    if (!input || !input.value.trim()) return;
+    const token = input.value;
+    input.value = "";
+    p.onSaveArenaToken?.(token);
+  };
 
   const slider = (key: RangeKey, label: string, value: number, disabled = false) => {
     const [min, max, step] = RANGES[key];
@@ -165,6 +187,73 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
             {toggle("autoHide", "Hide the control bar when the mouse rests")}
             {slider("autoHideSeconds", "Hide after", s.autoHideSeconds, !s.autoHide)}
           </section>
+
+          {p.arena && (
+            <section className="settings-section" aria-labelledby="sec-arena">
+              <h3 id="sec-arena">Are.na account</h3>
+              {p.arena.status?.saved ? (
+                <p className="settings-note">
+                  Token saved{p.arena.status.account ? ` for ${p.arena.status.account}` : ""}, in Windows Credential
+                  Manager. Refreshes use your account's read limit and can open your private channels.
+                </p>
+              ) : (
+                <>
+                  <p className="settings-note">
+                    Without a token LeMuse reads public channels as a guest (30 reads a minute). A free account's token
+                    gives 120 a minute and your private channels. It's kept in Windows Credential Manager, never in a
+                    file.
+                  </p>
+                  <div className="field text-field">
+                    <label htmlFor="set-arena-token">Personal access token</label>
+                    <input
+                      id="set-arena-token"
+                      ref={tokenRef}
+                      type="password"
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={600}
+                      disabled={p.arena.busy || p.arena.mode === "preview"}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          saveToken();
+                        }
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+              <div className="form-row">
+                {p.arena.status?.saved ? (
+                  <button type="button" className="text-btn danger" disabled={p.arena.busy} onClick={p.onClearArenaToken}>
+                    Remove token
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    disabled={p.arena.busy || p.arena.mode === "preview"}
+                    onClick={saveToken}
+                  >
+                    {p.arena.busy ? "Checking" : "Check and save"}
+                  </button>
+                )}
+                <a
+                  className="text-link"
+                  href={ARENA_TOKEN_PAGE}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={(e) => p.onOpenLink?.(e, ARENA_TOKEN_PAGE)}
+                >
+                  Make a token on Are.na
+                </a>
+                <p className={`form-status tone-${p.arena.message?.tone ?? "idle"}`} role="status">
+                  {p.arena.message?.text ??
+                    (p.arena.mode === "preview" ? "Saving the token works in the desktop app." : "")}
+                </p>
+              </div>
+            </section>
+          )}
         </div>
 
         <footer className="settings-foot">

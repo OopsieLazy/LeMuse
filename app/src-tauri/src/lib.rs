@@ -75,6 +75,9 @@ enum RefreshEvent {
         trigger: &'static str,
         blocks_upserted: u32,
         errors: usize,
+        /// Such as a refused Are.na token (ADR-0023).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
     },
     Error {
         trigger: &'static str,
@@ -319,6 +322,33 @@ async fn save_image(
     .map_err(|e| e.to_string())?
 }
 
+// ── Are.na token (ADR-0023) ─────────────────────────────────────────────
+
+/// Whether a token is saved, and for which account. The token itself never
+/// goes to the page.
+#[tauri::command]
+fn arena_token_status() -> Result<lemuse_core::credentials::TokenStatus, String> {
+    lemuse_core::credentials::arena_status().map_err(|e| e.to_string())
+}
+
+/// Check a pasted token with Are.na (one read), then keep it in Windows
+/// Credential Manager. Nothing is saved if Are.na refuses it.
+#[tauri::command]
+async fn set_arena_token(token: String) -> Result<arena::Account, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = load_config(&library_paths())?;
+        lemuse_core::sync::save_arena_token(&cfg, &token).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Remove the saved token; refreshes run as a guest again.
+#[tauri::command]
+fn clear_arena_token() -> Result<bool, String> {
+    lemuse_core::credentials::clear_arena_token().map_err(|e| e.to_string())
+}
+
 // ── Discover (ADR-0015) ─────────────────────────────────────────────────
 
 /// "Look before you add": a pasted link's channel and its first images.
@@ -559,6 +589,7 @@ fn done_event(
             trigger,
             blocks_upserted: s.blocks_upserted,
             errors: s.errors.len(),
+            note: s.notes.into_iter().next(),
         },
         Err(message) => RefreshEvent::Error { trigger, message },
     }
@@ -606,6 +637,9 @@ pub fn run() {
             preview_channel,
             related_channels,
             save_image,
+            arena_token_status,
+            set_arena_token,
+            clear_arena_token,
             add_channel,
             remove_channel,
             playlists,

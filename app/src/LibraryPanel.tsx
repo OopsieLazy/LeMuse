@@ -137,7 +137,7 @@ export const LibraryPanel = forwardRef<HTMLDialogElement, LibraryPanelProps>(fun
                   {p.status?.text ??
                     (p.mode === "preview"
                       ? "Adding channels works in the desktop app."
-                      : "Public channels only for now. LeMuse checks the link with Are.na once, then loads its images.")}
+                      : "LeMuse checks the link with Are.na once, then loads its images. Private channels need your Are.na token (Settings).")}
                 </p>
               </div>
             </form>

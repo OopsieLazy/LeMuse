@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ChannelPreview, Playlist, Slide, TopicInfo, Vocabulary } from "../src/api";
 import { DiscoverPanel, type DiscoverPanelProps } from "../src/DiscoverPanel";
 import { LibraryPanel, type LibraryPanelProps } from "../src/LibraryPanel";
-import { SettingsPanel } from "../src/SettingsPanel";
+import { SettingsPanel, type ArenaTokenView } from "../src/SettingsPanel";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
 import { SlideshowView, type SlideshowViewProps } from "../src/SlideshowView";
 import sample from "./sample-data.json";
@@ -119,6 +119,8 @@ interface State {
   settings?: Partial<UiSettings>;
   fullscreen?: boolean;
   panel?: boolean;
+  /** The Are.na account section of Settings (ADR-0023). */
+  arena?: ArenaTokenView;
   library?: Partial<LibraryPanelProps>;
   discover?: Partial<DiscoverPanelProps>;
   mini?: boolean;
@@ -186,6 +188,30 @@ export const STATES: Record<string, State> = {
   "blueprint-technical": { props: base, settings: { preset: "blueprint", font: "technical", uiScale: 1.2 } },
   "millennium-cover": { props: base, settings: { preset: "millennium", font: "millennium", fit: "cover" } },
   "settings-open": { props: base, settings: { accent: "#c2410c" }, panel: true },
+  "settings-token-none": {
+    props: base,
+    panel: true,
+    arena: { mode: "app", status: { saved: false, account: null } },
+  },
+  "settings-token-saved": {
+    props: base,
+    panel: true,
+    arena: {
+      mode: "app",
+      status: { saved: true, account: "example-person" },
+      message: { text: "Saved for example-person (free account). The next refresh uses it.", tone: "ok" },
+    },
+  },
+  "settings-token-refused": {
+    props: { ...base, refresh: { label: "Are.na refused your saved token, so this refresh ran as a guest.", busy: false, tone: "error" } },
+    panel: true,
+    arena: {
+      mode: "app",
+      status: { saved: false, account: null },
+      message: { text: "Are.na didn't accept that token. Make a new one and paste it again.", tone: "error" },
+    },
+  },
+  "settings-token-preview": { props: { ...base, mode: "preview" }, panel: true, arena: { mode: "preview", status: null } },
   // ---- Compact windows (tablets, small windows); wide sizes are unaffected ----
   "compact-bar": { props: { ...base, compactBarOpen: true }, compactBar: true },
   "compact-drawer": { props: { ...base, railOpen: true } },
@@ -277,7 +303,7 @@ function documentFor(name: string, st: State, extraHead = "") {
     .join("; ");
   const body =
     renderToStaticMarkup(<SlideshowView {...st.props} controlsHidden={settings.controlsHidden} />) +
-    (st.panel ? renderToStaticMarkup(<SettingsPanel settings={settings} staticOpen />) : "") +
+    (st.panel ? renderToStaticMarkup(<SettingsPanel settings={settings} arena={st.arena} staticOpen />) : "") +
     (st.library
       ? renderToStaticMarkup(
           <LibraryPanel
