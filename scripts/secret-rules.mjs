@@ -74,6 +74,12 @@ export const FORBIDDEN_FILES = [
   /(^|\/)\.arena[^/]*$/i,
   /(^|\/)arena[-_]token[^/]*$/i,
   /(^|\/)secrets\//i,
+  // Release outputs (ADR-0028): installers, SHA256SUMS and SBOMs are built in
+  // CI and attached to a GitHub Release, never committed.
+  /^release\//,
+  /\.cdx\.json$/i,
+  /(^|\/)SHA256SUMS$/,
+  /\.(exe|msi|msix)$/i,
 ];
 export const ALLOWED_FORBIDDEN = [
   /(^|\/)\.env\.example$/,

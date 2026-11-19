@@ -72,3 +72,11 @@ token*.txt
 arena-token*
 arena_token*
 /secrets/
+
+# Release outputs (ADR-0028): built in CI, attached to a GitHub Release
+/release/
+*.cdx.json
+SHA256SUMS
+*.exe
+*.msi
+*.msix
