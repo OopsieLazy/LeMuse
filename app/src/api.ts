@@ -212,6 +212,30 @@ export interface About {
 /** The project's own pages, the only GitHub links LeMuse opens. */
 export const PROJECT_URL = "https://github.com/OopsieLazy/LeMuse";
 
+/**
+ * "Report a problem": GitHub's bug form with only the version filled in.
+ * The issue is public, so nothing else from this PC goes into the link (ADR-0025).
+ */
+export function reportUrl(version?: string): string {
+  const q = new URLSearchParams({ template: "bug.yml" });
+  if (version && /^[0-9A-Za-z.+-]{1,32}$/.test(version)) q.set("version", version);
+  return `${PROJECT_URL}/issues/new?${q.toString()}`;
+}
+
+/**
+ * Text that may be pasted somewhere public (Copy details): replaces the
+ * Windows user folder (it holds the user name) and anything shaped like a
+ * token or key. A best effort: the report form also asks people to check.
+ */
+export function redact(text: string): string {
+  return text
+    // A user name can hold spaces, so take everything up to the next separator.
+    .replace(/[A-Za-z]:[\\/]+Users[\\/]+[^\\/"'`\r\n]+/gi, "%USERPROFILE%")
+    .replace(/\/(?:Users|home)\/[^/"'`\r\n]+/g, "~")
+    .replace(/\b(Bearer|token|key|secret|password)([\s:=]+)\S+/gi, "$1$2[redacted]")
+    .replace(/\b[A-Za-z0-9_-]{32,}\b/g, "[redacted]");
+}
+
 export interface Backend {
   kind: "app" | "preview";
   /** Saved look-and-feel settings; untrusted, run them through `sanitize`. */
@@ -310,7 +334,7 @@ export function isHttps(url: string): boolean {
 
 /** Sites the desktop app may open in the browser; mirrors the opener scope
  * in src-tauri/capabilities/default.json (ADR-0015). */
-const OPEN_HOSTS = new Set(["www.are.na", "are.na", "clevelandart.org", "www.clevelandart.org", "www.artic.edu"]);
+const OPEN_HOSTS = new Set(["www.are.na", "are.na", "clevelandart.org", "www.clevelandart.org"]);
 
 export function isOpenable(url: string): boolean {
   try {

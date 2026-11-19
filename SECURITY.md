@@ -15,7 +15,10 @@ for security problems.
 - **Untrusted input:** all remote JSON, file names and titles are treated as untrusted. Names are sanitized
   before touching the file system (`store::views`). Extensions are allow-listed (`store::blobs`). FTS queries are
   escaped (`store::catalog::fts_query`).
-- **Local scope:** no localhost server. The asset protocol is scoped to the library folder.
+- **Local scope:** the asset protocol is scoped to the library folder. The optional dashboard (`lemuse serve`)
+  listens on 127.0.0.1 only and needs its token (ADR-0019).
+- **Bug reports are public:** Copy details hides the Windows user name and token-shaped text, and the bug form
+  asks reporters to check what they paste (ADR-0025).
 
 ## Gates (ADR-0011)
 

@@ -1,5 +1,5 @@
 import { Component, useState, type ErrorInfo, type MouseEvent, type ReactNode } from "react";
-import { api, PROJECT_URL } from "./api";
+import { api, redact, reportUrl } from "./api";
 
 // What LeMuse shows when its own page fails (ADR-0024): instead of a blank
 // window, a page with the error's code, what it means for the library, and
@@ -25,6 +25,10 @@ export function ErrorScreen(p: ErrorScreenProps) {
           Your library is safe: topics, playlists and saved images are untouched. Reload to carry on.
         </p>
         <pre className="error-detail">{p.message}</pre>
+        <p className="settings-note">
+          Copy details leaves out your Windows user name and anything that looks like a token. A report on GitHub is
+          public: check what you paste.
+        </p>
         <div className="form-row">
           <button type="button" className="primary-btn" onClick={p.onReload}>
             Reload
@@ -34,7 +38,7 @@ export function ErrorScreen(p: ErrorScreenProps) {
           </button>
           <a
             className="text-link"
-            href={`${PROJECT_URL}/issues/new`}
+            href={reportUrl()}
             target="_blank"
             rel="noreferrer noopener"
             onClick={p.onReport}
@@ -59,14 +63,14 @@ function CrashPage({ error }: { error: Error }) {
       onCopy={() => {
         // Copied only when asked; it stays on this PC unless pasted somewhere.
         api
-          .copyText(`LeMuse ${code}: ${error.message}`)
+          .copyText(redact(`LeMuse ${code}: ${error.message}`))
           .then(() => setCopied(true))
           .catch(() => setCopied(false));
       }}
       onReport={(e) => {
         if (api.kind !== "app") return;
         e.preventDefault();
-        api.openExternal(`${PROJECT_URL}/issues/new`).catch(() => undefined);
+        api.openExternal(reportUrl()).catch(() => undefined);
       }}
     />
   );

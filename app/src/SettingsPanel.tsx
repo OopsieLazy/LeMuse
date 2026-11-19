@@ -1,5 +1,5 @@
 import { forwardRef, useRef, type MouseEvent } from "react";
-import { ARENA_TOKEN_PAGE, type About, type TokenStatus } from "./api";
+import { ARENA_TOKEN_PAGE, reportUrl, type About, type TokenStatus } from "./api";
 import {
   FITS,
   FONTS,
@@ -260,8 +260,14 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
             <section className="settings-section" aria-labelledby="sec-about">
               <h3 id="sec-about">About</h3>
               <p className="settings-note">
+                <strong>Real art, credited.</strong> Free museum collections and the Are.na channels you choose: no ads,
+                no algorithm, no AI feed. Warm up, study values, and see what you drew.
+              </p>
+              <p className="settings-note">
                 LeMuse {p.about.version} · open source under the {p.about.licence} licence. Images stream from their
-                sources and belong to their creators; each one shows its credit and a link back.
+                sources and belong to their creators; each one shows its credit and a link back. No tracking: LeMuse
+                talks only to the sources whose images you see, and your Are.na token stays in Windows Credential
+                Manager. It isn't affiliated with Are.na or any museum. Press <kbd>?</kbd> for keyboard shortcuts.
               </p>
               <div className="form-row">
                 <a
@@ -275,10 +281,10 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
                 </a>
                 <a
                   className="text-link"
-                  href={`${p.about.repository}/issues/new`}
+                  href={reportUrl(p.about.version)}
                   target="_blank"
                   rel="noreferrer noopener"
-                  onClick={(e) => p.about && p.onOpenLink?.(e, `${p.about.repository}/issues/new`)}
+                  onClick={(e) => p.about && p.onOpenLink?.(e, reportUrl(p.about.version))}
                 >
                   Report a problem
                 </a>
