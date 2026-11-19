@@ -53,7 +53,9 @@ renamed.
 | `arena-token check` | `{ slug, name, tier }` when Are.na still accepts the saved token (one read); code `token` if not |
 | `arena-token following [--page N]` | `{ channels: [{ slug, title, owner, contents }], total, next_page }`: channels your account follows (one read) |
 | `arena-token clear` | `{ removed }` |
-| `import-following [--topic T] [--dry-run]` | `{ followed, already, dry_run, planned: [{ slug, title, topic }], added: [{ slug, title, topic, added }] }`: adds the channels you follow that aren't in a topic yet, each to its best-matching topic or `Following` (or all to `--topic`). One read per page of the list, nothing else; run `sync` after (ADR-0026) |
+| `import-following [--topic T \| --match] [--dry-run]` | `{ followed, already, dry_run, planned: [{ slug, title, topic }], added: [{ slug, title, topic, added }] }`: adds the channels you follow that aren't in a topic yet, each as **its own topic** named after the channel, under "Following on Are.na" (or all into `--topic`, or each into its best-matching topic with `--match`). One read per page of the list, nothing else; run `sync` after (ADR-0026) |
+| `remove-channel <slug> --topic T` | `{ removed }`: takes an Are.na channel out of a topic; its images stay in playlists |
+| `remove-topic <name>` | `{ removed }`: removes a topic with no channels or keywords left (others are refused) |
 | `update-check` | `{ current, latest: { version, name, url, published_at, newer } \| null }`: one request to GitHub's Releases API, no token; nothing is downloaded (ADR-0028) |
 | `preview-data` | Always JSON (for the UI preview), without the envelope |
 

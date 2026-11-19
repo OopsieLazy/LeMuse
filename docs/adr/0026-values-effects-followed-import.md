@@ -73,6 +73,30 @@ account. One refresh follows, and big channels keep loading across refreshes (AD
 - Only channels the user chose to follow, and only on an explicit click (or command).
 - Following a channel on Are.na never adds it by itself, and LeMuse never crawls the follow graph.
 
+## Addendum (owner, same day): each followed channel is its own topic
+
+The owner: "Followed channels should be imported as their own channel, taking the name and adding it to the list;
+one big Following folder defeats the purpose."
+
+- **Default now:** **Add** and **Add all** make each channel **its own topic, named after the channel**.
+  - The name is the channel title as one clean line of at most 60 characters (the slug if the title is empty).
+  - If another topic already has that name, the channel's owner is added ("Objects · <owner>"), then a number.
+  - A topic that already holds the channel keeps its name.
+- **Grouping:** these topics carry `group = "Following on Are.na"` in `lemuse.toml`, and the topic list shows them
+  under that heading after your own topics.
+- **The best-match mode stays** as an option: "Each into the existing topic that fits it best" in the app,
+  `--match` in the CLI. "All into <topic>" also stays.
+- **New CLI commands:** `lemuse remove-channel <slug> --topic T`, and `lemuse remove-topic NAME` (empty topics
+  only: a topic with channels or keywords is refused).
+- **Live, on the owner's library:**
+  1. The 20 channels imported earlier were taken back out of the topics they'd been put in; the 7 the owner had
+     placed stayed.
+  2. The empty Following topic was removed.
+  3. All 20 were re-imported as their own topics.
+  4. A refresh brought 545 more images, 0 errors.
+  - Result: 36 topics, 20 under "Following on Are.na" with 7,484 images.
+  - One channel ("My Translucent electronics") has items but no images, so its topic shows none.
+
 ## Consequences
 
 - **Live (owner's library):** 20 channels added (10 to existing topics, 10 to Following), then one refresh brought

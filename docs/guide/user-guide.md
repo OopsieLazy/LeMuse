@@ -16,10 +16,13 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
 - **Find more:** press **D** for Find channels. Search Are.na in your browser, preview a channel, or list
   **Channels you follow**.
 - **Channels you follow:** after you save your Are.na token (Settings → Are.na account), each followed channel
-  shows "in Objects" or "new: would go to Tech". Press **Add**, or **Add all** to bring in every new one. Each
-  goes to the best-matching topic or to a new **Following** topic. Big channels keep loading over the next
-  refreshes.
-- **From the command line:** `lemuse import-following --dry-run`, then `lemuse import-following`.
+  shows "in Objects" or "new: becomes its own topic". Press **Add**, or **Add all** to bring in every new one.
+  - Each becomes **its own topic, named after the channel**, listed under **Following on Are.na** in the topic
+    list.
+  - You can instead put each into the existing topic that fits it best, or all into one topic.
+  - Big channels keep loading over the next refreshes.
+- **From the command line:** `lemuse import-following --dry-run`, then `lemuse import-following`. Tidy up with
+  `lemuse remove-channel <slug> --topic T` and `lemuse remove-topic NAME` (empty topics only).
 
 ## Practise
 

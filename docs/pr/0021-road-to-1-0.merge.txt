@@ -2,7 +2,7 @@ feat: values and drawing effects, followed import, content, practice log, update
 
 ✅ Values 2–9 tones; darks only / lights only / darks + lights; value strip
 ✅ Drawing effects on screen: lines, strokes ↕ ↔, cross-hatch (marks follow the values)
-✅ Channels you follow: where each is, Add / Add all to the best topic; lemuse import-following
+✅ Channels you follow: each becomes its own topic under "Following on Are.na"; lemuse import-following
 ✅ Nudity sensor, hidden by default (app, dashboard, sheets); Hide this image; Mark as nudity
 ✅ Practice log: this week + 8 weekly bars, no streaks; hide or clear
 ✅ Update check (GitHub, daily, optional); release workflow: draft, SHA256SUMS, SBOM, provenance

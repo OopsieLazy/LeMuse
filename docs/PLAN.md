@@ -76,6 +76,8 @@ nudity sensor; Q28 yes; Q29 good; check the newly followed channels import; test
 | 7 | **Accessibility:** single-key shortcuts switch (WCAG 2.1.4); layout test checks 24 px targets and text contrast (84 fixed) | ✅ pushed |
 | 8 | **Name check (Q26):** desk search for "LeMuse": no conflict found (docs/product/name-check.md) | ✅ pushed |
 | 9 | Docs: ADR-0026/0027/0028, review 0021, privacy statement, user guide, release guide; v0.10.0; PR #21 | ✅ pushed |
+| 10 | Owner: "one big Following folder defeats the purpose": **each followed channel is its own topic**, named after it, under a "Following on Are.na" heading; library restructured (36 topics, 20 under the heading, 0 errors); `remove-channel`, `remove-topic` | ✅ pushed |
+| 11 | Owner: "likely SignPath" (Q24): how many use it, solo rules; draft `docs/code-signing-policy.md` | ✅ pushed |
 
 ### Path to 1.0 (owner, session 15: "close to complete; let's complete it")
 
@@ -220,7 +222,7 @@ Claude's recommendation; the owner can reorder.
 | Q21 | Host LeMuse Web (stage 1, static, no user data) on the friend's domain? Which name, and who runs the server? | **Open** (ADR-0020); supersedes Q18 if yes |
 | Q22 | Which email account sends the daily mailer (app password in Credential Manager)? | **Open** (ADR-0021) |
 | Q23 | Contact Are.na before a public stage 2 or any paid tier? | **Open**, recommended yes (ADR-0020) |
-| Q24 | Signing identity for the installer: SignPath Foundation (free, SignPath named as publisher) or an OV certificate (~$150–300/yr, your name)? | **Open** (report §enterprise); keep one identity forever. The release workflow has the slot |
+| Q24 | Signing identity for the installer: SignPath Foundation (free, SignPath named as publisher) or an OV certificate (~$150–300/yr, your name)? | **Leaning SignPath** (2026-11-19). Next (owner): publish a first release, then apply at signpath.org with docs/code-signing-policy.md; ask about solo maintainers (their terms assume a team). Then the workflow's Sign step |
 | Q25 | Auto-update (Tauri updater needs a permanent private key) or manual updates via GitHub Releases / winget? | ✅ (2026-11-19) "How hard? At least detect new versions." Update check built (#21); the updater is one PR after the first published release (ADR-0028 §2) |
 | Q26 | Run the "LeMuse" trademark search (USPTO, EUIPO, UKIPO; classes 9 and 42) before 1.0 branding? | ✅ "Sure; likely will use regardless." Desk search clean (docs/product/name-check.md); formal search only before paid distribution |
 | Q27 | Nudity default: hide by default with a per-topic opt-in, or show all with a hide action? | ✅ "Yes, needs a nudity sensor": hidden by default, text sensor + your marks (#21, ADR-0027) |

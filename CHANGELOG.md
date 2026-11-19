@@ -13,8 +13,9 @@ Once a remote exists, release-please maintains this file from Conventional Commi
     absolute darks and their light counterparts; a value strip on the image;
   - **drawing effects** (E), on screen only: lines, strokes ↕ (grass, hair, rain), strokes ↔ (water, wood grain),
     cross-hatch. Marks follow the picture's values;
-  - **Channels you follow** shows where each channel is and adds the new ones (Add, Add all) to the best-matching
-    topic or a Following topic; `lemuse import-following`;
+  - **Channels you follow** shows where each channel is and adds the new ones (Add, Add all), each as **its own
+    topic named after the channel**, under a "Following on Are.na" heading (or into the best-matching topic);
+    `lemuse import-following`, `remove-channel`, `remove-topic`;
   - a **nudity sensor**: likely nudity is hidden by default (app, dashboard, sheets); right-click Hide this image
     or Mark as nudity; Settings → Content;
   - a **practice log** in the session planner: this week and eight weekly bars, no streaks;
