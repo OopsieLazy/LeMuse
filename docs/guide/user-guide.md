@@ -27,6 +27,9 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
 
 ## Practise
 
+The **Practice** button (the half-circle) holds the timed session, the grid view and the study aids. While a
+session runs, a ⏱ button appears next to it to end the session.
+
 - **Timed session (N):** pick a plan, from Gesture warm-up (10 × 30 s) to Long class (about 1 h), or build your
   own. Each pose starts when its image has loaded.
   - Keys: Space pause, → skip, ← back (restarts the pose), Esc end.
@@ -35,7 +38,7 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
     mistake.
 - **Your practice:** the planner shows this week's drawings and eight weekly bars. There are no streaks: any week
   you draw counts. Hide it there, or clear it in Settings → Practice.
-- **Study aids (the half-circle button):** all on screen only; the image itself is never changed.
+- **Study aids (in Practice):** all on screen only; the image itself is never changed.
   - **X** mirror · **U** upside down · **G** greyscale · **B** squint · **O** grids · **0** all off.
   - **V values:** 2 (notan), 3, 4, 5, 7 or 9 tones. Move the Darker/Lighter slider to shift where the tones
     split.
@@ -73,7 +76,8 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
 - **Save (Q):** the Save dialog opens; pick a folder and a name. The full-size original goes there (and into
   Saved in the app). A note at the top says which folder it went to; it stays until you press its **×**. The
   next save starts in the same folder. The image stays on screen.
-- **Right-click** an image: Save original as…, Copy link, Open source page, **Hide this image**, **Mark as nudity**.
+- **Right-click** an image, or press **⋯** in the bar: Save original as…, Copy link, Related Are.na channels, Open
+  source page, **Hide this image**, **Mark as nudity**.
   Changed your mind? Press **Undo** on the note that appears.
 
 ## Content

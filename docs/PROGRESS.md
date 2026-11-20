@@ -21,6 +21,8 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 - **Checks:** 125 Rust; 21 UI unit; W3C 107; layout passed; `cargo audit` clean; secret scan clean.
 - **Then:** the owner's icon, redrawn as vectors (`npm run icons`), and a portable folder with shortcut scripts
   (`npm run portable`; ADR-0031 §7–8).
+- **Then:** the bar: Practice and ⋯ menus (17 → 13 buttons); source always visible; ⌃ arrow off the grid;
+  three new layout checks, a 1040 px size (ADR-0031 §9).
 
 ---
 

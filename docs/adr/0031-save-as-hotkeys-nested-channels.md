@@ -6,7 +6,7 @@ consulted: admin pass, developer pass
 informed: —
 ---
 
-# ADR-0031: Save as, changeable shortcuts, channels inside channels; app icon; portable folder
+# ADR-0031: Save as, changeable shortcuts, channels inside channels; app icon; portable folder; a calmer bar
 
 ## Context
 
@@ -93,6 +93,24 @@ What we found:
      keeps it.
    - The output is git-ignored and in `FORBIDDEN_FILES`. It holds an `.exe` and third-party emails.
 
+9. **A calmer bar, and nothing hidden or covered (owner: "the bar up arrow covers grid", "as the window is made
+   smaller the source information disappears", "art parts together").**
+   - **Practice ◐** replaces the session, grid and study-aid buttons: one menu with Timed session and Grid view
+     at the top, the study aids below. While a session runs, the ⏱ "End the session" button swaps into the bar.
+   - **⋯ (More for this image)** opens the right-click menu above the bar, replacing the Copy link and Related
+     channels buttons. That menu gained Related Are.na channels.
+   - The bar goes from 17 buttons to 13. Keys N, W, L, R and right-click still work.
+   - **Grid view:**
+     - With the bar hidden, the ⌃ arrow gets its own strip under the grid instead of covering the last
+       thumbnails and the scrollbar.
+     - In compact windows, the tap-for-bar layer is left out over the grid, so a tap picks the thumbnail.
+   - **Attribution always visible (ADR-0004):**
+     - The compact credit puts the source in its own part, and only the creator shortens with "…".
+     - That credit was also wider than a 400 px window (`box-sizing`).
+     - The Minimal layout keeps its byline.
+   - **New checks:** no control may be covered at five points; the source must be visible and unclipped; the ⌃
+     arrow must not overlap the grid; and a 1040 px size, just above the compact cutoff.
+
 ## Options considered
 
 - **Keep the fixed folder, add "Show in Explorer".** Rejected: the owner asked to choose the folder.
@@ -102,6 +120,8 @@ What we found:
 - **Expose `dialog:allow-save` to the page.** Rejected: least privilege (ADR-0011). The page never needs a path.
 - **Follow nested channels automatically on refresh.** Rejected: ADR-0004 (only user-listed channels; no
   crawling).
+- **An overflow menu that fills as the window narrows.** Rejected: buttons that move depending on the window
+  size are hard to find again; fixed groups are predictable.
 - **Upscale the 256 px PNG for the icon.** Rejected: it blurs at large sizes and smears at 16 px; vectors give
   sharp edges at every size.
 - **The app makes its own shortcuts (a Settings button).** Rejected for now: a script beside the exe works

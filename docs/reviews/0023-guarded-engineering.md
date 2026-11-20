@@ -113,3 +113,17 @@ Apps folder, with a Desktop shortcut.
 | D-156 | low | `.cmd` files need CRLF line endings | Written with CRLF |
 | D-157 | high | The installer build failed in `beforeBuildCommand` (owner report): `npm run notices` reads `cargo metadata --offline`, which fails when a locked crate isn't downloaded yet (a fresh runner, or a cache from before the dialog crates). Local builds hid it: this PC had every crate | `notices.mjs` runs `cargo fetch --locked` (the exact locked versions the build downloads anyway) and reads again. **Check:** reproduced and fixed with an empty `CARGO_HOME` (exit 101 before, 282 packages after) |
 
+## Addendum 3 (session 20): the bar (ADR-0031 §9)
+
+The owner: "the bar up arrow covers 'grid'", "as the window is made smaller the source information disappears",
+"some items of the bar could … be swappable … (art parts together)".
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| A-148 | high | Attribution hidden in places ADR-0004 requires it: the compact credit cut off the source after a long creator; Minimal hid the byline | Source in its own part, never shortened; Minimal keeps the byline. **New check:** source visible and unclipped wherever an image shows |
+| D-158 | med | With the bar hidden, the ⌃ arrow sat on the grid's last thumbnails and scrollbar | A strip under the grid for the arrow. **New check:** the arrow never overlaps the grid (it failed at 1040, 1280, 1920 before the fix) |
+| D-159 | med | In compact windows the tap-for-bar layer covered grid thumbnails (a tap toggled the bar) | No tap layer over the grid. **New check:** no control covered at five points (it found this at every compact size) |
+| D-160 | low | The compact credit was 6 px wider than a 400 px window | `box-sizing: border-box` |
+| D-161 | low | The layout test never rendered just above the compact cutoff, where the full bar is tightest | New 1040 × 700 size |
+| D-162 | low | Headless Edge screenshots below about 500 px or near 1040 px come out cropped or shifted | Visual checks render the page in an iframe of the exact size (the harness already does) |
+
