@@ -79,17 +79,34 @@ nudity sensor; Q28 yes; Q29 good; check the newly followed channels import; test
 | 10 | Owner: "one big Following folder defeats the purpose": **each followed channel is its own topic**, named after it, under a "Following on Are.na" heading; library restructured (36 topics, 20 under the heading, 0 errors); `remove-channel`, `remove-topic` | ✅ pushed |
 | 11 | Owner: SignPath researched (332 projects; solo roles not addressed), then **declined** (Q24): ship unsigned with checksums and attestation | ✅ pushed |
 
+### Session 18: finish 1.0 items 3, 4, 5 (work item 22, `feat/0022-finish-1-0`, stacked on #21)
+
+Owner: "build 3, 4, 5. Then give full commands for merge." One PR, a commit series per item.
+
+| # | Work | Status |
+|---|---|---|
+| 3a | **Remember where you were:** topic, page, image, study aids (restored at launch) | ✅ pushed |
+| 3b | **Session clock:** large ring (or small, or hidden); a flash on each new pose for quiet rooms | ✅ pushed |
+| 3c | **View comfort:** image fades in once loaded (no blank flash); **surround** picker (5 neutral greys); **Undo** on hide, mark and un-♥ | ✅ pushed |
+| 3d | **First run:** "What are you drawing today?" with topic choices | ✅ pushed |
+| 4a | **Museum label:** creator, date, medium, dimensions, credit line; **CC0** or "© creator" badge (schema 9; 1,986 of 1,992 labelled live) | ✅ pushed |
+| 4b | **Sharper museum images:** Cleveland's 3,400 px print on large windows (900 px web otherwise) | ✅ pushed |
+| 5a | **Grid view** of any view (click to play from there) | ✅ pushed |
+| 5b | **Search** over titles, descriptions and creators; a **Saved** view | ✅ pushed |
+| 5c | **Rename and remove topics** in the app | ✅ pushed |
+| 6 | ADR-0029, review 0022, docs, v0.11.0, PR #22; full merge commands for #16–#22 | ✅ pushed |
+
 ### Path to 1.0 (owner, session 15: "close to complete; let's complete it")
 
 Claude's recommended order, one PR each. Updated after the art review (session 16): craft before breadth.
 1. ~~**Practice tools**~~ ✅ #20.
 2. ~~Road to 1.0 essentials~~ ✅ #21 (values, effects, content, log, updates, release pipeline, a11y gates).
-3. **Session craft and view comfort:** large timer ring (hideable), visual flash cue, crossfade after
+3. ~~**Session craft and view comfort:**~~ ✅ #22. large timer ring (hideable), visual flash cue, crossfade after
    `decode()`; surround picker (5 neutral steps); remember topic, position, plan and aids; Undo toasts; first run
    "What are you drawing today?" (DA-13, DA-6, DA-14). (The single-key switch shipped in #21.)
-4. **Museum label and sharpness:** tombstone label (creator, *title*, date, medium, dimensions, credit line),
+4. ~~**Museum label and sharpness:**~~ ✅ #22. tombstone label (creator, *title*, date, medium, dimensions, credit line),
    CC0 / "rights belong to the creator" badges; Cleveland print (3,400 px) on large windows (DA-11, DA-12).
-5. **Browse:** grid view, a search box over the existing index, a Saved view, rename and remove topics.
+5. ~~**Browse:**~~ ✅ #22 (still open: drag to reorder playlists, search across channel names). Grid view, a search box over the existing index, a Saved view, rename and remove topics.
 6. **Local folders** as a source; hide a whole channel (DA-15).
 7. **Desktop finish:** tray icon, start with Windows, `lemuse backup`; Save provenance sidecar (source, creator,
    licence).

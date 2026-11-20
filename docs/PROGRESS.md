@@ -5,6 +5,26 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-19 (session 18): finish 1.0 items 3, 4, 5 (work item 22)
+
+**Branch:** `feat/0022-finish-1-0` (pushed, stacked on #21) · **Status:** awaiting owner review
+
+- **Built (ADR-0029):**
+  - remember where you were;
+  - ring clock and pose flash; fade-in; surround picker; undo toasts; a first-run welcome;
+  - museum label (schema 9) and sharper museum images;
+  - grid view, search, Saved, rename/remove topics.
+- **Live:** schema 9; one refresh re-read the museum records (0 errors) and labelled 1,986 of 1,992.
+- **Found by tests and screenshots:**
+  - a restore race;
+  - a clamped block id;
+  - W3C rejecting `pathLength`;
+  - a ring text overflow;
+  - stray headless Edge processes (cleaned by profile path).
+- **Checks:** 122 Rust; 18 UI unit; W3C 102; layout 10,919; secret scan clean.
+
+---
+
 ## 2026-11-19 (session 17): road to 1.0 (work item 21)
 
 **Branch:** `feat/0021-road-to-1-0` (pushed, stacked on #20) · **Status:** awaiting owner review

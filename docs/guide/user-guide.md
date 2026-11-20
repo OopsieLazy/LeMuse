@@ -44,6 +44,22 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
     Marks follow the picture's values, so you see how to draw the effect rather than every blade. Try strokes
     with 4 values and squint.
   - A badge on the image always says which aids are on.
+- **The session clock** is a large ring by default; choose small or hidden in Settings → Practice, where you can
+  also turn off the flash around the image on each new pose.
+- **Behind the image** (Settings → Image): a neutral grey keeps values honest; pick white, light, mid, dark or
+  black.
+- **Museum images** show a label like a gallery wall: who made it, a CC0 badge (public domain), date, medium,
+  size and credit line. On a big screen they load at full museum resolution.
+
+## Find and browse
+
+- **Search (/):** the box at the top of the topic list searches titles, descriptions and creators across your
+  whole library.
+- **Grid (W):** the whole view as a contact sheet; click an image to play from there; Esc goes back.
+- **Saved:** every image you saved, newest first (in the topic list under All).
+- **Rename or remove a topic:** press **+**, pick the topic, and use **This topic**. Removing asks once more;
+  your playlists and saved files stay.
+- LeMuse **remembers where you were**: it opens on the same view and image next time.
 
 ## Keep and organise
 
@@ -51,6 +67,7 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
 - **Playlist (P):** add to any playlist.
 - **Save:** the full-size original goes into your LeMuse folder.
 - **Right-click** an image: Save original, Copy link, Open source page, **Hide this image**, **Mark as nudity**.
+  Changed your mind? Press **Undo** on the note that appears.
 
 ## Content
 

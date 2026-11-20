@@ -8,6 +8,16 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Finishing 1.0 (work item 22, ADR-0029):
+  - LeMuse **remembers where you were** (view, page, image, study aids);
+  - sessions get a **large ring clock** (or small, or hidden) and a soft **flash** on each new pose;
+  - images **fade in** once loaded; pick the **grey behind the image** (Settings → Image); **Undo** after Hide
+    this image, Mark as nudity and removing a ♥;
+  - a first-run welcome: "What are you drawing today?";
+  - a **museum label**: creator, CC0 or © creator, date · medium · dimensions, credit line; **sharper museum
+    images** on big windows;
+  - **grid view** (W), **search** (/), a **Saved** view, and **rename / remove topics** in the app; CLI
+    `rename-topic`, `remove-topic --with-channels`; version 0.11.0.
 - Road to 1.0 (work item 21, ADR-0026, ADR-0027, ADR-0028):
   - **values** in 2, 3, 4, 5, 7 or 9 tones, and **darks only / lights only / darks + lights** (I) to find the
     absolute darks and their light counterparts; a value strip on the image;
