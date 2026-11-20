@@ -79,6 +79,21 @@ nudity sensor; Q28 yes; Q29 good; check the newly followed channels import; test
 | 10 | Owner: "one big Following folder defeats the purpose": **each followed channel is its own topic**, named after it, under a "Following on Are.na" heading; library restructured (36 topics, 20 under the heading, 0 errors); `remove-channel`, `remove-topic` | ✅ pushed |
 | 11 | Owner: SignPath researched (332 projects; solo roles not addressed), then **declined** (Q24): ship unsigned with checksums and attestation | ✅ pushed |
 
+### Session 19: guarded engineering with an AI; third-party notices (work item 23, `chore/0023-guarded-engineering`)
+
+Owner (after merging 0.11 as one PR and tagging v0.11.0): "remove ability to push as git account. This was good
+test, the line is moderately easy to walk. Continue as per plan." One branch, merged before the next starts.
+
+| # | Work | Status |
+|---|---|---|
+| 1 | **Claude never pushes:** deny rule + `no-push.mjs` hook (any position in a command); CLAUDE.md and memory | ✅ |
+| 2 | **Guardrail files gate:** CI fails when a PR touches workflows, hooks, scanner rules, `.gitleaksignore`, capabilities, CSP or CLAUDE.md, until the owner adds the `guardrails-reviewed` label | ✅ |
+| 3 | **"Where to look"** in every PR: the riskiest changes (file:line), what breaks if wrong, which test catches it | ✅ |
+| 4 | **Backup before every schema migration** (`catalog-v<N>-backup.db`, last 2 kept) | ✅ |
+| 5 | **Third-party notices** (1.0 item): every Rust crate and npm package with its licence text, in the installer and Settings → About | ✅ |
+| 6 | Process: acceptance examples first (owner approves), no stacked branches, CI is the source of truth | ✅ |
+| 7 | **Version 1.0.0** (the 1.0 list is complete); tagging and publishing are the owner's | ✅ |
+
 ### Session 18: finish 1.0 items 3, 4, 5 (work item 22, `feat/0022-finish-1-0`, stacked on #21)
 
 Owner: "build 3, 4, 5. Then give full commands for merge." One PR, a commit series per item.
@@ -110,8 +125,17 @@ Claude's recommended order, one PR each. Updated after the art review (session 1
 6. **Local folders** as a source; hide a whole channel (DA-15).
 7. **Desktop finish:** tray icon, start with Windows, `lemuse backup`; Save provenance sidecar (source, creator,
    licence).
-8. **1.0 release:** third-party notices, the Tauri auto-updater (ADR-0028 §2), tag v1.0.0 and publish the draft
-   the release workflow makes (docs/release.md). Unsigned by decision (Q24).
+8. ~~**1.0 release:**~~ third-party notices ✅ work item 23 (ADR-0030); version 1.0.0. Owner: tag v1.0.0 and publish the
+   draft the release workflow makes (docs/release.md). Unsigned by decision (Q24). The Tauri auto-updater moves to
+   1.1 (ADR-0028 §2).
+
+### After 1.0 (1.1 candidates, owner picks)
+
+- Local folders as a source; hide a whole channel (DA-15).
+- Tray icon, start with Windows, `lemuse backup` (whole library); the Tauri auto-updater.
+- Guarded engineering, next steps (ADR-0030): mutation testing (cargo-mutants, Stryker); an independent AI
+  reviewer with only the diff; a separate bot account for AI commits (A-4).
+- Search across channel names; drag to reorder playlists.
 
 ## Roadmap
 

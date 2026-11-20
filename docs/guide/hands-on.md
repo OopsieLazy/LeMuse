@@ -114,12 +114,14 @@ git add -A
 git commit -m "feat(ui): add a hands session preset"
 # Before pushing: scan everything the branch changes
 node scripts/scan-secrets.mjs --range main...HEAD
-# Push the branch (never main), then open the PR from the compare link
+# Push the branch (never main), then open the PR from the compare link. You push; Claude can't (ADR-0030)
 git push -u origin feat/0021-my-change
 ```
 
-The PR description follows `.github/pull_request_template.md` (What / Why / How + checklist). Merge with
-**Squash and merge** on GitHub.
+The PR description follows `.github/pull_request_template.md` (What / Why / How / **Where to look** +
+checklist). If the PR changes a guardrail file (`node scripts/guardrail-check.mjs` lists them), read those
+files, then add the `guardrails-reviewed` label: the `guardrails` check waits for it. Merge with **Squash and
+merge** on GitHub.
 
 ## 6. Working with Claude
 

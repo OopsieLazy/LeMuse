@@ -18,8 +18,9 @@ owner tags and publishes.
    git push origin v0.10.0
    ```
 
-3. **Wait for the `release` workflow** (GitHub → Actions). It runs the tests, builds the installers, writes
-   `SHA256SUMS` and the SBOM, attests where the files came from, and opens a **draft** release.
+3. **Wait for the `release` workflow** (GitHub → Actions). It runs the tests, builds the installers (with the
+   third-party notices inside), writes `SHA256SUMS`, the SBOM and `THIRD-PARTY-NOTICES.txt`, attests where the
+   files came from, and opens a **draft** release.
 4. **Read the draft** (GitHub → Releases): the files, the notes, the CHANGELOG entry. Click **Publish release**.
    From then on the app's update check offers it.
 

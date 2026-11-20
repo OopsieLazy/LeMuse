@@ -2116,7 +2116,7 @@ dependencies = [
 
 [[package]]
 name = "lemuse-app"
-version = "0.11.0"
+version = "1.0.0"
 dependencies = [
  "lemuse-core",
  "serde",
@@ -2129,7 +2129,7 @@ dependencies = [
 
 [[package]]
 name = "lemuse-cli"
-version = "0.11.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "lemuse-core",
@@ -2138,7 +2138,7 @@ dependencies = [
 
 [[package]]
 name = "lemuse-core"
-version = "0.11.0"
+version = "1.0.0"
 dependencies = [
  "getrandom 0.2.17",
  "hex",

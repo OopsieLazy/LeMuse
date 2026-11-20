@@ -17,6 +17,9 @@ for security problems.
   escaped (`store::catalog::fts_query`).
 - **Local scope:** the asset protocol is scoped to the library folder. The optional dashboard (`lemuse serve`)
   listens on 127.0.0.1 only and needs its token (ADR-0019).
+- **AI changes are gated (ADR-0030):** the coding agent can't push; a PR that changes a guardrail file (CI,
+  hooks, scanner rules, ignore lists, permissions, CSP, CLAUDE.md) fails the `guardrails` check until the owner
+  reads it and adds the `guardrails-reviewed` label.
 - **Bug reports are public:** Copy details hides the Windows user name and token-shaped text, and the bug form
   asks reporters to check what they paste (ADR-0025).
 

@@ -1,0 +1,12 @@
+chore: guarded engineering with an AI, third-party notices, 1.0.0
+
+✅ Claude can't push: deny rule + no-push hook; the owner pushes with their own account
+✅ Guardrail gate: PRs touching CI, hooks, scanners, ignore lists, permissions, CSP or CLAUDE.md need the
+   owner's "guardrails-reviewed" label
+✅ "Where to look" in every PR; CLAUDE.md: acceptance examples first, one branch per PR, CI is the truth
+✅ Catalog backup before every schema upgrade (newest two kept)
+✅ Third-party licences in the installer, Settings → About and each release
+✅ 123 Rust, 18 UI unit, W3C 103, layout 14,008 checks; version 1.0.0
+
+Reviewed-by: admin, developer passes (docs/reviews/0023-guarded-engineering.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

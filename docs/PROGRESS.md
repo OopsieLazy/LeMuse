@@ -5,6 +5,23 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-20 (session 19): guarded engineering with an AI; 1.0 (work item 23)
+
+**Branch:** `chore/0023-guarded-engineering` (committed; **the owner pushes**) · **Status:** awaiting owner review
+
+- **Owner merged** 0.11 as one PR (#3) and tagged v0.11.0. Then asked whether this was vibe coding and to remove
+  Claude's ability to push.
+- **Built (ADR-0030):**
+  - no-push rule and hook;
+  - guardrail gate (label);
+  - "Where to look" in PRs, and new process rules in CLAUDE.md;
+  - a backup before schema upgrades;
+  - third-party notices (279 packages, in the installer and About);
+  - version 1.0.0.
+- **Checks:** 123 Rust; 18 UI unit; W3C 103; layout 14,008; installer build with notices; secret scan clean.
+
+---
+
 ## 2026-11-19 (session 18): finish 1.0 items 3, 4, 5 (work item 22)
 
 **Branch:** `feat/0022-finish-1-0` (pushed, stacked on #21) · **Status:** awaiting owner review

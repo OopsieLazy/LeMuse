@@ -12,7 +12,7 @@ no AI feed.
   PureRef, Krita or your CAD tool.
 - **Calm by design:** each image shows who made it and links back to its source.
 
-> Status: **v0.10, on the way to 1.0.** See [docs/PLAN.md](docs/PLAN.md). Repo:
+> Status: **1.0.** See [docs/PLAN.md](docs/PLAN.md). Repo:
 > <https://github.com/OopsieLazy/LeMuse> · Licence: [MIT](LICENSE).
 
 ## How it works

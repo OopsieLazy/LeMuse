@@ -8,6 +8,9 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- 1.0 (work item 23, ADR-0030): third-party licences in the installer and Settings → About (and attached to each
+  release); a catalog backup before every schema upgrade; a `guardrails` CI check that needs the owner's label
+  when CI, hooks, scanners, permissions or CLAUDE.md change; Claude can no longer push; version 1.0.0.
 - Finishing 1.0 (work item 22, ADR-0029):
   - LeMuse **remembers where you were** (view, page, image, study aids);
   - sessions get a **large ring clock** (or small, or hidden) and a soft **flash** on each new pose;
