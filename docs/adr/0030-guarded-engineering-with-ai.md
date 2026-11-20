@@ -50,7 +50,8 @@ the ability to push as the git account" and to continue with guarded engineering
    - If the copy fails (disk full), nothing is migrated and the error says why.
 6. **Third-party notices.**
    - `scripts/notices.mjs` walks only what ships: normal dependencies of the app and CLI on Windows, not dev or
-     build tools. That's 272 crates from `cargo metadata --offline`, plus the 7 non-dev npm packages.
+     build tools. That's 272 crates from `cargo metadata --offline`, plus the 7 non-dev npm packages. If a locked crate
+     isn't downloaded yet, the script runs `cargo fetch --locked` first (review 0023 D-157).
    - It reads each package's own licence files and prints identical texts once.
    - Installer builds generate it (`beforeBuildCommand`) and bundle it as a resource. Settings → About →
      Third-party licences shows it as text, and the release workflow attaches it to each release.

@@ -111,4 +111,5 @@ Apps folder, with a Desktop shortcut.
 | D-154 | med | `target/release/lemuse-app.exe` is locked while that build runs (the installer rebuild failed this way) | `portable.mjs` says so and honours `CARGO_TARGET_DIR`; copying over a running portable exe gives a clear message |
 | D-155 | low | Thin lines vanish at 16–32 px | A second, bolder drawing feeds the small ICO frames and `32x32.png` |
 | D-156 | low | `.cmd` files need CRLF line endings | Written with CRLF |
+| D-157 | high | The installer build failed in `beforeBuildCommand` (owner report): `npm run notices` reads `cargo metadata --offline`, which fails when a locked crate isn't downloaded yet (a fresh runner, or a cache from before the dialog crates). Local builds hid it: this PC had every crate | `notices.mjs` runs `cargo fetch --locked` (the exact locked versions the build downloads anyway) and reads again. **Check:** reproduced and fixed with an empty `CARGO_HOME` (exit 101 before, 282 packages after) |
 

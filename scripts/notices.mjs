@@ -6,8 +6,10 @@
 //
 //   node scripts/notices.mjs [--out app/src-tauri/notices/THIRD-PARTY-NOTICES.txt]
 //
-// Reads `cargo metadata` and the local package sources only: no network
-// (`--offline`). The output is git-ignored (it quotes third-party authors'
+// Reads `cargo metadata` and the local package sources (`--offline`). If a
+// crate in Cargo.lock isn't downloaded yet (a fresh clone, or a CI cache
+// from before a dependency was added), it first runs `cargo fetch --locked`:
+// exactly the locked versions the build downloads anyway, nothing newer. The output is git-ignored (it quotes third-party authors'
 // copyright lines); the installer bundles it and Settings → About shows it.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -32,13 +34,23 @@ function licenceTexts(dir) {
 }
 
 // ── Rust: walk normal dependencies from the shipped workspace members ──
-const meta = JSON.parse(
+const metadata = () =>
   execFileSync(
     "cargo",
     ["metadata", "--format-version", "1", "--locked", "--offline", "--filter-platform", "x86_64-pc-windows-msvc"],
-    { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
-  ),
-);
+    { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] },
+  );
+let metaText;
+try {
+  metaText = metadata();
+} catch {
+  // Not all locked crates are on this machine yet (review 0023 D-157: the
+  // CI installer build failed this way). Download them, then read again.
+  console.error("notices: fetching the crates in Cargo.lock (cargo fetch --locked)");
+  execFileSync("cargo", ["fetch", "--locked"], { cwd: root, stdio: "inherit" });
+  metaText = metadata();
+}
+const meta = JSON.parse(metaText);
 const byId = new Map(meta.packages.map((p) => [p.id, p]));
 const nodes = new Map(meta.resolve.nodes.map((n) => [n.id, n]));
 const shipped = new Set();
