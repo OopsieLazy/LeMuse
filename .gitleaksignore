@@ -1,0 +1,10 @@
+# Reviewed gitleaks false positives (ADR-0011, review 0022 A-134). One exact
+# finding per line, so anything new is still caught:
+#   history scans (CI): commit:file:rule:line
+#   working-tree scans: file:rule:line
+#
+# ADR-0011 line 26 is a table row of prose about what the admin hook reviews;
+# the generic-api-key rule reads one of its words and the text after it as a
+# key. It is not a secret.
+c5efc1c82344d3789a98025565b8cf364c11f3bd:docs/adr/0011-security-gates.md:generic-api-key:26
+docs/adr/0011-security-gates.md:generic-api-key:26
