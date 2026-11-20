@@ -5,6 +5,23 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-20 (session 20): before the merge: Save as, shortcuts, nested channels (work item 23)
+
+**Branch:** `chore/0023-guarded-engineering` (committed; **the owner pushes**) · **Status:** awaiting owner review
+
+- **Owner asked before merging:** changeable hotkeys; a key that brings the bar back; a saved image must stay;
+  "Translucent electronics" doesn't load; Save as with a folder note and ×.
+- **Built (ADR-0031):**
+  - Save as through the Windows dialog (Rust side; no page permission);
+  - `keys.ts` drives the key handler and the editable ? sheet;
+  - H opens the bar in every window;
+  - a stable shuffle (the save bug);
+  - nested channels listed in the preview (the channel holds 8 channels, no images).
+- **New check:** layout test at mini sizes; it caught the save note and an old mini-menu overflow (D-146).
+- **Checks:** 125 Rust; 21 UI unit; W3C 107; layout passed; `cargo audit` clean; secret scan clean.
+
+---
+
 ## 2026-11-20 (session 19): guarded engineering with an AI; 1.0 (work item 23)
 
 **Branch:** `chore/0023-guarded-engineering` (committed; **the owner pushes**) · **Status:** awaiting owner review

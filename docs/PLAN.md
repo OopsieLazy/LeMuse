@@ -93,6 +93,11 @@ test, the line is moderately easy to walk. Continue as per plan." One branch, me
 | 5 | **Third-party notices** (1.0 item): every Rust crate and npm package with its licence text, in the installer and Settings → About | ✅ |
 | 6 | Process: acceptance examples first (owner approves), no stacked branches, CI is the source of truth | ✅ |
 | 7 | **Version 1.0.0** (the 1.0 list is complete); tagging and publishing are the owner's | ✅ |
+| 8 | Owner (before merging): **changeable hotkeys** in the ? sheet (linked from Settings → Keyboard); Save gets Q (ADR-0031) | ✅ |
+| 9 | **H brings the bar back** in every window: large, compact and the mini player | ✅ |
+| 10 | **Bug fixed:** saving reshuffled the slides; the order is now stable, so the image stays | ✅ |
+| 11 | **Translucent electronics** holds 8 channels, no images: the preview now lists channels inside to add (ADR-0004 kept) | ✅ |
+| 12 | **Save as:** Windows Save dialog (Rust side, no page permission); a note names the folder until its × | ✅ |
 
 ### Session 18: finish 1.0 items 3, 4, 5 (work item 22, `feat/0022-finish-1-0`, stacked on #21)
 
@@ -136,6 +141,7 @@ Claude's recommended order, one PR each. Updated after the art review (session 1
 - Guarded engineering, next steps (ADR-0030): mutation testing (cargo-mutants, Stryker); an independent AI
   reviewer with only the diff; a separate bot account for AI commits (A-4).
 - Search across channel names; drag to reorder playlists.
+- An automated check for the bar key (H) in compact and mini windows (review 0023 D-153).
 
 ## Roadmap
 

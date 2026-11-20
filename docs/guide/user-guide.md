@@ -53,6 +53,11 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
 
 ## Find and browse
 
+- **Shortcuts:** press **?** for the list. Choose **Change** next to any of them and press the key you want
+  (Settings → Keyboard has a link too). **H** shows or hides the control bar in every window size, the mini
+  player included.
+- **A channel that shows nothing** may hold other channels instead of images. Open Find channels, preview it,
+  and add the channels inside that you want; each becomes its own topic.
 - **Search (/):** the box at the top of the topic list searches titles, descriptions and creators across your
   whole library.
 - **Grid (W):** the whole view as a contact sheet; click an image to play from there; Esc goes back.
@@ -65,8 +70,10 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
 
 - **♥ (K):** adds the image to Favourites.
 - **Playlist (P):** add to any playlist.
-- **Save:** the full-size original goes into your LeMuse folder.
-- **Right-click** an image: Save original, Copy link, Open source page, **Hide this image**, **Mark as nudity**.
+- **Save (Q):** the Save dialog opens; pick a folder and a name. The full-size original goes there (and into
+  Saved in the app). A note at the top says which folder it went to; it stays until you press its **×**. The
+  next save starts in the same folder. The image stays on screen.
+- **Right-click** an image: Save original as…, Copy link, Open source page, **Hide this image**, **Mark as nudity**.
   Changed your mind? Press **Undo** on the note that appears.
 
 ## Content

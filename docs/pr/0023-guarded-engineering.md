@@ -22,6 +22,16 @@
   - every crate and npm package LeMuse ships, with its licence text;
   - in the installer, in Settings → About → Third-party licences, and attached to each release.
 - **Version 1.0.0:** the 1.0 list in PLAN is complete.
+- **Before the merge (ADR-0031):**
+  - **Save as** (button, right-click or Q). The Windows Save dialog picks the folder and name, starting where
+    the last save went. A note at the top names the folder until you press its ×.
+  - **Changeable shortcuts** in the ? sheet (Change, then press a key; None; Reset all), linked from
+    Settings → Keyboard.
+  - **H brings the bar back** in compact windows and the mini player too.
+  - **Saving keeps the image on screen.** The slide order no longer reshuffles when the image is marked
+    saved.
+  - **Channels made of channels** ("Translucent electronics" holds 8 channels and no images). The preview
+    lists the channels inside, with Add and Add all; each becomes its own topic.
 
 ## Why
 
@@ -34,6 +44,10 @@ The vibe-coding discussion showed the gaps:
 
 Third-party notices were the last 1.0 item.
 
+Before merging, you asked: "create a hotkeys list (changeable)… bringing back the bar… Saving an image should not
+remove it… Some channels not loaded (Translucent electronics)… save to folder on local (user choose EI save as)
+and state which folder saved to, with pop up an x".
+
 ## How
 
 - `scripts/hooks/no-push.mjs`, `.claude/settings.json`;
@@ -41,7 +55,9 @@ Third-party notices were the last 1.0 item.
 - `Catalog::migrate_list` with `VACUUM INTO`;
 - `scripts/notices.mjs`, `build.rs` placeholder, Tauri `resources`;
 - `NoticesPanel`.
-- ADR-0030 · [review 0023](../reviews/0023-guarded-engineering.md).
+- `keys.ts` (one list for the handler, the sheet and the editor), `order.ts` (stable shuffle),
+  `save.rs` `copy_to`, `save_image_as` with `tauri-plugin-dialog` =2.8.4 (Rust side only).
+- ADR-0030, ADR-0031 · [review 0023](../reviews/0023-guarded-engineering.md).
 
 ## Where to look
 
@@ -51,19 +67,24 @@ Third-party notices were the last 1.0 item.
 | high | `.github/workflows/guardrails.yml`, `scripts/guardrail-check.mjs` | Guardrail changes merge unread, or every PR fails | Local: no label → fail, label → pass, none touched → pass |
 | med | `crates/lemuse-core/src/store/catalog.rs` (`migrate_list`, `backup_before_migration`) | An upgrade with no way back | Backup test (old schema inside; newest two kept) |
 | med | `app/src-tauri/build.rs`, `tauri.conf.json` | Builds break, or the installer lacks notices | `cargo check` passes without notices; a real installer build bundled them |
+| high | `app/src-tauri/src/lib.rs` `save_image_as`, `.plugin(tauri_plugin_dialog::init())` | The page could choose paths or open dialogs | No `dialog:` permission in `capabilities/`; the command takes no path |
+| med | `crates/lemuse-core/src/save.rs` `copy_to` | A half-written or misnamed file in your folder | Rust test (type fix, replace, no `.part` left, bad paths refused) |
+| med | `app/src/App.tsx` `slides` memo, `app/src/order.ts`, `app/src/keys.ts` | Shuffle stops or jumps; two actions on one key | UI unit tests |
 
 - Guardrail files touched: `.claude/settings.json`, `scripts/hooks/no-push.mjs`,
   `.github/workflows/guardrails.yml`, `.github/workflows/release.yml`, `scripts/guardrail-check.mjs`,
   `scripts/secret-rules.mjs`, `.gitignore`, `app/src-tauri/tauri.conf.json`,
-  `CLAUDE.md`, `SECURITY.md`.
+  `CLAUDE.md`, `SECURITY.md`, `app/scripts/layout-test.mjs`.
+- `layout-test.mjs` got stricter: it adds mini sizes and checks that pop-ups stay inside the window. One
+  relaxation: a control inside a scrolling list that fits the window counts as reachable (the mini menu).
 - Acceptance examples: the owner's words. No push is possible; guardrail changes need a label; an upgrade leaves
-  a backup; About lists the licences.
+  a backup; About lists the licences. Before the merge: the 5 examples in review 0023's addendum.
 
 ## Checklist
 
 - [x] Secret scan clean
-- [x] 123 Rust tests · fmt · clippy `-D warnings` (core, CLI, app) · typecheck · 18 UI unit tests · W3C 103 ·
-  layout 14,008 checks
+- [x] 125 Rust tests · fmt · clippy `-D warnings` (core, CLI, app) · typecheck · 21 UI unit tests · W3C 107 ·
+  layout 105 states × 6 sizes, + 2 mini sizes · `cargo audit` 0 vulnerabilities
 - [x] Installer build with the full notices (279 packages)
 - [ ] Owner: read the guardrail files, add the `guardrails-reviewed` label, and make `guardrails` a required check
   in the ruleset

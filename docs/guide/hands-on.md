@@ -92,8 +92,10 @@ Check: `npm run typecheck`, then open the session planner (N) and see it. Add a 
 lines in `gridLines` (golden ratio: split at 0.382 and 0.618 of each side). Check: unit test for its line count;
 `npm run test:layout` checks that the grid sits on the image at every size.
 
-**D. Rebind a key.** Keys live in `App.tsx` (the `onKey` handler) and are listed for people in
-`ShortcutsPanel.tsx`. Change both, or the ? sheet will lie. Check: press ? in the app.
+**D. Add or rebind a key.** Every shortcut is one line in `keys.ts` (`ACTIONS`: id, group, label, default key);
+the ? sheet and its Change buttons read that list. A new action also needs one `case` in the `onKey` handler in
+`App.tsx`. People change keys themselves in the ? sheet. Check: `npm run test:unit` (no two actions share a
+key), then press ? in the app.
 
 **E. Tune a drawing effect.** In `practice.ts`, `strokes()` sets the stroke noise (`baseFrequency`: fine across,
 long along) and the ramp; `filterGraph()` chains them. Change the vertical frequency, run `npm run test:unit`, then
