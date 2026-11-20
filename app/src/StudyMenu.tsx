@@ -1,13 +1,23 @@
 import { EFFECT_LABELS, EFFECTS, FOCI, FOCUS_LABELS, GRID_LABELS, GRIDS, studyActive, TONES, type StudyAids } from "./practice";
 
-// Study aids menu (ADR-0025): a popover above the controls, like the filter
-// menu. Pure view; the app owns the state. Each aid also has a key.
+// Practice menu (ADR-0025, ADR-0031): a popover above the controls, like the
+// filter menu. The timed session and the grid view sit at the top (they were
+// bar buttons; owner, session 20: "art parts together"), the study aids below.
+// Pure view; the app owns the state. Each item also has a key.
 
 export interface StudyMenuProps {
   study: StudyAids;
   onChange?: (patch: Partial<StudyAids>) => void;
   onReset?: () => void;
   onClose?: () => void;
+  /** A timed session is running (the button ends it). */
+  session?: boolean;
+  canSession?: boolean;
+  onSession?: () => void;
+  /** The grid view is showing. */
+  grid?: boolean;
+  canGrid?: boolean;
+  onToggleGrid?: () => void;
 }
 
 function Toggle(p: { label: string; hint: string; on: boolean; onClick?: () => void }) {
@@ -26,7 +36,7 @@ export function StudyMenu(p: StudyMenuProps) {
     <div className="playlist-menu study-menu" id="study-menu" role="group" aria-labelledby="study-menu-title">
       <div className="menu-head">
         <p className="menu-title" id="study-menu-title">
-          Study aids
+          Practice
         </p>
         <span className="row-actions">
           <button type="button" className="text-btn" onClick={p.onReset} disabled={!studyActive(s)}>
@@ -37,6 +47,22 @@ export function StudyMenu(p: StudyMenuProps) {
           </button>
         </span>
       </div>
+      <div className="study-row practice-row">
+        <button
+          type="button"
+          className="chip study-toggle"
+          disabled={!p.canSession}
+          onClick={() => {
+            p.onClose?.();
+            p.onSession?.();
+          }}
+          title={p.session ? "End the session and see what you drew (Esc)" : "Timed drawing session (N)"}
+        >
+          <span className="chip-label">{p.session ? "End the session" : "Timed session… (N)"}</span>
+        </button>
+        <Toggle label="Grid view (W)" hint="The whole view as a contact sheet (W)" on={Boolean(p.grid)} onClick={p.canGrid ? p.onToggleGrid : undefined} />
+      </div>
+      <p className="menu-title study-subtitle">Study aids</p>
       <p className="menu-empty">
         On screen only: the image itself is never changed or saved. Greyscale and values use luma, close to how light a
         colour looks but not exact for strong reds and blues.

@@ -100,6 +100,15 @@ test, the line is moderately easy to walk. Continue as per plan." One branch, me
 | 12 | **Save as:** Windows Save dialog (Rust side, no page permission); a note names the folder until its × | ✅ |
 | 13 | **App icon** from the owner's drawing (vector, a bolder version for 16–32 px); `npm run icons` | ✅ |
 | 14 | **Portable folder** (`npm run portable`): move it to Apps, then "Add shortcuts.cmd" (Desktop + Start menu) | ✅ |
+| 15 | Owner: **the ⌃ arrow covered the grid**; in compact windows the tap layer covered grid images | ✅ |
+| 16 | Owner: **the source disappears** as the window shrinks (credit line cut the source; Minimal hid it) | ✅ |
+| 17 | Owner: **fewer bar buttons**, "art parts together": Practice menu (session, grid, aids); ⋯ for image actions | ✅ |
+
+Acceptance (rows 15–17), each a layout-test check or snapshot state:
+- Grid view with the bar hidden: no thumbnail sits under the ⌃ arrow; compact grid: tapping a thumbnail opens it.
+- Any window size and layout with an image: the source ("Cleveland Museum of Art", "Are.na") is fully visible.
+- No control is covered by another element at any tested size, 1040 px (just above compact) included.
+- The bar has 13 buttons instead of 17; N, W, L, R and right-click still work; ⋯ opens the image menu above it.
 
 ### Session 18: finish 1.0 items 3, 4, 5 (work item 22, `feat/0022-finish-1-0`, stacked on #21)
 

@@ -225,6 +225,15 @@ export const STATES: Record<string, State> = {
   "museum-label-compact": { props: { ...base, index: 0, compactBarOpen: true }, compactBar: true },
   "grid-view": { props: { ...base, grid: true, index: 2 } },
   "grid-view-cinema": { props: { ...base, grid: true }, settings: { layout: "cinema" } },
+  // The bar hidden (H): its ⌃ arrow must not cover a grid image (owner, session 20).
+  "grid-view-bar-hidden": {
+    props: {
+      ...base,
+      grid: true,
+      slides: Array.from({ length: 36 }, (_, i) => ({ ...slides[i % slides.length], block_id: 9000 + i })),
+    },
+    settings: { controlsHidden: true },
+  },
   "session-ring": { props: { ...base, session: { ...running, total: 30 }, clockStyle: "ring", flashKey: 3 } },
   "session-small-warn": { props: { ...base, session: { ...running, total: 30, left: 4 }, clockStyle: "small" } },
   "session-clock-hidden": { props: { ...base, session: { ...running, total: 30 }, clockStyle: "hidden" } },
@@ -429,6 +438,8 @@ export const STATES: Record<string, State> = {
   "mini-empty": { props: { ...base, mini: true, slides: [], index: 0, total: 0 }, mini: true },
   "link-copied": { props: { ...base, toast: "Link copied" } },
   "context-menu": { props: { ...base, contextMenu: { x: 300, y: 200 } } },
+  // The bar's ⋯ opens the same menu above it (ADR-0031).
+  "more-menu": { props: { ...base, contextMenu: { x: 760, y: 720, above: true } } },
   "context-menu-preview": { props: { ...base, mode: "preview", contextMenu: { x: 300, y: 200 } } },
   // Save as (ADR-0031): the note stays until its × (placeholder path, never a real one).
   saved: {

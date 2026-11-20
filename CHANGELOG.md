@@ -14,6 +14,8 @@ Once a remote exists, release-please maintains this file from Conventional Commi
   electronics") list the channels inside in the preview, to add each as its own topic.
 - A new **app icon** (the owner's magnifying glass), sharp at every size, and a **portable folder**
   (`npm run portable`) with "Add shortcuts.cmd" for Desktop and Start menu shortcuts.
+- A calmer bar: **Practice** holds the timed session, grid view and study aids; **⋯** opens the image menu
+  (copy link, related channels, source page, hide). 13 buttons instead of 17.
 - 1.0 (work item 23, ADR-0030): third-party licences in the installer and Settings → About (and attached to each
   release); a catalog backup before every schema upgrade; a `guardrails` CI check that needs the owner's label
   when CI, hooks, scanners, permissions or CLAUDE.md change; Claude can no longer push; version 1.0.0.
@@ -144,6 +146,8 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 - Saving an image no longer reshuffles the slideshow, so the saved image stays on screen.
 - The mini player's menu fits the window at the smallest size.
+- The source is always shown: small windows no longer cut it off, and the Minimal layout keeps it.
+- The ⌃ arrow no longer covers the grid; in small windows, tapping a grid image opens it.
 
 ### Security
 

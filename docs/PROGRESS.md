@@ -21,6 +21,9 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 - **Checks:** 125 Rust; 21 UI unit; W3C 107; layout passed; `cargo audit` clean; secret scan clean.
 - **Then:** the owner's icon, redrawn as vectors (`npm run icons`), and a portable folder with shortcut scripts
   (`npm run portable`; ADR-0031 §7–8).
+- **Owner merged #4.** Then (work item 24, `fix/0024-calmer-bar`): Practice and ⋯ menus (17 → 13 buttons);
+  the source always visible; the ⌃ arrow off the grid; new layout checks and a 1040 px size (ADR-0031 §9).
+  The commits first landed on local `main` (D-163), then moved to the branch; pre-commit now refuses `main`.
 
 ---
 
