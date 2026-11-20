@@ -6,7 +6,7 @@ consulted: admin pass, developer pass
 informed: —
 ---
 
-# ADR-0031: Save as, changeable shortcuts, channels inside channels
+# ADR-0031: Save as, changeable shortcuts, channels inside channels; app icon; portable folder
 
 ## Context
 
@@ -71,6 +71,28 @@ What we found:
      `tauri-plugin-fs` is a library dependency of the dialog crate and is not registered as a plugin, so its
      commands don't exist at runtime.
 
+7. **App icon (owner's design).** The owner drew a magnifying glass at 256 px, on white. Scaled up it blurs,
+   and at 16–32 px its thin black lines blur into the ring.
+   - Redrawn as vectors: `app/app-icon.svg` (full detail) and `app/app-icon-small.svg` (bolder lines, one grip).
+   - `npm run icons` (`scripts/icons.mjs`) makes every file in `app/src-tauri/icons/` from them with the Tauri
+     CLI. `icon.ico` takes its 16, 24 and 32 px frames from the small drawing and its 48, 64 and 256 px frames
+     from the full one, all as PNG frames like the CLI's own.
+   - No new tool: it uses only the Tauri CLI already installed. The old `app/app-icon.png` is removed.
+8. **Portable folder (owner: "a folder I can move to my Apps folder, and a shortcut on the Desktop").**
+   - `npm run portable` (`scripts/portable.mjs`) builds the release app without an installer
+     (`tauri build --no-bundle`).
+   - It writes `app/dist-portable/LeMuse/` with:
+     - `LeMuse.exe`;
+     - `THIRD-PARTY-NOTICES.txt`, next to the exe, where Settings → About finds it;
+     - `Add shortcuts.cmd` and `Remove shortcuts.cmd`;
+     - a short README.
+   - `Add shortcuts.cmd` makes `LeMuse.lnk` on the Desktop and in the Start menu, which is what puts LeMuse in
+     Windows' All apps list. The shortcuts point to the exe wherever the folder now is. The folder reaches
+     PowerShell through an environment variable, never spliced into the command.
+   - Data stays outside the folder (the library folder and `%APPDATA%`), so moving or replacing the folder
+     keeps it.
+   - The output is git-ignored and in `FORBIDDEN_FILES`. It holds an `.exe` and third-party emails.
+
 ## Options considered
 
 - **Keep the fixed folder, add "Show in Explorer".** Rejected: the owner asked to choose the folder.
@@ -80,6 +102,11 @@ What we found:
 - **Expose `dialog:allow-save` to the page.** Rejected: least privilege (ADR-0011). The page never needs a path.
 - **Follow nested channels automatically on refresh.** Rejected: ADR-0004 (only user-listed channels; no
   crawling).
+- **Upscale the 256 px PNG for the icon.** Rejected: it blurs at large sizes and smears at 16 px; vectors give
+  sharp edges at every size.
+- **The app makes its own shortcuts (a Settings button).** Rejected for now: a script beside the exe works
+  before the app has ever run and needs no app code that writes outside the library. The installer
+  (NSIS/MSI) still makes its own shortcuts.
 
 ## Consequences
 

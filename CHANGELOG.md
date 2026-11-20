@@ -12,6 +12,8 @@ Once a remote exists, release-please maintains this file from Conventional Commi
   note says where it went until you close it (×); **changeable shortcuts** in the ? sheet; **H brings the bar
   back** in compact windows and the mini player too; channels made of channels (such as "Translucent
   electronics") list the channels inside in the preview, to add each as its own topic.
+- A new **app icon** (the owner's magnifying glass), sharp at every size, and a **portable folder**
+  (`npm run portable`) with "Add shortcuts.cmd" for Desktop and Start menu shortcuts.
 - 1.0 (work item 23, ADR-0030): third-party licences in the installer and Settings → About (and attached to each
   release); a catalog backup before every schema upgrade; a `guardrails` CI check that needs the owner's label
   when CI, hooks, scanners, permissions or CLAUDE.md change; Claude can no longer push; version 1.0.0.

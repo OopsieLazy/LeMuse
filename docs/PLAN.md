@@ -98,6 +98,8 @@ test, the line is moderately easy to walk. Continue as per plan." One branch, me
 | 10 | **Bug fixed:** saving reshuffled the slides; the order is now stable, so the image stays | ✅ |
 | 11 | **Translucent electronics** holds 8 channels, no images: the preview now lists channels inside to add (ADR-0004 kept) | ✅ |
 | 12 | **Save as:** Windows Save dialog (Rust side, no page permission); a note names the folder until its × | ✅ |
+| 13 | **App icon** from the owner's drawing (vector, a bolder version for 16–32 px); `npm run icons` | ✅ |
+| 14 | **Portable folder** (`npm run portable`): move it to Apps, then "Add shortcuts.cmd" (Desktop + Start menu) | ✅ |
 
 ### Session 18: finish 1.0 items 3, 4, 5 (work item 22, `feat/0022-finish-1-0`, stacked on #21)
 

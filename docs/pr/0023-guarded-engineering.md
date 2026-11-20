@@ -32,6 +32,9 @@
     saved.
   - **Channels made of channels** ("Translucent electronics" holds 8 channels and no images). The preview
     lists the channels inside, with Add and Add all; each becomes its own topic.
+  - **Your icon** in every size (redrawn as vectors; a bolder version for 16–32 px): `npm run icons`.
+  - **A portable folder:** `npm run portable` → `app/dist-portable/LeMuse/`. Move it to your Apps folder and
+    run `Add shortcuts.cmd` for Desktop and Start menu shortcuts.
 
 ## Why
 
@@ -75,6 +78,8 @@ and state which folder saved to, with pop up an x".
   `.github/workflows/guardrails.yml`, `.github/workflows/release.yml`, `scripts/guardrail-check.mjs`,
   `scripts/secret-rules.mjs`, `.gitignore`, `app/src-tauri/tauri.conf.json`,
   `CLAUDE.md`, `SECURITY.md`, `app/scripts/layout-test.mjs`.
+- In `.gitignore` and `scripts/secret-rules.mjs`, this round adds `app/dist-portable/` (portable build output). It also
+  drops the allow rule for the removed `app/app-icon.png`.
 - `layout-test.mjs` got stricter: it adds mini sizes and checks that pop-ups stay inside the window. One
   relaxation: a control inside a scrolling list that fits the window counts as reachable (the mini menu).
 - Acceptance examples: the owner's words. No push is possible; guardrail changes need a label; an upgrade leaves

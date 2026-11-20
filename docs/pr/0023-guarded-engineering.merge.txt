@@ -9,6 +9,7 @@ chore: guarded engineering with an AI, third-party notices, 1.0.0
 ✅ Save as (Q): Windows Save dialog, a note names the folder until its ×; Rust-side only, no page permission
 ✅ Changeable shortcuts in the ? sheet; H brings the bar back in compact windows and the mini player
 ✅ Saving no longer reshuffles the slideshow (the image stays); channels made of channels can be added
+✅ The owner's icon at every size (npm run icons); a portable folder with shortcut scripts (npm run portable)
 ✅ 125 Rust, 21 UI unit, W3C 107, layout (+ mini sizes) checks; cargo audit clean; version 1.0.0
 
 Reviewed-by: admin, developer passes (docs/reviews/0023-guarded-engineering.md)

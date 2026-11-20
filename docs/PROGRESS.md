@@ -19,6 +19,8 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
   - nested channels listed in the preview (the channel holds 8 channels, no images).
 - **New check:** layout test at mini sizes; it caught the save note and an old mini-menu overflow (D-146).
 - **Checks:** 125 Rust; 21 UI unit; W3C 107; layout passed; `cargo audit` clean; secret scan clean.
+- **Then:** the owner's icon, redrawn as vectors (`npm run icons`), and a portable folder with shortcut scripts
+  (`npm run portable`; ADR-0031 §7–8).
 
 ---
 

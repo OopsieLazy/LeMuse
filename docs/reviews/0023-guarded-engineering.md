@@ -91,3 +91,24 @@ on screen, a channel that wouldn't load ("Translucent electronics"), and Save as
 
 - [x] 125 Rust tests · fmt · clippy `-D warnings` (core, CLI, app) · `cargo audit` (0 vulnerabilities)
 - [x] UI: typecheck · 21 unit tests · W3C 107 files · layout 105 states × 6 sizes (+2 mini sizes), both themes
+
+## Addendum 2 (session 20): app icon and portable folder (ADR-0031 §7, §8)
+
+The owner supplied an icon (256 px magnifying glass) and asked for a build in a folder they can move to their
+Apps folder, with a Desktop shortcut.
+
+| Done when | Check |
+|---|---|
+| The icon is the owner's design and sharp at 16–256 px | Comparison sheet of the original vs 256/48/32/16 px renders, on dark and light strips (scratchpad, deleted) |
+| `npm run portable` gives a folder that runs anywhere | Built and listed. Not started here: LeMuse was already running, and a second copy hands over to it (single instance). **Owner check:** start it from the folder; Settings → About should list the licences |
+| "Add shortcuts.cmd" puts LeMuse on the Desktop and in All apps | The script's PowerShell, run with its two places pointed at a scratch folder: shortcut made with the right target, icon and working folder, then removed. Not run against the real Desktop |
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| A-145 | med | The portable folder holds an `.exe` and notices with third-party emails | `app/dist-portable/` in `.gitignore` and `FORBIDDEN_FILES` (same change) |
+| A-146 | med | A shortcut script that runs PowerShell | Writes only `LeMuse.lnk` in the user's own Desktop and Start menu; the folder path comes in through an environment variable, never spliced into the command |
+| A-147 | low | The icon sources are public (the repo is) | It's the app's own icon, already shipped in every build; SVG text, no personal data |
+| D-154 | med | `target/release/lemuse-app.exe` is locked while that build runs (the installer rebuild failed this way) | `portable.mjs` says so and honours `CARGO_TARGET_DIR`; copying over a running portable exe gives a clear message |
+| D-155 | low | Thin lines vanish at 16–32 px | A second, bolder drawing feeds the small ICO frames and `32x32.png` |
+| D-156 | low | `.cmd` files need CRLF line endings | Written with CRLF |
+
