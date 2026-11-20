@@ -119,6 +119,16 @@
   --drawn-thumb: calc(120px * var(--ui-scale));
   --value-swatch: calc(10px * var(--ui-scale));
   --log-bar-height: calc(48px * var(--ui-scale));
+  /* Surround steps (ADR-0029): neutral greys behind the image, zero chroma. */
+  --surround-white: #f0f0f0;
+  --surround-light: #c4c4c4;
+  --surround-mid: #808080;
+  --surround-dark: #2e2e2e;
+  --surround-black: #000000;
+  --clock-ring-size: calc(96px * var(--ui-scale));
+  --clock-ring-text: calc(22px * var(--ui-scale));
+  --grid-thumb: calc(150px * var(--ui-scale));
+  --flash-width: 6px;
   /* WCAG 2.5.8: the smallest clickable control. */
   --target-min: 24px;
   /* A 9-step neutral value scale (black → white) for the value strip. */

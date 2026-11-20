@@ -401,6 +401,8 @@ export interface SessionView {
   rounds: number;
   /** Seconds left in this pose. */
   left: number;
+  /** Seconds this pose lasts (the ring's full circle). */
+  total: number;
   paused: boolean;
 }
 

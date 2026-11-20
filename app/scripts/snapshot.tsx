@@ -15,6 +15,7 @@ import { SettingsPanel, type ArenaTokenView, type SettingsPanelProps } from "../
 import { ErrorScreen } from "../src/ErrorScreen";
 import { RefreshDetails } from "../src/RefreshDetails";
 import { PracticePanel, type PracticePanelProps } from "../src/PracticePanel";
+import { WelcomePanel } from "../src/WelcomePanel";
 import { ShortcutsPanel } from "../src/ShortcutsPanel";
 import { NO_STUDY, weeklyLog, type SessionResult } from "../src/practice";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
@@ -36,6 +37,16 @@ const slides: Slide[] = sample.topics[0].slides.map((s, i) => ({
   ...s,
   categories: ["image", ...CATS[i % CATS.length]],
   connector: i % 2 ? "arena" : "cleveland",
+  // Museum slides carry a label and CC0 (ADR-0029); Are.na ones don't.
+  ...(i % 2
+    ? {}
+    : {
+        date: "c. 1650–1700",
+        medium: "Walnut, with later upholstery",
+        dimensions: "Overall: 104.1 x 52.7 x 48.3 cm (41 x 20 3/4 x 19 in.)",
+        credit: "Gift of a long-named family foundation in memory of a collector, 1929.323",
+        license_id: "CC0-1.0",
+      }),
 }));
 
 // A slice of the built-in vocabulary (crates/lemuse-core/assets/categories.toml).
@@ -142,6 +153,8 @@ interface State {
   /** Extra Settings props (Content, Updates; ADR-0027, ADR-0028). */
   settingsExtra?: Partial<SettingsPanelProps>;
   shortcuts?: boolean;
+  /** The first-run welcome (ADR-0029). */
+  welcome?: boolean;
 }
 
 // A tall portrait image is the case that used to run under the control bar.
@@ -150,7 +163,7 @@ const wide: Slide = { ...slides[0], block_id: 9002, width: 4000, height: 900, ti
 
 // Practice tools (ADR-0025).
 const studyOn = { ...NO_STUDY, mirror: true, tones: 3 as const, balance: 0.2, grid: "thirds" as const };
-const running = { planName: "Class", pose: 7, poses: 18, round: 1, rounds: 4, left: 24, paused: false };
+const running = { planName: "Class", pose: 7, poses: 18, round: 1, rounds: 4, left: 24, total: 30, paused: false };
 const sessionResult: SessionResult = {
   startedAt: Date.UTC(2026, 10, 19, 14, 5),
   planName: "Gesture warm-up",
@@ -202,6 +215,24 @@ export const STATES: Record<string, State> = {
     practice: { view: "summary", result: { ...sessionResult, drawn: [], seconds: 0, finished: false }, onResume: () => undefined },
   },
   shortcuts: { props: base, shortcuts: true },
+  // Finishing 1.0 (ADR-0029).
+  "museum-label": { props: { ...base, index: 0 } },
+  "museum-label-compact": { props: { ...base, index: 0, compactBarOpen: true }, compactBar: true },
+  "grid-view": { props: { ...base, grid: true, index: 2 } },
+  "grid-view-cinema": { props: { ...base, grid: true }, settings: { layout: "cinema" } },
+  "session-ring": { props: { ...base, session: { ...running, total: 30 }, clockStyle: "ring", flashKey: 3 } },
+  "session-small-warn": { props: { ...base, session: { ...running, total: 30, left: 4 }, clockStyle: "small" } },
+  "session-clock-hidden": { props: { ...base, session: { ...running, total: 30 }, clockStyle: "hidden" } },
+  "toast-undo": { props: { ...base, toast: "Hidden. Settings → Content shows it again.", onUndo: () => undefined } },
+  "search-results": { props: { ...base, active: { kind: "search", query: "chair" }, activeLabel: "“chair”", savedCount: 12 } },
+  "search-empty": {
+    props: { ...base, active: { kind: "search", query: "zzz" }, activeLabel: "“zzz”", slides: [], index: 0, total: 0 },
+  },
+  "saved-empty": { props: { ...base, active: { kind: "saved" }, activeLabel: "Saved", slides: [], index: 0, total: 0 } },
+  "surround-mid": { props: base, settings: { surround: "mid" } },
+  "surround-black-dark": { props: base, settings: { surround: "black", mode: "dark" } },
+  welcome: { props: base, welcome: true },
+  "image-ready": { props: { ...base, imageReady: true } },
   // Followed channels as their own topics, under a heading (ADR-0026 addendum).
   "rail-following": {
     props: {
@@ -473,6 +504,7 @@ function documentFor(name: string, st: State, extraHead = "") {
     (st.refreshDetails ? renderToStaticMarkup(<RefreshDetails {...st.refreshDetails} staticOpen />) : "") +
     (st.practice ? renderToStaticMarkup(<PracticePanel {...practiceBase} {...st.practice} staticOpen />) : "") +
     (st.shortcuts ? renderToStaticMarkup(<ShortcutsPanel staticOpen />) : "") +
+    (st.welcome ? renderToStaticMarkup(<WelcomePanel topics={st.props.topics} staticOpen />) : "") +
     (st.library
       ? renderToStaticMarkup(
           <LibraryPanel

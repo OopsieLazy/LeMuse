@@ -4,7 +4,9 @@
 // No network, no files outside .snapshot/ (git-ignored).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { redact, reportUrl, withContentDefaults } from "../src/api";
+import { labelLine, parseSourceKey, redact, reportUrl, sharpSlide, sourceKey, withContentDefaults, type Slide } from "../src/api";
+import { altText } from "../src/SlideshowView";
+import { welcomeTopics } from "../src/WelcomePanel";
 import {
   balanceExponent,
   clock,
@@ -246,4 +248,69 @@ test("new settings are sanitized", () => {
   assert.equal(s.singleKeys, false);
   assert.equal(s.checkUpdates, true);
   assert.equal(sanitize({ lastUpdateCheck: 1_700_000_000_000.4 }).lastUpdateCheck, 1_700_000_000_000);
+});
+
+test("views: source keys round-trip and bad stored keys are refused", () => {
+  for (const src of [
+    { kind: "all" as const },
+    { kind: "saved" as const },
+    { kind: "topic" as const, name: "Wood: objects" },
+    { kind: "playlist" as const, id: 42 },
+    { kind: "search" as const, query: "oak chair" },
+  ])
+    assert.deepEqual(parseSourceKey(sourceKey(src)), src);
+  for (const bad of [null, 7, "", "topic:", "playlist:x", "playlist:-1", "search:   ", "x".repeat(400)])
+    assert.equal(parseSourceKey(bad), null, String(bad).slice(0, 20));
+});
+
+test("museum label line, alt text and sharper museum images", () => {
+  assert.equal(labelLine({ date: "c. 1650", medium: "Oil", dimensions: " 50 x 40 cm " }), "c. 1650 · Oil · 50 x 40 cm");
+  assert.equal(labelLine({ date: null, medium: "", dimensions: undefined }), "");
+  assert.equal(altText({ title: "Chair", creator: "Ann", date: "1900s" }), "Chair, Ann, 1900s");
+  assert.equal(altText({ title: null, creator: null }), "Untitled reference image");
+  const s = {
+    block_id: 1,
+    title: "x",
+    display_url: "https://openaccess-cdn.clevelandart.org/a_web.jpg",
+    original_url: "https://openaccess-cdn.clevelandart.org/a_print.jpg",
+    fallback_urls: [],
+    connector: "cleveland",
+  } as unknown as Slide;
+  const big = sharpSlide(s, true);
+  assert.equal(big.display_url, s.original_url);
+  assert.deepEqual(big.fallback_urls, [s.display_url], "the web size is the first fallback");
+  assert.equal(sharpSlide(s, false), s, "small windows keep the web size");
+  assert.equal(sharpSlide({ ...s, connector: "arena" }, true).display_url, s.display_url, "Are.na is untouched");
+});
+
+test("settings for finishing 1.0 are sanitized", () => {
+  const s = sanitize({
+    surround: "neon",
+    sessionClock: "huge",
+    poseFlash: "no",
+    last: { source: "topic:Chairs", page: 99_999, blockId: -3 },
+    study: { mirror: true, tones: 6, grid: "thirds", effect: "x", balance: 9 },
+  });
+  assert.equal(s.surround, "theme");
+  assert.equal(s.sessionClock, "ring");
+  assert.equal(s.poseFlash, true);
+  assert.deepEqual(s.last, { source: "topic:Chairs", page: 10_000, blockId: null });
+  assert.equal(s.study.mirror, true);
+  assert.equal(s.study.tones, 0, "6 tones isn't offered");
+  assert.equal(s.study.grid, "thirds");
+  assert.equal(s.study.effect, "off");
+  assert.equal(s.study.balance, 1);
+  // A brand-new library sees the welcome; existing settings mean someone knows the app.
+  assert.equal(sanitize({}).welcomed, false);
+  assert.equal(sanitize({ fit: "cover" }).welcomed, true);
+  assert.equal(sanitize({ last: { source: "" } }).last, null);
+});
+
+test("the welcome offers the fullest topics first, at most 12", () => {
+  const t = (name: string, slides: number) => ({ name, slides, slide_seconds: 8, shuffle: true, sources: 1, channels: [] });
+  const many = Array.from({ length: 20 }, (_, i) => t(`T${i}`, i));
+  const offer = welcomeTopics(many);
+  assert.equal(offer.length, 12);
+  assert.equal(offer[0].name, "T19");
+  assert.ok(offer.every((x) => x.slides > 0), "empty topics aren't offered");
 });

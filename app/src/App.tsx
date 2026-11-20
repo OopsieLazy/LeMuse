@@ -21,6 +21,8 @@ import {
   type FollowedPick,
   type BlockFlag,
   withContentDefaults,
+  parseSourceKey,
+  sharpSlide,
   type TokenStatus,
   type TopicInfo,
   type Vocabulary,
@@ -33,6 +35,7 @@ import { applyToDocument, DEFAULTS, sanitize, type UiSettings } from "./settings
 import { SlideshowView, type RefreshState } from "./SlideshowView";
 import { PracticePanel } from "./PracticePanel";
 import { ShortcutsPanel } from "./ShortcutsPanel";
+import { WelcomePanel } from "./WelcomePanel";
 import {
   FAVOURITES,
   finishPose,
@@ -194,6 +197,21 @@ export function App() {
   const [log, setLog] = useState<LogWeek[] | null>(null);
   const [update, setUpdate] = useState<UpdateView>({ state: "idle" });
   const [settingsReady, setSettingsReady] = useState(false);
+  // Finishing 1.0 (ADR-0029): Saved, grid, sharper museum images, undo, flash.
+  const [savedCount, setSavedCount] = useState(0);
+  const [grid, setGrid] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [flashKey, setFlashKey] = useState(0);
+  const [undoable, setUndoable] = useState(false);
+  const undoRef = useRef<(() => void) | null>(null);
+  const welcomeRef = useRef<HTMLDialogElement>(null);
+  const restored = useRef(false);
+  /** The image to show again once its own view has loaded (remember where you were). */
+  const pendingBlock = useRef<{ key: string; id: number } | null>(null);
+  const bigNow = () =>
+    typeof window !== "undefined" &&
+    (window.innerWidth * (window.devicePixelRatio || 1) > 1200 || window.innerHeight * (window.devicePixelRatio || 1) > 1000);
+  const [bigWindow, setBigWindow] = useState(bigNow);
   const shortcutsRef = useRef<HTMLDialogElement>(null);
   const refreshDetailsRef = useRef<HTMLDialogElement>(null);
   const settingsRef = useRef<HTMLDialogElement>(null);
@@ -220,6 +238,10 @@ export function App() {
       setStatus(s);
       setTopics(t);
       setAllCount(all);
+      api
+        .slideCount({ kind: "saved" }, withContentDefaults(NO_FILTER, false))
+        .then(setSavedCount)
+        .catch(() => undefined);
       if (s.refreshing)
         setRefresh({
           label: all === 0 ? "First refresh: images appear as they arrive" : "Refreshing topics",
@@ -250,9 +272,21 @@ export function App() {
 
   const topic = active?.kind === "topic" ? topics.find((t) => t.name === active.name) : undefined;
   const playlist = active?.kind === "playlist" ? playlists.find((l) => l.id === active.id) : undefined;
-  const activeLabel = active?.kind === "all" ? "All" : (topic?.name ?? playlist?.name ?? "");
+  const activeLabel =
+    active?.kind === "all"
+      ? "All"
+      : active?.kind === "saved"
+        ? "Saved"
+        : active?.kind === "search"
+          ? `“${active.query}”`
+          : (topic?.name ?? playlist?.name ?? "");
   // What changes when new images arrive, so the slideshow reloads.
-  const activeCount = active?.kind === "all" ? allCount : (topic?.slides ?? playlist?.items ?? 0);
+  const activeCount =
+    active?.kind === "all" || active?.kind === "search"
+      ? allCount
+      : active?.kind === "saved"
+        ? savedCount
+        : (topic?.slides ?? playlist?.items ?? 0);
   const activeKey = sourceKey(active);
 
   // While a refresh runs and this view is still empty (a new library's
@@ -372,11 +406,12 @@ export function App() {
     return () => {
       stale = true;
     };
-  }, [activeKey, activeCount, page, fKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeKey, activeCount, page, fKey, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (active?.kind === "topic") setShuffle(topic?.shuffle ?? true);
-    else setShuffle(active?.kind !== "playlist");
+    // Playlists keep your order, search its best matches first, Saved the newest first.
+    else setShuffle(active?.kind === "all");
   }, [activeKey, topic?.shuffle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Shuffle once per load/toggle; a failed image must not reshuffle the order.
@@ -386,12 +421,19 @@ export function App() {
     () =>
       slides
         .filter((s) => !failed.has(s.block_id))
-        .map((s) => {
+        .map((raw) => {
+          // Cleveland's print size on big windows (ADR-0029); the web size stays a fallback.
+          const s = sharpSlide(raw, bigWindow);
           const n = attempts.get(s.block_id) ?? 0;
           return n > 0 && s.fallback_urls?.[n - 1] ? { ...s, display_url: s.fallback_urls[n - 1] } : s;
         }),
-    [slides, failed, attempts],
+    [slides, failed, attempts, bigWindow],
   );
+  useEffect(() => {
+    const onResize = () => setBigWindow(bigNow());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const safeIndex = visible.length ? index % visible.length : 0;
   const slide = visible[safeIndex] as Slide | undefined;
 
@@ -562,11 +604,28 @@ export function App() {
 
   // ---- Copy link: the source page and the full-size image ----
   const toastTimer = useRef(0);
-  const say = useCallback((text: string) => {
+  /** A short note; with `undo`, an Undo button for a few seconds (ADR-0029). */
+  const say = useCallback((text: string, undo?: () => void) => {
     setToast(text);
+    undoRef.current = undo ?? null;
+    setUndoable(Boolean(undo));
     window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(undefined), 2500);
+    toastTimer.current = window.setTimeout(
+      () => {
+        setToast(undefined);
+        undoRef.current = null;
+        setUndoable(false);
+      },
+      undo ? 6000 : 2500,
+    );
   }, []);
+  const runUndo = () => {
+    const u = undoRef.current;
+    undoRef.current = null;
+    setUndoable(false);
+    setToast(undefined);
+    u?.();
+  };
   const copyLink = useCallback(() => {
     if (!slide) return;
     const lines = [
@@ -588,6 +647,7 @@ export function App() {
     try {
       const r = await api.saveImage(id, active);
       setSource((list) => list.map((s) => (s.block_id === id ? { ...s, saved: true } : s)));
+      if (!r.already_stored) setSavedCount((n) => n + 1);
       const folder = r.view.split("/").slice(0, -1).join(" › ");
       say(`Saved to LeMuse › ${folder}`);
     } catch (e) {
@@ -667,6 +727,7 @@ export function App() {
     setPlaying(false);
     setResult(null);
     setStudyOpen(false);
+    setGrid(false);
     resumable.current = null;
     commit(firstPose(plan, activeLabel, many, Date.now()));
     if (many) go(1);
@@ -749,9 +810,15 @@ export function App() {
         round: session.at.round + 1,
         rounds: session.plan.rounds.length,
         left: Math.max(0, session.left / 1000),
+        total: poseMs(session) / 1000,
         paused: session.paused,
       }
     : null;
+  // A quiet flash on each new pose (Settings → Practice; CSS drops it for reduced motion).
+  const poseId = session ? `${session.at.round}-${session.at.pose}` : "";
+  useEffect(() => {
+    if (poseId && settings.poseFlash) setFlashKey((k) => k + 1);
+  }, [poseId, settings.poseFlash]);
 
   // The summary's ♥ marks: which drawn images are already favourites.
   useEffect(() => {
@@ -787,8 +854,14 @@ export function App() {
 
   const toggleFavourite = useCallback(() => {
     if (!slide) return;
-    setFavourite(slide.block_id, !favourite)
-      .then(() => say(favourite ? "Removed from Favourites" : "♥ Added to Favourites"))
+    const id = slide.block_id;
+    const removing = favourite;
+    setFavourite(id, !removing)
+      .then(() =>
+        removing
+          ? say("Removed from Favourites", () => setFavourite(id, true).catch((e) => say(message(e))))
+          : say("♥ Added to Favourites"),
+      )
       .catch((e) => say(message(e)));
   }, [slide, favourite, setFavourite, say]);
 
@@ -797,11 +870,12 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "Escape" && (menuOpen || filterOpen || miniMenuOpen || studyOpen)) {
+      if (e.key === "Escape" && (menuOpen || filterOpen || miniMenuOpen || studyOpen || grid)) {
         setMenuOpen(false);
         setFilterOpen(false);
         setMiniMenuOpen(false);
         setStudyOpen(false);
+        setGrid(false);
         return;
       }
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, dialog")) return;
@@ -827,6 +901,12 @@ export function App() {
       // Isolating darks or lights needs at least 3 values; start from 5.
       else if (k === "i") changeStudy({ focus: nextOf(FOCI, study.focus), tones: study.tones > 2 ? study.tones : 5 });
       else if (k === "o") changeStudy({ grid: nextOf(GRIDS, study.grid) });
+      else if (k === "w" && !s) setGrid((g) => !g);
+      else if (k === "/") {
+        e.preventDefault();
+        setRailOpen(true);
+        document.getElementById("rail-search")?.focus();
+      }
       else if (k === "0") setStudy(NO_STUDY);
       else if (k === "?") openDialog(shortcutsRef.current);
       else if (k === "s") setShuffle((s) => !s);
@@ -845,7 +925,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, slide, fullscreen, settings.singleKeys, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
+  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, grid, slide, fullscreen, settings.singleKeys, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
@@ -962,6 +1042,90 @@ export function App() {
     }
   };
 
+  // ---- Remember where you were (ADR-0029) ----
+  // Restore once, when settings and the topic list are in; then keep the
+  // place (view, page, image) and the study aids in ui.json.
+  useEffect(() => {
+    if (restored.current || !settingsReady) return;
+    if (!topics.length && allCount === 0) return;
+    restored.current = true;
+    setStudy(settings.study);
+    const last = settings.last;
+    const src = parseSourceKey(last?.source);
+    if (!src || !last) return;
+    if (src.kind === "topic" && !topics.some((t) => t.name === src.name)) return;
+    if (src.kind === "playlist" && !playlists.some((l) => l.id === src.id)) return;
+    if (last.blockId !== null) pendingBlock.current = { key: sourceKey(src), id: last.blockId };
+    setActive(src);
+    setPage(last.page);
+  }, [settingsReady, topics, playlists, allCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const want = pendingBlock.current;
+    // Only in its own view; an earlier view's images may still be on screen.
+    if (!want || want.key !== activeKey || !visible.length) return;
+    const at = visible.findIndex((x) => x.block_id === want.id);
+    if (at >= 0) {
+      pendingBlock.current = null;
+      setIndex(at);
+      setTick((t) => t + 1);
+    }
+  }, [visible, activeKey]);
+  useEffect(() => {
+    if (!restored.current || !active) return;
+    patch({ last: { source: sourceKey(active), page, blockId: slide?.block_id ?? null } });
+  }, [activeKey, page, slide?.block_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (restored.current) patch({ study });
+  }, [study]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // First run: one question instead of setup (ADR-0029).
+  useEffect(() => {
+    if (settingsReady && !settings.welcomed && topics.length && api.kind === "app") openDialog(welcomeRef.current);
+  }, [settingsReady, settings.welcomed, topics.length, openDialog]);
+  const chooseSource = (next: SlideSource) => {
+    pendingBlock.current = null;
+    setFailed(new Set());
+    setAttempts(new Map());
+    setNotice(undefined);
+    setMenuOpen(false);
+    setMiniMenuOpen(false);
+    setGrid(false);
+    setActive(next);
+    setPage(0);
+    setIndex(0);
+    setRailOpen(false);
+  };
+
+  // ---- Topics: rename and remove (ADR-0029) ----
+  const renameTopic = async (from: string, to: string) => {
+    const problem = nameProblem("topic", to);
+    if (problem) return setLibraryStatus({ tone: "error", text: problem });
+    setLibraryBusy(true);
+    try {
+      const stored = await api.renameTopic(from, to);
+      if (active?.kind === "topic" && active.name === from) setActive({ kind: "topic", name: stored });
+      await loadLibrary();
+      setLibraryStatus({ tone: "ok", text: `Renamed ${from} to ${stored}.` });
+    } catch (e) {
+      setLibraryStatus({ tone: "error", text: message(e) });
+    } finally {
+      setLibraryBusy(false);
+    }
+  };
+  const removeTopic = async (name: string) => {
+    setLibraryBusy(true);
+    try {
+      await api.removeTopic(name);
+      if (active?.kind === "topic" && active.name === name) chooseSource({ kind: "all" });
+      await loadLibrary();
+      setLibraryStatus({ tone: "ok", text: `Removed ${name}. Images in your playlists and saved files stay.` });
+    } catch (e) {
+      setLibraryStatus({ tone: "error", text: message(e) });
+    } finally {
+      setLibraryBusy(false);
+    }
+  };
+
   // ---- Content marks (ADR-0027) ----
   const loadMarks = useCallback(() => {
     api
@@ -980,7 +1144,15 @@ export function App() {
       await api.setBlockFlag(id, flag, true);
       // Gone from this view at once (unless nudity is shown).
       if (flag === "hidden" || !settings.showNudity) setSource((list) => list.filter((x) => x.block_id !== id));
-      say(flag === "hidden" ? "Hidden. Settings → Content shows it again." : "Marked as nudity.");
+      say(flag === "hidden" ? "Hidden. Settings → Content shows it again." : "Marked as nudity.", () => {
+        api
+          .setBlockFlag(id, flag, false)
+          .then(() => {
+            setReloadKey((k) => k + 1);
+            loadMarks();
+          })
+          .catch((e) => say(message(e)));
+      });
       loadMarks();
     } catch (e) {
       say(message(e));
@@ -1222,20 +1394,23 @@ export function App() {
         onContextMenu={(x, y) => setContextMenu({ x, y })}
         onCloseContextMenu={() => setContextMenu(null)}
         onHideImage={() => markCurrent("hidden")}
+        savedCount={savedCount}
+        onSearch={(query) => chooseSource({ kind: "search", query })}
+        grid={grid}
+        onToggleGrid={() => setGrid((g) => !g)}
+        onPickSlide={(i) => {
+          setIndex(i);
+          setTick((t) => t + 1);
+          setGrid(false);
+        }}
+        imageReady={natural?.id === slide?.block_id}
+        clockStyle={settings.sessionClock}
+        flashKey={settings.poseFlash ? flashKey : 0}
+        onUndo={undoable ? runUndo : undefined}
         onMarkNudity={() => markCurrent("nudity")}
         update={update.state === "available" && update.release ? update.release : null}
         toast={toast}
-        onSelect={(next) => {
-          setFailed(new Set());
-          setAttempts(new Map());
-          setNotice(undefined);
-          setMenuOpen(false);
-          setMiniMenuOpen(false);
-          setActive(next);
-          setPage(0);
-          setIndex(0);
-          setRailOpen(false);
-        }}
+        onSelect={chooseSource}
         onOpenLibrary={openLibrary}
         onTogglePlaylistMenu={toggleMenu}
         onSetInPlaylist={setInPlaylist}
@@ -1251,7 +1426,8 @@ export function App() {
         onToggleShuffle={() => setShuffle((s) => !s)}
         onRefresh={onRefresh}
         onImageError={(id) => {
-          const s = slides.find((x) => x.block_id === id);
+          const raw = slides.find((x) => x.block_id === id);
+          const s = raw && sharpSlide(raw, bigWindow);
           const n = attempts.get(id) ?? 0;
           if (s && n < (s.fallback_urls?.length ?? 0)) setAttempts((m) => new Map(m).set(id, n + 1));
           else setFailed((f) => new Set(f).add(id));
@@ -1352,6 +1528,21 @@ export function App() {
         }
       />
       <ShortcutsPanel ref={shortcutsRef} />
+      <WelcomePanel
+        ref={welcomeRef}
+        topics={topics}
+        onPick={(name) => {
+          welcomeRef.current?.close();
+          chooseSource({ kind: "topic", name });
+        }}
+        onSurprise={() => {
+          welcomeRef.current?.close();
+          chooseSource({ kind: "all" });
+          setShuffle(true);
+          setPlaying(true);
+        }}
+        onClose={() => patch({ welcomed: true })}
+      />
       <RefreshDetails
         ref={refreshDetailsRef}
         failed={refreshFailed.list}
@@ -1372,6 +1563,8 @@ export function App() {
         playlistStatus={playlistStatus}
         onAddChannel={addChannel}
         onRemoveChannel={removeChannel}
+        onRenameTopic={renameTopic}
+        onRemoveTopic={removeTopic}
         onCreatePlaylist={(name) => createPlaylist(name, false)}
         onRenamePlaylist={(id, name) => {
           const problem = nameProblem("playlist", name);

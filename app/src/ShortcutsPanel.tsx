@@ -11,6 +11,8 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
       ["← →", "Previous, next image"],
       ["Space", "Play or pause"],
       ["S", "Shuffle"],
+      ["W", "Grid of this view (Esc to close)"],
+      ["/", "Search"],
       ["K", "♥ Favourite"],
       ["P", "Add to a playlist"],
       ["C", "Filter by category"],

@@ -27,6 +27,9 @@ export interface LibraryPanelProps {
   mode: "app" | "preview";
   onAddChannel?: (link: string, topic: string, createTopic: boolean) => void;
   onRemoveChannel?: (topic: string, channel: string) => void;
+  /** Rename or remove the selected topic (ADR-0029). */
+  onRenameTopic?: (from: string, to: string) => void;
+  onRemoveTopic?: (name: string) => void;
   onCreatePlaylist?: (name: string) => void;
   onRenamePlaylist?: (id: number, name: string) => void;
   onDeletePlaylist?: (id: number) => void;
@@ -45,6 +48,7 @@ export const LibraryPanel = forwardRef<HTMLDialogElement, LibraryPanelProps>(fun
   const [topic, setTopic] = useState(first);
   const [editing, setEditing] = useState<number | null>(null);
   const [confirming, setConfirming] = useState<number | null>(null);
+  const [topicConfirm, setTopicConfirm] = useState(false);
   // Follow the topic that's playing, and never point at a topic that's gone.
   useEffect(() => {
     if (p.defaultTopic) setTopic(p.defaultTopic);
@@ -53,6 +57,15 @@ export const LibraryPanel = forwardRef<HTMLDialogElement, LibraryPanelProps>(fun
     if (topic !== NEW_TOPIC && p.topics.length && !p.topics.some((t) => t.name === topic)) setTopic(p.topics[0].name);
   }, [p.topics, topic]);
   const selected = topic === NEW_TOPIC ? undefined : p.topics.find((t) => t.name === topic);
+  useEffect(() => setTopicConfirm(false), [topic]);
+  const onRenameTopic = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const to = field(e.currentTarget, "topic-rename").trim();
+    if (selected && to && to !== selected.name) {
+      p.onRenameTopic?.(selected.name, to);
+      setTopic(to);
+    }
+  };
 
   const onAdd = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -160,6 +173,61 @@ export const LibraryPanel = forwardRef<HTMLDialogElement, LibraryPanelProps>(fun
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {selected && (
+              <div className="topic-manage">
+                <p className="list-label">This topic</p>
+                <form className="form-row" onSubmit={onRenameTopic}>
+                  <label htmlFor="topic-rename" className="visually-hidden">
+                    New name for {selected.name}
+                  </label>
+                  <input
+                    key={selected.name}
+                    id="topic-rename"
+                    name="topic-rename"
+                    type="text"
+                    maxLength={60}
+                    defaultValue={selected.name}
+                    autoComplete="off"
+                    required
+                  />
+                  <button type="submit" className="text-btn" disabled={p.busy || p.mode === "preview"}>
+                    Rename
+                  </button>
+                  {topicConfirm ? (
+                    <>
+                      <button
+                        type="button"
+                        className="text-btn danger"
+                        disabled={p.busy || p.mode === "preview"}
+                        onClick={() => {
+                          setTopicConfirm(false);
+                          p.onRemoveTopic?.(selected.name);
+                        }}
+                      >
+                        Remove {selected.name} and its channels
+                      </button>
+                      <button type="button" className="text-btn" onClick={() => setTopicConfirm(false)}>
+                        Keep it
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-btn danger"
+                      disabled={p.busy || p.mode === "preview"}
+                      onClick={() => setTopicConfirm(true)}
+                    >
+                      Remove topic
+                    </button>
+                  )}
+                </form>
+                {topicConfirm && (
+                  <p className="settings-note">
+                    Images you put in playlists or saved stay where they are. Only the topic and its list of channels go.
+                  </p>
+                )}
               </div>
             )}
           </section>

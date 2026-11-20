@@ -24,13 +24,55 @@ export interface TopicInfo {
   group?: string | null;
 }
 
-/** What the slideshow plays: everything, one topic, or one playlist. */
-export type SlideSource = { kind: "all" } | { kind: "topic"; name: string } | { kind: "playlist"; id: number };
+/** What the slideshow plays: everything, one topic, a playlist, your saved images or a search (ADR-0029). */
+export type SlideSource =
+  | { kind: "all" }
+  | { kind: "topic"; name: string }
+  | { kind: "playlist"; id: number }
+  | { kind: "saved" }
+  | { kind: "search"; query: string };
 
 export function sourceKey(s: SlideSource | null): string {
   if (!s) return "";
-  if (s.kind === "all") return "all";
-  return s.kind === "topic" ? `topic:${s.name}` : `playlist:${s.id}`;
+  switch (s.kind) {
+    case "all":
+    case "saved":
+      return s.kind;
+    case "topic":
+      return `topic:${s.name}`;
+    case "playlist":
+      return `playlist:${s.id}`;
+    case "search":
+      return `search:${s.query}`;
+  }
+}
+
+/** The other way round, for "remember where I was": a stored key back to a source, or null. */
+export function parseSourceKey(key: unknown): SlideSource | null {
+  if (typeof key !== "string" || key.length > 300) return null;
+  if (key === "all" || key === "saved") return { kind: key };
+  if (key.startsWith("topic:") && key.length > 6) return { kind: "topic", name: key.slice(6) };
+  if (key.startsWith("search:") && key.slice(7).trim()) return { kind: "search", query: key.slice(7, 207) };
+  const m = /^playlist:(\d{1,12})$/.exec(key);
+  return m ? { kind: "playlist", id: Number(m[1]) } : null;
+}
+
+/** "Oil on canvas · c. 1650 · 50 x 40 cm": the label's middle line, in museum order (ADR-0029). */
+export function labelLine(s: Pick<Slide, "date" | "medium" | "dimensions">): string {
+  return [s.date, s.medium, s.dimensions]
+    .map((x) => x?.trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Sharper museum images on big windows (ADR-0029): Cleveland's "web" image is
+ * 900 px, its "print" 3,400 px. On a window wider than about 1,200 device
+ * pixels, show the print and keep the web image as the first fallback.
+ */
+export function sharpSlide(s: Slide, bigWindow: boolean): Slide {
+  if (!bigWindow || s.connector !== "cleveland" || !s.original_url || s.original_url === s.display_url) return s;
+  return { ...s, display_url: s.original_url, fallback_urls: [s.display_url, ...(s.fallback_urls ?? [])] };
 }
 
 /** A local list of images (ADR-0014). */
@@ -73,6 +115,15 @@ export interface Slide {
   original_url?: string | null;
   /** Other stored sizes, tried in turn when `display_url` fails (ADR-0016). */
   fallback_urls?: string[];
+  /** Museum label (ADR-0029). */
+  date?: string | null;
+  medium?: string | null;
+  dimensions?: string | null;
+  credit?: string | null;
+  /** "CC0-1.0" for open-access museum works; null when rights are unknown. */
+  license_id?: string | null;
+  /** A small size for the grid view. */
+  thumb_url?: string;
 }
 
 /** Result of Save (ADR-0022). `view` is relative to the library folder. */
@@ -373,6 +424,10 @@ export interface Backend {
   /** Paste-a-link import; the core validates the link (ADR-0014). */
   addChannel(link: string, topic: string, createTopic: boolean): Promise<AddedChannel>;
   removeChannel(topic: string, channel: string): Promise<boolean>;
+  /** Rename a topic; resolves to the stored name (ADR-0029). */
+  renameTopic(from: string, to: string): Promise<string>;
+  /** Remove a topic with its channels. Images stay in playlists. */
+  removeTopic(name: string): Promise<boolean>;
   playlists(): Promise<Playlist[]>;
   createPlaylist(name: string): Promise<Playlist>;
   renamePlaylist(id: number, name: string): Promise<boolean>;
@@ -480,6 +535,8 @@ function tauriBackend(): Backend {
     relatedChannels: (blockId, page) => invoke<RelatedChannels>("related_channels", { blockId, page }),
     addChannel: (link, topic, createTopic) => invoke<AddedChannel>("add_channel", { link, topic, createTopic }),
     removeChannel: (topic, channel) => invoke<boolean>("remove_channel", { topic, channel }),
+    renameTopic: (from, to) => invoke<string>("rename_topic", { from, to }),
+    removeTopic: (name) => invoke<boolean>("remove_topic", { name }),
     playlists: () => invoke<Playlist[]>("playlists"),
     createPlaylist: (name) => invoke<Playlist>("create_playlist", { name }),
     renamePlaylist: (id, name) => invoke<boolean>("rename_playlist", { id, name }),
@@ -622,7 +679,15 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     let list: Slide[];
     if (source.kind === "all") list = await allSlides();
     else if (source.kind === "topic") list = (await data()).topics.find((t) => t.name === source.name)?.slides ?? [];
-    else {
+    else if (source.kind === "saved") list = (await allSlides()).filter((s) => s.saved);
+    else if (source.kind === "search") {
+      // Every word, as a prefix, in the title or the creator (like the desktop's search).
+      const words = source.query.toLowerCase().split(/\s+/).filter(Boolean);
+      const text = (s: Slide) => `${s.title ?? ""} ${s.creator ?? ""}`.toLowerCase();
+      list = words.length
+        ? (await allSlides()).filter((s) => words.every((w) => text(s).split(/[^\p{L}\p{N}]+/u).some((t) => t.startsWith(w))))
+        : [];
+    } else {
       const d = await data();
       const known = [...(await allSlides()), ...(d.playlists ?? []).flatMap((p) => p.slides)];
       const byId = new Map(known.map((s) => [s.block_id, s]));
@@ -680,6 +745,12 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     },
     removeChannel: async () => {
       throw new Error("Removing channels works in the desktop app.");
+    },
+    renameTopic: async () => {
+      throw new Error("Renaming topics works in the desktop app.");
+    },
+    removeTopic: async () => {
+      throw new Error("Removing topics works in the desktop app.");
     },
     playlists: async () =>
       (await data()) &&

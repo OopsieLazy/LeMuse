@@ -1,6 +1,7 @@
 import type { FormEvent, MouseEvent } from "react";
 import {
   isHttps,
+  labelLine,
   NO_FILTER,
   PAGE_SIZE,
   sourceKey,
@@ -154,6 +155,22 @@ export interface SlideshowViewProps {
   onSession?: () => void;
   /** The image fills the frame (settings: fit = cover); the grid follows. */
   cover?: boolean;
+  /** Images you saved, for the Saved entry (ADR-0029). */
+  savedCount?: number;
+  /** Search the catalog (titles, descriptions, creators). */
+  onSearch?: (query: string) => void;
+  /** The grid view of the current view (ADR-0029). */
+  grid?: boolean;
+  onToggleGrid?: () => void;
+  /** Play from this image (its index in `slides`). */
+  onPickSlide?: (index: number) => void;
+  /** The current image has loaded: fade it in (no blank flash). */
+  imageReady?: boolean;
+  /** Pose clock style and a counter that flashes the frame on each new pose. */
+  clockStyle?: "ring" | "small" | "hidden";
+  flashKey?: number;
+  /** Undo for the last toast (hide, mark, un-♥). */
+  onUndo?: () => void;
   /** Right-click: never show this image again / mark nudity the sensor missed (ADR-0027). */
   onHideImage?: () => void;
   onMarkNudity?: () => void;
@@ -183,10 +200,11 @@ export function sourceName(slide: Slide): string {
 
 const pad = (n: number, width: number) => String(n).padStart(width, "0");
 
-/** Alt text like a short museum label: title, then creator (WCAG 1.1.1). */
-export function altText(slide: Pick<Slide, "title" | "creator">): string {
-  const title = slide.title?.trim() || "Untitled reference image";
-  return slide.creator?.trim() ? `${title}, ${slide.creator.trim()}` : title;
+/** Alt text like a short museum label: title, creator, date (WCAG 1.1.1). */
+export function altText(slide: Pick<Slide, "title" | "creator"> & { date?: string | null }): string {
+  return [slide.title?.trim() || "Untitled reference image", slide.creator?.trim(), slide.date?.trim()]
+    .filter(Boolean)
+    .join(", ");
 }
 
 /** "Mirrored · Upside down · 3 values · Grid": shown on the image while an aid is on. */
@@ -234,6 +252,7 @@ const ICONS = {
   expand: "M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7",
   heart: "M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20Z",
   study: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17ZM12 3.5v17M12 7h5M12 11h7.5M12 15h7M12 19h4",
+  grid: "M4 4h7v7H4ZM13 4h7v7h-7ZM4 13h7v7H4ZM13 13h7v7h-7Z",
   timer: "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM12 9v4l2.5 2.5M9.5 2.5h5",
 };
 
@@ -300,6 +319,13 @@ function emptyText(p: SlideshowViewProps): [string, string] {
   if (f.include.length || f.exclude.length)
     return ["No images match this filter", "Change or clear the category filter to see more."];
   if (!p.active) return ["No topic selected", "Pick a topic, or add an Are.na channel with the + button."];
+  if (p.active.kind === "saved")
+    return ["Nothing saved yet", "Right-click an image and choose Save original: it lands in your LeMuse folder and here."];
+  if (p.active.kind === "search")
+    return [
+      `Nothing found for “${p.active.query}”`,
+      "Search looks in titles, descriptions and creators. Try a shorter word, or the start of one.",
+    ];
   if (p.active.kind === "playlist" && p.activeLabel === FAVOURITES)
     return [
       "No favourites yet",
@@ -378,12 +404,40 @@ export function SlideshowView(p: SlideshowViewProps) {
           </button>
         </div>
         <div className="rail-scroll">
+          <form
+            className="rail-search"
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const input = e.currentTarget.elements.namedItem("rail-search");
+              if (input instanceof HTMLInputElement && input.value.trim()) p.onSearch?.(input.value.trim());
+            }}
+          >
+            <label htmlFor="rail-search" className="visually-hidden">
+              Search your library: titles, descriptions and creators
+            </label>
+            <input
+              id="rail-search"
+              name="rail-search"
+              type="search"
+              maxLength={200}
+              placeholder="Search your library"
+              autoComplete="off"
+              defaultValue={p.active?.kind === "search" ? p.active.query : ""}
+            />
+          </form>
           <ul className="topic-list" aria-label="Everything">
             <RailItem
               label="All"
               count={p.allCount}
               current={current === "all"}
               onClick={() => p.onSelect?.({ kind: "all" })}
+            />
+            <RailItem
+              label="Saved"
+              count={p.savedCount ?? 0}
+              current={current === "saved"}
+              onClick={() => p.onSelect?.({ kind: "saved" })}
             />
           </ul>
           <h2 className="rail-heading" id="rail-topics">
@@ -497,13 +551,32 @@ export function SlideshowView(p: SlideshowViewProps) {
               p.onContextMenu?.(e.clientX, e.clientY);
             }}
           >
-            {slide ? (
+            {p.grid && p.slides.length > 0 ? (
+              // Grid view (ADR-0029): every image in this view (this page), small
+              // sizes, loaded as they scroll into view. Pick one to play from it.
+              <ul className="grid-view" aria-label={`${p.activeLabel}: ${p.slides.length} images`}>
+                {p.slides.map((s, i) => (
+                  <li key={s.block_id} className="grid-item">
+                    <button
+                      type="button"
+                      className="grid-pick"
+                      aria-current={i === p.index ? "true" : undefined}
+                      onClick={() => p.onPickSlide?.(i)}
+                      title={s.title || "Untitled"}
+                    >
+                      <img src={s.thumb_url || s.display_url} alt={altText(s)} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : slide ? (
               // With a grid on, the image fills its cell (object-fit contain or
               // cover) and the grid is an SVG in the same cell with the image's
               // own viewBox and the same fit, so the lines sit on the image.
               <>
                 <img
                   key={slide.block_id}
+                  data-ready={p.imageReady ? "true" : "false"}
                   src={slide.display_url}
                   alt={altText(slide)}
                   width={slide.width ?? undefined}
@@ -563,13 +636,31 @@ export function SlideshowView(p: SlideshowViewProps) {
                 {studyBadge(study)}
               </p>
             )}
-            {session && (
+            {session && Boolean(p.flashKey) && (
+              // A quiet cue on each new pose (off with reduced motion or in Settings).
+              <span key={p.flashKey} className="pose-flash" aria-hidden="true" />
+            )}
+            {session && p.clockStyle !== "hidden" && (
               <p
                 className="session-clock"
                 role="timer"
+                data-style={p.clockStyle ?? "ring"}
                 data-paused={session.paused ? "true" : "false"}
                 data-warn={!session.paused && session.left <= 5 ? "true" : "false"}
               >
+                {(p.clockStyle ?? "ring") === "ring" && (
+                  <svg className="clock-ring" viewBox="0 0 36 36" aria-hidden="true">
+                    {/* r = 100 / 2π, so the circumference is 100 and the dash is a percentage. */}
+                    <circle className="clock-track" cx="18" cy="18" r="15.9155" />
+                    <circle
+                      className="clock-left"
+                      cx="18"
+                      cy="18"
+                      r="15.9155"
+                      strokeDasharray={`${Math.round((session.left / Math.max(1, session.total)) * 1000) / 10} 100`}
+                    />
+                  </svg>
+                )}
                 <span className="session-time">{clock(session.left)}</span>
                 <span className="session-pose">
                   {session.paused ? "Paused · " : ""}
@@ -701,9 +792,14 @@ export function SlideshowView(p: SlideshowViewProps) {
               </div>
             )}
             {p.toast && (
-              <p className="toast" role="status">
-                {p.toast}
-              </p>
+              <div className="toast" role="status">
+                <span>{p.toast}</span>
+                {p.onUndo && (
+                  <button type="button" className="toast-undo" onClick={p.onUndo}>
+                    Undo
+                  </button>
+                )}
+              </div>
             )}
             {p.mini && (
               <>
@@ -810,6 +906,15 @@ export function SlideshowView(p: SlideshowViewProps) {
                 {slide && (
                   <p className="byline">
                     {slide.creator && <span className="creator">{slide.creator}</span>}
+                    {slide.license_id === "CC0-1.0" ? (
+                      <span className="rights-badge" title="Public domain: free to use for anything">
+                        CC0
+                      </span>
+                    ) : (
+                      <span className="rights-badge" data-rights="creator" title="Rights belong to the creator: for personal reference">
+                        © creator
+                      </span>
+                    )}
                     <span className="source">{sourceName(slide)}</span>
                     {slide.page_url && isHttps(slide.page_url) && (
                       <a
@@ -824,6 +929,8 @@ export function SlideshowView(p: SlideshowViewProps) {
                     )}
                   </p>
                 )}
+                {slide && labelLine(slide) && <p className="label-line">{labelLine(slide)}</p>}
+                {slide?.credit && <p className="credit-line">{slide.credit}</p>}
                 {slideTags.length > 0 && (
                   <p className="slide-tags">
                     <span className="visually-hidden">Categories: </span>
@@ -939,6 +1046,17 @@ export function SlideshowView(p: SlideshowViewProps) {
                   title="Mirror, values, grid (X U G V B O)"
                 >
                   <Icon d={ICONS.study} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={p.onToggleGrid}
+                  disabled={!p.slides.length}
+                  aria-pressed={Boolean(p.grid)}
+                  aria-label={p.grid ? "Back to the slideshow" : "Grid view"}
+                  title="Grid of this view (W)"
+                >
+                  <Icon d={ICONS.grid} />
                 </button>
                 <button
                   type="button"

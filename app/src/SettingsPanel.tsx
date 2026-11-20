@@ -1,6 +1,10 @@
 import { forwardRef, useRef, type MouseEvent } from "react";
 import { ARENA_TOKEN_PAGE, reportUrl, type About, type Release, type TokenStatus } from "./api";
 import {
+  CLOCK_LABELS,
+  CLOCKS,
+  SURROUND_LABELS,
+  SURROUNDS,
   FITS,
   FONTS,
   LABELS,
@@ -129,6 +133,31 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
     </div>
   );
 
+  const labelled = <T extends string>(
+    name: keyof UiSettings,
+    legend: string,
+    options: readonly T[],
+    labels: Record<T, string>,
+    value: T,
+  ) => (
+    <fieldset className="choice">
+      <legend>{legend}</legend>
+      <div className="choice-options">
+        {options.map((o) => (
+          <label key={o} className="choice-option" data-option={o}>
+            <input
+              type="radio"
+              name={`set-${name}`}
+              value={o}
+              checked={value === o}
+              onChange={() => set({ [name]: o } as Partial<UiSettings>)}
+            />
+            <span>{labels[o]}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
   const choice = <T extends string>(name: keyof UiSettings, legend: string, options: readonly T[], value: T) => (
     <fieldset className="choice">
       <legend>{legend}</legend>
@@ -199,6 +228,11 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
           <section className="settings-section" aria-labelledby="sec-image">
             <h3 id="sec-image">Image</h3>
             {choice("fit", "Fit", FITS, s.fit)}
+            {labelled("surround", "Behind the image", SURROUNDS, SURROUND_LABELS, s.surround)}
+            <p className="settings-note">
+              A neutral grey behind the image keeps colours and values honest: a tinted or very dark surround changes
+              how light a picture looks.
+            </p>
             {slider("stagePadding", "Space around the image", s.stagePadding)}
             {slider("imageShadow", "Image shadow", s.imageShadow)}
           </section>
@@ -324,6 +358,8 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
                 Clear my practice history
               </button>
             </div>
+            {labelled("sessionClock", "Pose clock", CLOCKS, CLOCK_LABELS, s.sessionClock)}
+            {toggle("poseFlash", "Flash around the image when a pose changes (for quiet rooms)")}
             {toggle("singleKeys", "Single-key shortcuts (letters such as N, V, K)")}
             <p className="settings-note">
               Turn these off if you use speech input or press keys by accident. Arrows, Space and Esc always work.

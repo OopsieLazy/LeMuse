@@ -6,19 +6,45 @@
 // `sanitize` whitelists every enum and clamps every number. Only validated
 // numbers and #rrggbb colours ever reach style.setProperty.
 
-import { PLAN_IDS, DEFAULT_CUSTOM, sanitizeRounds, type PlanId, type Round } from "./practice";
+import {
+  DEFAULT_CUSTOM,
+  EFFECTS,
+  FOCI,
+  GRIDS,
+  NO_STUDY,
+  PLAN_IDS,
+  sanitizeRounds,
+  TONES,
+  type PlanId,
+  type Round,
+  type StudyAids,
+} from "./practice";
 
 export const PRESETS = ["studio", "gallery", "blueprint", "paper", "millennium"] as const;
 export const MODES = ["system", "light", "dark"] as const;
 export const LAYOUTS = ["studio", "rail-right", "caption-top", "cinema", "minimal"] as const;
 export const FONTS = ["system", "editorial", "technical", "millennium"] as const;
 export const FITS = ["contain", "cover"] as const;
+/** The grey behind the image (ADR-0029): the theme's own, or a neutral step. */
+export const SURROUNDS = ["theme", "white", "light", "mid", "dark", "black"] as const;
+/** How the pose clock shows during a session. */
+export const CLOCKS = ["ring", "small", "hidden"] as const;
 
 export type Preset = (typeof PRESETS)[number];
 export type Mode = (typeof MODES)[number];
 export type Layout = (typeof LAYOUTS)[number];
 export type Font = (typeof FONTS)[number];
 export type Fit = (typeof FITS)[number];
+export type Surround = (typeof SURROUNDS)[number];
+export type ClockStyle = (typeof CLOCKS)[number];
+
+/** Where you were (ADR-0029): restored at the next launch. */
+export interface LastPlace {
+  /** sourceKey() of the view. */
+  source: string;
+  page: number;
+  blockId: number | null;
+}
 
 export interface UiSettings {
   version: 1;
@@ -59,6 +85,16 @@ export interface UiSettings {
   lastUpdateCheck: number | null;
   /** Single-letter shortcuts (WCAG 2.1.4: can be turned off). Arrows, Space and Esc always work. */
   singleKeys: boolean;
+  /** View comfort (ADR-0029). */
+  surround: Surround;
+  sessionClock: ClockStyle;
+  /** A brief flash around the image when a pose changes (for quiet rooms). */
+  poseFlash: boolean;
+  /** The first-run welcome was shown. */
+  welcomed: boolean;
+  last: LastPlace | null;
+  /** Study aids, kept between launches (the badge always says which are on). */
+  study: StudyAids;
 }
 
 /** Ranges for every slider: [min, max, step]. One table feeds clamping and the UI. */
@@ -102,6 +138,12 @@ export const DEFAULTS: UiSettings = {
   checkUpdates: true,
   lastUpdateCheck: null,
   singleKeys: true,
+  surround: "theme",
+  sessionClock: "ring",
+  poseFlash: true,
+  welcomed: false,
+  last: null,
+  study: NO_STUDY,
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -129,6 +171,35 @@ function bounds(v: unknown): UiSettings["miniBounds"] {
   const width = int(b.width, 200, 8000);
   const height = int(b.height, 120, 8000);
   return x === null || y === null || width === null || height === null ? null : { x, y, width, height };
+}
+
+function lastPlace(v: unknown): LastPlace | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.source !== "string" || !o.source || o.source.length > 300) return null;
+  return {
+    source: o.source,
+    page: int(o.page, 0, 10_000) ?? 0,
+    // A block id is a positive whole number or nothing: never clamped to another image.
+    blockId: Number.isSafeInteger(o.blockId) && (o.blockId as number) > 0 ? (o.blockId as number) : null,
+  };
+}
+
+function studyAids(v: unknown): StudyAids {
+  if (!v || typeof v !== "object") return NO_STUDY;
+  const o = v as Record<string, unknown>;
+  const n = NO_STUDY;
+  return {
+    mirror: bool(o.mirror, n.mirror),
+    upside: bool(o.upside, n.upside),
+    grey: bool(o.grey, n.grey),
+    tones: (TONES as readonly unknown[]).includes(o.tones) ? (o.tones as StudyAids["tones"]) : n.tones,
+    focus: oneOf(FOCI, o.focus, n.focus),
+    balance: typeof o.balance === "number" && Number.isFinite(o.balance) ? Math.max(-1, Math.min(1, o.balance)) : n.balance,
+    squint: bool(o.squint, n.squint),
+    grid: oneOf(GRIDS, o.grid, n.grid),
+    effect: oneOf(EFFECTS, o.effect, n.effect),
+  };
 }
 
 /** Any value in, a valid `UiSettings` out. Unknown keys are dropped. */
@@ -168,6 +239,13 @@ export function sanitize(raw: unknown): UiSettings {
         ? Math.round(r.lastUpdateCheck)
         : null,
     singleKeys: bool(r.singleKeys, d.singleKeys),
+    surround: oneOf(SURROUNDS, r.surround, d.surround),
+    sessionClock: oneOf(CLOCKS, r.sessionClock, d.sessionClock),
+    poseFlash: bool(r.poseFlash, d.poseFlash),
+    // Settings saved before the welcome existed belong to someone who knows the app.
+    welcomed: bool(r.welcomed, Object.keys(r).length > 0),
+    last: lastPlace(r.last),
+    study: studyAids(r.study),
   };
 }
 
@@ -199,6 +277,8 @@ export function rootAttributes(
     "data-mini": state.mini ? "true" : "false",
     // Compact windows (tablets, small windows) hide the bar until a tap.
     "data-compact-bar": state.compactBar ? "shown" : "hidden",
+    "data-surround": s.surround,
+    "data-session-clock": s.sessionClock,
   };
   if (s.mode !== "system") attrs["data-theme"] = s.mode;
   const style: Record<string, string> = {
@@ -252,4 +332,19 @@ export const LABELS: Record<Preset | Layout | Font | Mode | Fit, string> = {
   technical: "Technical mono",
   contain: "Whole image",
   cover: "Fill the frame",
+};
+
+export const SURROUND_LABELS: Record<Surround, string> = {
+  theme: "Theme",
+  white: "White",
+  light: "Light grey",
+  mid: "Mid grey",
+  dark: "Dark grey",
+  black: "Black",
+};
+
+export const CLOCK_LABELS: Record<ClockStyle, string> = {
+  ring: "Large ring",
+  small: "Small",
+  hidden: "Hidden",
 };

@@ -286,8 +286,47 @@ input {
 }
 
 /* Image, grid and empty state share the frame's one cell (ADR-0025). */
-.frame > :is(img, .grid-overlay, .empty) {
+.frame > :is(img, .grid-overlay, .empty, .grid-view) {
   grid-area: 1 / 1;
+}
+
+/* The image fades in once it has loaded, so there's no blank flash
+   (ADR-0029). If a load event is ever missed, it shows anyway after 1.2 s. */
+.frame > img {
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease);
+  animation: image-reveal 0s 1.2s forwards;
+}
+
+.frame > img[data-ready="true"] {
+  opacity: 1;
+}
+
+@keyframes image-reveal {
+  to {
+    opacity: 1;
+  }
+}
+
+/* The surround (Settings → Image): a neutral grey behind the image. */
+:root[data-surround="white"] {
+  --stage: var(--surround-white);
+}
+
+:root[data-surround="light"] {
+  --stage: var(--surround-light);
+}
+
+:root[data-surround="mid"] {
+  --stage: var(--surround-mid);
+}
+
+:root[data-surround="dark"] {
+  --stage: var(--surround-dark);
+}
+
+:root[data-surround="black"] {
+  --stage: var(--surround-black);
 }
 
 .frame img {
@@ -1457,6 +1496,9 @@ ul.channel-list {
   left: 50%;
   bottom: var(--space-6);
   z-index: var(--z-menu);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
   margin: 0;
   padding: var(--space-3) var(--space-5);
   transform: translateX(-50%);
@@ -1621,7 +1663,7 @@ ul.channel-list {
   }
 
   /* A slimmer bar: title, credit and controls; no specs or tags. */
-  :root:not([data-mini="true"]) :is(.specs, .slide-tags) {
+  :root:not([data-mini="true"]) :is(.specs, .slide-tags, .label-line, .credit-line) {
     display: none;
   }
 
@@ -2033,4 +2075,220 @@ kbd {
   background: var(--bg);
   color: var(--fg);
   font: inherit;
+}
+
+/* ============ Finishing 1.0 (ADR-0029) ============ */
+
+.toast-undo {
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+/* Search at the top of the topic list. */
+.rail-search {
+  margin: 0 var(--space-4) var(--space-2);
+}
+
+.rail-search input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+/* The museum label: date · medium · dimensions, then the credit line. */
+.label-line,
+.credit-line {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.credit-line {
+  font-style: italic;
+}
+
+.rights-badge {
+  align-self: center;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--chip-radius);
+  color: var(--accent);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-label);
+}
+
+.rights-badge[data-rights="creator"] {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+/* Grid view: the whole view as a contact sheet, inside the image frame. */
+.grid-view {
+  place-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--grid-thumb), 1fr));
+  align-content: start;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-2);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.grid-item {
+  content-visibility: auto;
+  contain-intrinsic-size: var(--grid-thumb) var(--grid-thumb);
+}
+
+.grid-pick {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.grid-pick[aria-current="true"] {
+  border-color: var(--accent);
+}
+
+.grid-pick:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.frame .grid-pick img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  box-shadow: none;
+}
+
+/* The pose clock as a large ring (Settings → Practice). */
+.session-clock[data-style="ring"] {
+  grid-template-areas: "ring";
+  place-items: center;
+  justify-items: center;
+  padding: var(--space-2);
+  border-radius: 50%;
+}
+
+.session-clock[data-style="ring"] > * {
+  grid-area: ring;
+}
+
+.session-clock[data-style="ring"] .session-time {
+  font-size: var(--clock-ring-text);
+}
+
+.session-clock[data-style="ring"] .session-pose {
+  margin-top: calc(var(--clock-ring-text) * 1.6);
+}
+
+.clock-ring {
+  width: var(--clock-ring-size);
+  height: var(--clock-ring-size);
+}
+
+.clock-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.clock-track {
+  stroke: var(--line);
+}
+
+.clock-left {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dasharray 200ms linear;
+}
+
+.session-clock[data-warn="true"] .clock-left {
+  stroke: var(--error);
+}
+
+.session-clock[data-paused="true"] .clock-left {
+  stroke: var(--muted);
+}
+
+/* A quiet cue on each new pose: a brief accent frame that fades. */
+.pose-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  box-shadow: inset 0 0 0 var(--flash-width) var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  animation: pose-flash 700ms ease-out;
+}
+
+@keyframes pose-flash {
+  from {
+    opacity: 0.9;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.topic-manage {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.topic-manage input {
+  flex: 1 1 calc(160px * var(--ui-scale));
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.welcome-topics {
+  margin-top: var(--space-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame > img {
+    transition: none;
+  }
+
+  .pose-flash {
+    display: none;
+  }
+
+  .clock-left {
+    transition: none;
+  }
 }
