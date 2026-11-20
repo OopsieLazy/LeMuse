@@ -32,6 +32,13 @@ const VIEWPORTS = [
   [768, 1024],
   [400, 800],
 ];
+// The mini player's own window: its default and its smallest (api.ts
+// MINI_DEFAULT, MINI_MIN). Mini states are also checked at these sizes (the
+// save note once hid its × off the right edge there, review 0023 D-146).
+const MINI_VIEWPORTS = [
+  [360, 225],
+  [200, 125],
+];
 
 const statesPath = join(".snapshot", "layout", "states.json");
 if (!existsSync(statesPath)) {
@@ -53,6 +60,7 @@ if (!edge) {
 const measure = String(async function run() {
   const states = JSON.parse(document.getElementById("states").textContent);
   const viewports = JSON.parse(document.getElementById("viewports").textContent);
+  const miniViewports = JSON.parse(document.getElementById("mini-viewports").textContent);
   const failures = [];
   let checks = 0;
   // Hidden means display:none or visibility:hidden (the compact bar collapses
@@ -66,7 +74,8 @@ const measure = String(async function run() {
     Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
     Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
   for (const st of states) {
-    for (const [w, h] of viewports) {
+    const sizes = st.html.includes('data-mini="true"') ? [...viewports, ...miniViewports] : viewports;
+    for (const [w, h] of sizes) {
       const frame = document.createElement("iframe");
       frame.style.cssText = `width:${w}px;height:${h}px;border:0;display:block`;
       const loaded = new Promise((r) => frame.addEventListener("load", r, { once: true }));
@@ -132,7 +141,7 @@ const measure = String(async function run() {
         return out;
       };
       const textSel =
-        ".slide-title, .creator, .source, .refresh-label, .library-line, .rail-heading, .topic-name, .topic-count, .menu-empty, .settings-note, .list-label, .chip-label, .chip-count, .compact-credit, .study-badge, .session-pose, .session-time, .plan-rounds, .plan-total, .drawn-meta, .related-meta, .specs dt, .specs dd, .menu-title, .empty-body, .error-code";
+        ".slide-title, .creator, .source, .refresh-label, .library-line, .rail-heading, .topic-name, .topic-count, .menu-empty, .settings-note, .list-label, .chip-label, .chip-count, .compact-credit, .study-badge, .session-pose, .session-time, .plan-rounds, .plan-total, .drawn-meta, .related-meta, .specs dt, .specs dd, .menu-title, .empty-body, .error-code, .save-note-title, .save-note-file";
       // Colour doesn't change with size: check at one desktop and one compact size.
       const contrastHere = (w === 1280 && h === 800) || (w === 800 && h === 600);
       // Both themes, whatever this PC's own setting is (a dark-mode PC once
@@ -178,12 +187,27 @@ const measure = String(async function run() {
       const outside = (r) =>
         r.right > win.innerWidth + 1 || r.bottom > win.innerHeight + 1 || r.left < -1 || r.top < -1;
       const controls =
-        ".controls button, .page-select, .reveal, .rail-actions button, .brand .icon-btn, .playlist-menu :is(button, input, select), .mini-bar button, .mini-burger, .mini-menu button, .compact-burger, .context-menu :is(button, a)";
+        ".controls button, .page-select, .reveal, .rail-actions button, .brand .icon-btn, .playlist-menu :is(button, input, select), .mini-bar button, .mini-burger, .mini-menu button, .compact-burger, .context-menu :is(button, a), .save-note-close, .toast-undo";
+      // A control in a scrolling list that itself fits the window is reached
+      // by scrolling (the mini player's menu at its smallest size).
+      const scrolledInto = (el) => {
+        for (let n = el.parentElement; n && n !== doc.body; n = n.parentElement) {
+          const o = win.getComputedStyle(n).overflowY;
+          if ((o === "auto" || o === "scroll") && n.scrollHeight > n.clientHeight + 1)
+            return !outside(n.getBoundingClientRect());
+        }
+        return false;
+      };
       for (const b of doc.querySelectorAll(controls)) {
         if (!visible(b, win)) continue;
         if (b.closest(".rail") && win.getComputedStyle(b.closest(".rail")).visibility === "hidden") continue;
-        if (outside(b.getBoundingClientRect()))
+        if (outside(b.getBoundingClientRect()) && !scrolledInto(b))
           fail(`control "${b.getAttribute("aria-label") || b.textContent.trim()}" is outside the window`);
+      }
+      // Pop-ups over the image (the save note once hid its × off the right
+      // edge of the mini player, review 0023 D-146): wholly in the window.
+      for (const pop of doc.querySelectorAll(".save-note, .toast")) {
+        if (visible(pop, win) && outside(pop.getBoundingClientRect())) fail(`pop-up "${pop.className}" leaves the window`);
       }
       for (const dialog of doc.querySelectorAll("dialog[open]")) {
         if (outside(dialog.getBoundingClientRect()))
@@ -218,6 +242,7 @@ const harness = `<!doctype html><html><head><meta charset="utf-8"><title>layout 
 <pre id="report">PENDING</pre>
 <script type="application/json" id="states">${safe(JSON.stringify(states))}</script>
 <script type="application/json" id="viewports">${JSON.stringify(VIEWPORTS)}</script>
+<script type="application/json" id="mini-viewports">${JSON.stringify(MINI_VIEWPORTS)}</script>
 <script>(${measure})().catch(e => { history.replaceState(null, "", "#" + encodeURIComponent(JSON.stringify({ error: String(e && e.stack || e) }))); document.title = "REPORT:DONE"; });</script>
 </body></html>`;
 const harnessPath = resolve(".snapshot", "layout", "harness.html");
@@ -283,7 +308,7 @@ if (report.error) {
   console.error("layout-test: harness error:", report.error);
   process.exit(2);
 }
-console.log(`layout-test: ${states.length} states x ${VIEWPORTS.length} sizes = ${report.checks} renders`);
+console.log(`layout-test: ${states.length} states x ${VIEWPORTS.length} sizes (+${MINI_VIEWPORTS.length} for mini states) = ${report.checks} checks`);
 if (report.failures.length) {
   for (const f of report.failures) console.error(`  FAIL ${f}`);
   console.error(`layout-test: ${report.failures.length} failure(s).`);
