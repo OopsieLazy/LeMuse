@@ -28,6 +28,9 @@ const VIEWPORTS = [
   [1920, 1080],
   [1280, 800],
   [1024, 640],
+  // Just wider than the compact cutoff (1024): the full bar's tightest fit
+  // (owner, session 20: "as the window is made smaller the source information disappears").
+  [1040, 700],
   [800, 600],
   [768, 1024],
   [400, 800],
@@ -115,6 +118,41 @@ const measure = String(async function run() {
         checks++;
         if (r.width < 23.5 || r.height < 23.5)
           fail(`target "${b.getAttribute("aria-label") || b.textContent.trim().slice(0, 30)}" is ${Math.round(r.width)}x${Math.round(r.height)} (min 24x24)`);
+        // Nothing may sit on top of a control (owner, session 20: "the bar up
+        // arrow covers grid"): at its centre and four points around it, the
+        // topmost element must be the control (or inside it). Skipped: controls
+        // scrolled out of their own list, the page under an open drawer, and
+        // open menus or dialogs, which are meant to cover things.
+        const underDrawer = doc.querySelector('.app[data-rail-open="true"]') && !b.closest(".rail");
+        if (!underDrawer && !b.closest("dialog")) {
+          const points = [
+            [0.5, 0.5],
+            [0.25, 0.25],
+            [0.75, 0.25],
+            [0.25, 0.75],
+            [0.75, 0.75],
+          ].map(([fx, fy]) => [r.left + r.width * fx, r.top + r.height * fy]);
+          const clippedAt = (x, y) => {
+            for (let n = b.parentElement; n && n !== doc.body; n = n.parentElement) {
+              const o = win.getComputedStyle(n).overflowY;
+              if (o === "auto" || o === "scroll" || o === "hidden") {
+                const q = n.getBoundingClientRect();
+                if (y < q.top || y > q.bottom || x < q.left || x > q.right) return true;
+              }
+            }
+            return false;
+          };
+          for (const [x, y] of points) {
+            if (x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight || clippedAt(x, y)) continue;
+            const top = doc.elementFromPoint(x, y);
+            // An ancestor "on top" is content-visibility skipping offscreen work, not a cover.
+            if (!top || top === b || b.contains(top) || top.contains(b)) continue;
+            const cover = top.closest("button, a, select, input, [role=menuitem]") || top;
+            if (cover.closest(".playlist-menu, .filter-menu, .study-menu, .context-menu, .mini-menu, dialog[open], .toast, .save-note")) continue;
+            fail(`"${b.getAttribute("aria-label") || b.textContent.trim().slice(0, 30)}" is covered by ${cover.tagName.toLowerCase()}.${cover.className || "?"}${cover.getAttribute("aria-label") ? ` "${cover.getAttribute("aria-label")}"` : ""}`);
+            break;
+          }
+        }
       }
       const rgba = (c) => {
         const m = c.match(/rgba?\(([^)]+)\)/);
@@ -203,6 +241,33 @@ const measure = String(async function run() {
         if (b.closest(".rail") && win.getComputedStyle(b.closest(".rail")).visibility === "hidden") continue;
         if (outside(b.getBoundingClientRect()) && !scrolledInto(b))
           fail(`control "${b.getAttribute("aria-label") || b.textContent.trim()}" is outside the window`);
+      }
+      // Attribution is never hidden (ADR-0004): with an image on screen, its
+      // source is visible and not clipped, in the bar or, with the compact bar
+      // tucked away, in the small credit line.
+      if (doc.querySelector(".frame img") && !doc.querySelector("dialog[open]") && !doc.querySelector(".grid-view")) {
+        const where = visible(caption, win) ? doc.querySelector(".caption .byline .source") : doc.querySelector(".compact-credit .credit-source");
+        checks++;
+        if (where && root.getAttribute("data-controls") !== "hidden") {
+          const sr = where.getBoundingClientRect();
+          let clippedBy = null;
+          for (let n = where.parentElement; n && n !== doc.body && !clippedBy; n = n.parentElement) {
+            const cs = win.getComputedStyle(n);
+            if (cs.overflowX !== "visible" || cs.overflowY !== "visible") {
+              const q = n.getBoundingClientRect();
+              if (sr.left < q.left - 1 || sr.right > q.right + 1 || sr.top < q.top - 1 || sr.bottom > q.bottom + 1) clippedBy = n.className || n.tagName;
+            }
+          }
+          if (!visible(where, win) || sr.width < 2 || outside(sr)) fail(`source attribution "${where.textContent.trim().slice(0, 30)}" isn't visible`);
+          else if (clippedBy) fail(`source attribution is cut off by .${clippedBy}`);
+        }
+      }
+      // The ⌃ arrow (bar hidden) never sits on the grid view or its scrollbar.
+      const reveal = doc.querySelector(".reveal");
+      const gridView = doc.querySelector(".grid-view");
+      if (reveal && gridView && visible(reveal, win) && visible(gridView, win)) {
+        checks++;
+        if (overlap(reveal.getBoundingClientRect(), gridView.getBoundingClientRect()) > 1) fail("the ⌃ arrow covers the grid view");
       }
       // Pop-ups over the image (the save note once hid its × off the right
       // edge of the mini player, review 0023 D-146): wholly in the window.
