@@ -134,6 +134,13 @@ export interface Saved {
   already_stored: boolean;
 }
 
+/** Result of Save as (ADR-0031): the file the user chose, and its folder. */
+export interface SavedAs {
+  saved: Saved;
+  path: string;
+  folder: string;
+}
+
 /** Where the mini player sat last time, in physical pixels. */
 /** Where Are.na makes personal access tokens (free accounts too). */
 export const ARENA_TOKEN_PAGE = "https://www.are.na/settings/personal-access-tokens";
@@ -199,6 +206,9 @@ export interface PreviewItem {
 export interface ChannelPreview {
   channel: { slug: string; title: string; contents: number | null };
   items: PreviewItem[];
+  /** Channels inside this one (Are.na channels can hold channels). Never
+   *  opened on their own (ADR-0004): the user previews or adds each. */
+  channels?: ChannelSummary[];
 }
 
 export interface ChannelSummary {
@@ -383,8 +393,10 @@ export interface Backend {
   setMini(on: boolean, saved: MiniBounds | null): Promise<MiniBounds | null>;
   /** Put text on the clipboard. */
   copyText(text: string): Promise<void>;
-  /** Save the image's original into the library folder for this source. */
-  saveImage(blockId: number, source: SlideSource): Promise<Saved>;
+  /** Save as (ADR-0031): the native Save dialog, then the original to the
+   *  chosen file (and the library). Null if the dialog was cancelled.
+   *  `startDir` only picks where the dialog opens. */
+  saveImageAs(blockId: number, source: SlideSource, startDir: string | null): Promise<SavedAs | null>;
   /** Open an https link outside the app (system browser). */
   openExternal(url: string): Promise<void>;
   /** Whether an Are.na token is saved, and whose (never the token itself; ADR-0023). */
@@ -406,6 +418,8 @@ export interface Backend {
   clearPractice(): Promise<number>;
   /** The newest release on GitHub, or null when none is published. */
   checkUpdate(): Promise<Release | null>;
+  /** The licences of the open-source parts LeMuse is built from (plain text). */
+  thirdPartyNotices(): Promise<string>;
   about(): Promise<About>;
   libraryStatus(): Promise<LibraryStatus>;
   topics(): Promise<TopicInfo[]>;
@@ -602,7 +616,8 @@ function tauriBackend(): Backend {
       return now;
     },
     copyText: (text) => navigator.clipboard.writeText(text),
-    saveImage: (blockId, source) => invoke<Saved>("save_image", { blockId, source }),
+    saveImageAs: (blockId, source, startDir) =>
+      invoke<SavedAs | null>("save_image_as", { blockId, source, startDir }),
     arenaTokenStatus: () => invoke<TokenStatus>("arena_token_status"),
     setArenaToken: (token) => invoke<ArenaAccount>("set_arena_token", { token }),
     clearArenaToken: () => invoke<boolean>("clear_arena_token"),
@@ -615,6 +630,7 @@ function tauriBackend(): Backend {
     practiceSessions: (since) => invoke<PracticeSession[]>("practice_sessions", { since }),
     clearPractice: () => invoke<number>("clear_practice"),
     checkUpdate: () => invoke<Release | null>("check_update"),
+    thirdPartyNotices: () => invoke<string>("third_party_notices"),
     about: () => invoke<About>("about"),
     async openExternal(url) {
       if (!isOpenable(url)) throw new Error("LeMuse only opens Are.na and museum pages.");
@@ -810,8 +826,8 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     openExternal: async (url) => {
       if (isHttps(url)) window.open(url, "_blank", "noopener,noreferrer");
     },
-    saveImage: async () => {
-      throw new Error("Saving works in the desktop app; it writes into your LeMuse folder.");
+    saveImageAs: async () => {
+      throw new Error("Saving works in the desktop app; it saves to a folder you choose.");
     },
     // The browser has no Credential Manager: the token is desktop-only.
     arenaTokenStatus: async () => ({ saved: false, account: null }),
@@ -850,6 +866,7 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     practiceSessions: async (since) => sessions.filter((x) => x.started_at >= since),
     clearPractice: async () => sessions.splice(0).length,
     checkUpdate: async () => null,
+    thirdPartyNotices: async () => "The full licence list ships with the desktop app (Settings → About).",
     about: async () => ({ version: "preview", licence: "MIT", repository: PROJECT_URL }),
     // The browser can't resize itself: the preview shows the mini layout only.
     setMini: async () => null,

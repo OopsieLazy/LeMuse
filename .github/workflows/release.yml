@@ -72,6 +72,8 @@ jobs:
           Copy-Item target/release/bundle/nsis/LeMuse_*_x64-setup.exe release/
           Copy-Item target/release/bundle/msi/LeMuse_*_x64_en-US.msi release/
           node scripts/sbom.mjs --out release/lemuse-sbom.cdx.json
+          # The same third-party notices the installer carries (ADR-0030).
+          Copy-Item app/src-tauri/notices/THIRD-PARTY-NOTICES.txt release/
           Get-ChildItem release -File | ForEach-Object {
             "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
           } | Set-Content -Encoding ascii release/SHA256SUMS

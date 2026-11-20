@@ -8,6 +8,15 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Before 1.0 (work item 23, ADR-0031): **Save as** (Q): the Windows Save dialog picks the folder and name, and a
+  note says where it went until you close it (×); **changeable shortcuts** in the ? sheet; **H brings the bar
+  back** in compact windows and the mini player too; channels made of channels (such as "Translucent
+  electronics") list the channels inside in the preview, to add each as its own topic.
+- A new **app icon** (the owner's magnifying glass), sharp at every size, and a **portable folder**
+  (`npm run portable`) with "Add shortcuts.cmd" for Desktop and Start menu shortcuts.
+- 1.0 (work item 23, ADR-0030): third-party licences in the installer and Settings → About (and attached to each
+  release); a catalog backup before every schema upgrade; a `guardrails` CI check that needs the owner's label
+  when CI, hooks, scanners, permissions or CLAUDE.md change; Claude can no longer push; version 1.0.0.
 - Finishing 1.0 (work item 22, ADR-0029):
   - LeMuse **remembers where you were** (view, page, image, study aids);
   - sessions get a **large ring clock** (or small, or hidden) and a soft **flash** on each new pose;
@@ -130,6 +139,11 @@ Once a remote exists, release-please maintains this file from Conventional Commi
   deleted by a refresh.
 - Playlists, All and Add channel (PR #8): your own lists of images (links only; a refresh never touches them); an
   All slideshow across every topic; paste an Are.na link to add a channel to a topic (`lemuse add-channel` too).
+
+### Fixed
+
+- Saving an image no longer reshuffles the slideshow, so the saved image stays on screen.
+- The mini player's menu fits the window at the smallest size.
 
 ### Security
 

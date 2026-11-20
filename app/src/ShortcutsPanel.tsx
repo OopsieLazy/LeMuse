@@ -1,68 +1,70 @@
-import { forwardRef } from "react";
+import { forwardRef, useState, type KeyboardEvent } from "react";
+import { ACTIONS, actionLabel, bind, DEFAULT_KEYS, GROUPS, isCharacterKey, keyLabel, keyOf, type ActionId, type KeyMap } from "./keys";
 
-// The ? sheet: every key LeMuse answers to. App.tsx's key handler and this
-// list must agree; the hands-on guide (docs/guide/hands-on.md) shows how to
-// add one.
-
-export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
-  {
-    group: "Slideshow",
-    keys: [
-      ["← →", "Previous, next image"],
-      ["Space", "Play or pause"],
-      ["S", "Shuffle"],
-      ["W", "Grid of this view (Esc to close)"],
-      ["/", "Search"],
-      ["K", "♥ Favourite"],
-      ["P", "Add to a playlist"],
-      ["C", "Filter by category"],
-      ["L", "Copy the image and source links"],
-    ],
-  },
-  {
-    group: "Practice",
-    keys: [
-      ["N", "Timed session (Esc ends it)"],
-      ["X", "Mirror"],
-      ["U", "Upside down"],
-      ["G", "Greyscale"],
-      ["V", "Values: off, 2 (notan), 3, 4, 5, 7, 9"],
-      ["I", "Values shown: all, darks only, lights only, darks + lights"],
-      ["E", "Drawing effect: lines, strokes ↕, strokes ↔, cross-hatch"],
-      ["B", "Squint (blur)"],
-      ["O", "Grid: thirds, 4 × 4, squares, diagonals"],
-      ["0", "All study aids off"],
-    ],
-  },
-  {
-    group: "Window and library",
-    keys: [
-      ["F", "Fullscreen"],
-      ["M", "Mini player"],
-      ["H", "Hide or show the controls"],
-      ["T", "Topics and playlists"],
-      ["D", "Find channels"],
-      ["R", "Related channels (Are.na images)"],
-      ["A", "Add a channel, playlists"],
-      [",", "Settings"],
-      ["?", "This sheet"],
-    ],
-  },
-];
+// The ? sheet: every key LeMuse answers to, and where you change them
+// (owner, session 20). The list comes from keys.ts, which the key handler in
+// App.tsx also reads, so the sheet can't disagree with the keys.
 
 export interface ShortcutsPanelProps {
+  keys?: KeyMap;
+  /** Single-key shortcuts are off (Settings → Keyboard): letters don't work. */
+  lettersOff?: boolean;
+  onChangeKeys?: (keys: KeyMap) => void;
   staticOpen?: boolean;
+  /** Snapshot: show one row waiting for a key. */
+  staticCapturing?: ActionId;
   onClose?: () => void;
 }
 
 export const ShortcutsPanel = forwardRef<HTMLDialogElement, ShortcutsPanelProps>(function ShortcutsPanel(p, ref) {
+  const keys = p.keys ?? DEFAULT_KEYS;
+  const [capturing, setCapturing] = useState<ActionId | null>(p.staticCapturing ?? null);
+  const [note, setNote] = useState("");
+  const editable = Boolean(p.onChangeKeys) || Boolean(p.staticCapturing);
+
+  const apply = (id: ActionId, key: string) => {
+    const r = bind(keys, id, key);
+    p.onChangeKeys?.(r.map);
+    setCapturing(null);
+    setNote(
+      !key
+        ? `${actionLabel(id)} has no key now.`
+        : r.moved
+          ? `${keyLabel(key)} now does ${actionLabel(id)}. ${actionLabel(r.moved)} has no key now; give it another one.`
+          : `${keyLabel(key)} now does ${actionLabel(id)}.`,
+    );
+  };
+
+  const onCapture = (id: ActionId) => (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
+    // Every other key is taken here, Esc included (it cancels, not closes).
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      setCapturing(null);
+      setNote("Unchanged.");
+      return;
+    }
+    const k = keyOf(e.key);
+    if (!k) return setNote(`${e.key} can't be a shortcut. Try a letter, a digit, an arrow or F1–F11.`);
+    apply(id, k);
+  };
+
   return (
     <dialog
       ref={ref}
       className="settings shortcuts"
       aria-labelledby="shortcuts-title"
       open={p.staticOpen || undefined}
-      onClose={p.onClose}
+      // While waiting for a key, Esc cancels the change, not the sheet.
+      onCancel={(e) => {
+        if (capturing) e.preventDefault();
+      }}
+      onClose={() => {
+        setCapturing(null);
+        setNote("");
+        p.onClose?.();
+      }}
     >
       <form method="dialog" className="settings-form">
         <header className="settings-head">
@@ -74,23 +76,96 @@ export const ShortcutsPanel = forwardRef<HTMLDialogElement, ShortcutsPanelProps>
           </button>
         </header>
         <div className="settings-body">
-          {SHORTCUTS.map((g) => (
-            <section key={g.group} className="settings-section" aria-label={g.group}>
-              <h3>{g.group}</h3>
+          {editable && (
+            <p className="settings-note">
+              Choose Change, then press the key you want. Esc cancels. A key can do one thing: taking one that's in use
+              frees it from the other action.
+              {p.lettersOff && " Single-key shortcuts are off in Settings → Keyboard, so letter keys do nothing until you turn them on."}
+            </p>
+          )}
+          {GROUPS.map((g) => (
+            <section key={g} className="settings-section" aria-label={g}>
+              <h3>{g}</h3>
               <dl className="shortcut-list">
-                {g.keys.map(([k, what]) => (
-                  <div key={k} className="shortcut">
+                {ACTIONS.filter((a) => a.group === g).map((a) => {
+                  const k = keys[a.id];
+                  const off = p.lettersOff && isCharacterKey(k);
+                  return (
+                    <div key={a.id} className={editable ? "shortcut editable" : "shortcut"}>
+                      <dt>
+                        <kbd className={k ? (off ? "key-off" : undefined) : "key-none"}>{keyLabel(k)}</kbd>
+                      </dt>
+                      <dd>{a.label}</dd>
+                      {editable && (
+                        <dd className="row-actions">
+                          {capturing === a.id ? (
+                            <button
+                              type="button"
+                              className="primary-btn key-capture"
+                              autoFocus
+                              onKeyDown={onCapture(a.id)}
+                              onBlur={() => setCapturing(null)}
+                              aria-label={`Press a key for ${a.label}. Esc cancels.`}
+                            >
+                              Press a key
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-btn"
+                              onClick={() => {
+                                setCapturing(a.id);
+                                setNote(`Press a key for ${a.label}. Esc cancels.`);
+                              }}
+                              aria-label={`Change the key for ${a.label}`}
+                            >
+                              Change
+                            </button>
+                          )}
+                          {k !== "" && capturing !== a.id && (
+                            <button
+                              type="button"
+                              className="text-btn"
+                              onClick={() => apply(a.id, "")}
+                              aria-label={`No key for ${a.label}`}
+                            >
+                              None
+                            </button>
+                          )}
+                        </dd>
+                      )}
+                    </div>
+                  );
+                })}
+                {g === GROUPS[0] && (
+                  <div className="shortcut">
                     <dt>
-                      <kbd>{k}</kbd>
+                      <kbd>Esc</kbd>
                     </dt>
-                    <dd>{what}</dd>
+                    <dd>Close a menu, end a session, leave fullscreen (always Esc)</dd>
                   </div>
-                ))}
+                )}
               </dl>
             </section>
           ))}
         </div>
         <footer className="settings-foot">
+          <p className="list-label shortcut-note" role="status">
+            {note}
+          </p>
+          {editable && (
+            <button
+              type="button"
+              className="text-btn"
+              onClick={() => {
+                p.onChangeKeys?.({ ...DEFAULT_KEYS });
+                setCapturing(null);
+                setNote("Every shortcut is back to its usual key.");
+              }}
+            >
+              Reset all
+            </button>
+          )}
           <button type="submit" className="primary-btn">
             Done
           </button>

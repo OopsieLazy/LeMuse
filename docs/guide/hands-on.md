@@ -92,8 +92,10 @@ Check: `npm run typecheck`, then open the session planner (N) and see it. Add a 
 lines in `gridLines` (golden ratio: split at 0.382 and 0.618 of each side). Check: unit test for its line count;
 `npm run test:layout` checks that the grid sits on the image at every size.
 
-**D. Rebind a key.** Keys live in `App.tsx` (the `onKey` handler) and are listed for people in
-`ShortcutsPanel.tsx`. Change both, or the ? sheet will lie. Check: press ? in the app.
+**D. Add or rebind a key.** Every shortcut is one line in `keys.ts` (`ACTIONS`: id, group, label, default key);
+the ? sheet and its Change buttons read that list. A new action also needs one `case` in the `onKey` handler in
+`App.tsx`. People change keys themselves in the ? sheet. Check: `npm run test:unit` (no two actions share a
+key), then press ? in the app.
 
 **E. Tune a drawing effect.** In `practice.ts`, `strokes()` sets the stroke noise (`baseFrequency`: fine across,
 long along) and the ramp; `filterGraph()` chains them. Change the vertical frequency, run `npm run test:unit`, then
@@ -114,12 +116,14 @@ git add -A
 git commit -m "feat(ui): add a hands session preset"
 # Before pushing: scan everything the branch changes
 node scripts/scan-secrets.mjs --range main...HEAD
-# Push the branch (never main), then open the PR from the compare link
+# Push the branch (never main), then open the PR from the compare link. You push; Claude can't (ADR-0030)
 git push -u origin feat/0021-my-change
 ```
 
-The PR description follows `.github/pull_request_template.md` (What / Why / How + checklist). Merge with
-**Squash and merge** on GitHub.
+The PR description follows `.github/pull_request_template.md` (What / Why / How / **Where to look** +
+checklist). If the PR changes a guardrail file (`node scripts/guardrail-check.mjs` lists them), read those
+files, then add the `guardrails-reviewed` label: the `guardrails` check waits for it. Merge with **Squash and
+merge** on GitHub.
 
 ## 6. Working with Claude
 

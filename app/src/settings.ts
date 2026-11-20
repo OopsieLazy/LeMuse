@@ -19,6 +19,7 @@ import {
   type Round,
   type StudyAids,
 } from "./practice";
+import { DEFAULT_KEYS, sanitizeKeys, type KeyMap } from "./keys";
 
 export const PRESETS = ["studio", "gallery", "blueprint", "paper", "millennium"] as const;
 export const MODES = ["system", "light", "dark"] as const;
@@ -95,6 +96,10 @@ export interface UiSettings {
   last: LastPlace | null;
   /** Study aids, kept between launches (the badge always says which are on). */
   study: StudyAids;
+  /** Keyboard shortcuts (keys.ts); changed in the ? sheet. */
+  keys: KeyMap;
+  /** The folder the last Save went to (Save as starts there). */
+  lastSaveDir: string | null;
 }
 
 /** Ranges for every slider: [min, max, step]. One table feeds clamping and the UI. */
@@ -144,6 +149,8 @@ export const DEFAULTS: UiSettings = {
   welcomed: false,
   last: null,
   study: NO_STUDY,
+  keys: DEFAULT_KEYS,
+  lastSaveDir: null,
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -246,6 +253,12 @@ export function sanitize(raw: unknown): UiSettings {
     welcomed: bool(r.welcomed, Object.keys(r).length > 0),
     last: lastPlace(r.last),
     study: studyAids(r.study),
+    keys: sanitizeKeys(r.keys),
+    // A folder path is shown and offered to the Save dialog, never opened here.
+    lastSaveDir:
+      typeof r.lastSaveDir === "string" && r.lastSaveDir.length > 0 && r.lastSaveDir.length <= 1024 && !/[\u0000-\u001f]/.test(r.lastSaveDir)
+        ? r.lastSaveDir
+        : null,
   };
 }
 

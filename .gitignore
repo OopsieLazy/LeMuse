@@ -33,6 +33,8 @@ Thumbs.db
 app/preview/
 app/dist-preview/
 app/dist-dashboard/
+# Portable app folder (ADR-0031): an .exe and third-party notices; build with npm run portable
+app/dist-portable/
 app/.snapshot/
 
 # Admin-review snapshot of uncommitted work (ADR-0011); never committed
@@ -80,3 +82,8 @@ SHA256SUMS
 *.exe
 *.msi
 *.msix
+
+# Third-party notices (ADR-0030): generated before installer builds; quotes
+# third-party authors' copyright lines
+app/src-tauri/notices/
+THIRD-PARTY-NOTICES*.txt

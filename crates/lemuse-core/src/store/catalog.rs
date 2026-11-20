@@ -31,6 +31,12 @@ pub const MAX_PLAYLIST_ITEMS: i64 = 20_000;
 /// Across all playlists (review 0008 A-33).
 pub const MAX_TOTAL_PLAYLIST_ITEMS: i64 = 200_000;
 
+/// Backups made before a schema upgrade: `catalog-v8-backup.db` holds the
+/// catalog as it was at schema 8. The newest two are kept.
+pub const BACKUP_PREFIX: &str = "catalog-v";
+pub const BACKUP_SUFFIX: &str = "-backup.db";
+pub const KEEP_BACKUPS: usize = 2;
+
 /// The marks a user can put on an image (ADR-0027); each is also a category id.
 pub const BLOCK_FLAGS: &[&str] = &["hidden", "nudity"];
 /// Practice log bounds: the newest sessions are kept.
@@ -407,7 +413,7 @@ impl Catalog {
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let mut c = Self { conn };
-        c.migrate()?;
+        c.migrate_list(MIGRATIONS, path.parent())?;
         Ok(c)
     }
 
@@ -426,12 +432,63 @@ impl Catalog {
     }
 
     fn migrate(&mut self) -> Result<()> {
+        self.migrate_list(MIGRATIONS, None)
+    }
+
+    /// Apply the migrations this catalog hasn't had yet. With `backup_dir`
+    /// (a catalog file, not one in memory), an existing catalog is first copied
+    /// to `catalog-v<N>-backup.db` in that folder, so an upgrade can always be
+    /// undone by hand; the newest [`KEEP_BACKUPS`] are kept. If the copy fails
+    /// (disk full, no permission), nothing is migrated.
+    fn migrate_list(&mut self, list: &[&str], backup_dir: Option<&Path>) -> Result<()> {
         let current = self.schema_version()? as usize;
-        for (i, sql) in MIGRATIONS.iter().enumerate().skip(current) {
+        if current >= list.len() {
+            return Ok(());
+        }
+        if let (Some(dir), true) = (backup_dir, current > 0) {
+            self.backup_before_migration(dir, current)?;
+        }
+        for (i, sql) in list.iter().enumerate().skip(current) {
             let tx = self.conn.transaction()?;
             tx.execute_batch(sql)?;
             tx.pragma_update(None, "user_version", (i + 1) as u32)?;
             tx.commit()?;
+        }
+        Ok(())
+    }
+
+    /// A consistent copy (`VACUUM INTO`, safe with WAL and other readers) of
+    /// the catalog at schema `version`, then prune to the newest few.
+    fn backup_before_migration(&self, dir: &Path, version: usize) -> Result<()> {
+        let target = dir.join(format!("{BACKUP_PREFIX}{version}{BACKUP_SUFFIX}"));
+        // A leftover from an interrupted upgrade would make VACUUM INTO fail.
+        if target.exists() {
+            std::fs::remove_file(&target).map_err(|e| Error::io(&target, e))?;
+        }
+        let path = target
+            .to_str()
+            .ok_or_else(|| Error::Config("the library path isn't valid text".into()))?;
+        self.conn.execute("VACUUM INTO ?1", [path]).map_err(|e| {
+            Error::Config(format!(
+                "couldn't back up the catalog before upgrading it ({e}); nothing was changed. Free some disk space and start LeMuse again"
+            ))
+        })?;
+        let mut backups: Vec<(usize, std::path::PathBuf)> = std::fs::read_dir(dir)
+            .map_err(|e| Error::io(dir, e))?
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let name = e.file_name().into_string().ok()?;
+                let v = name
+                    .strip_prefix(BACKUP_PREFIX)?
+                    .strip_suffix(BACKUP_SUFFIX)?
+                    .parse()
+                    .ok()?;
+                Some((v, e.path()))
+            })
+            .collect();
+        backups.sort_by_key(|b| std::cmp::Reverse(b.0));
+        for (_, old) in backups.into_iter().skip(KEEP_BACKUPS) {
+            let _ = std::fs::remove_file(old);
         }
         Ok(())
     }
@@ -1527,6 +1584,55 @@ mod tests {
     fn migrates_to_latest_version() {
         let c = Catalog::open_in_memory().unwrap();
         assert_eq!(c.schema_version().unwrap() as usize, MIGRATIONS.len());
+    }
+
+    #[test]
+    fn an_upgrade_backs_up_the_catalog_first_and_keeps_the_newest_two() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("catalog.db");
+        let steps = [
+            "CREATE TABLE one (x INTEGER)",
+            "CREATE TABLE two (x INTEGER)",
+            "CREATE TABLE three (x INTEGER)",
+            "CREATE TABLE four (x INTEGER)",
+            "CREATE TABLE five (x INTEGER)",
+        ];
+        let open_at = |n: usize| {
+            let conn = Connection::open(&file).unwrap();
+            let mut c = Catalog { conn };
+            c.migrate_list(&steps[..n], Some(dir.path())).unwrap();
+            c
+        };
+        // A new catalog: nothing to back up.
+        drop(open_at(2));
+        let backup = |v: usize| {
+            dir.path()
+                .join(format!("{BACKUP_PREFIX}{v}{BACKUP_SUFFIX}"))
+        };
+        assert!(!backup(0).exists());
+        // Upgrading 2 → 3 copies the catalog as it was at 2.
+        drop(open_at(3));
+        let old = Connection::open(backup(2)).unwrap();
+        let tables: Vec<String> = old
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|t| t.unwrap())
+            .collect();
+        assert_eq!(
+            tables,
+            ["one", "two"],
+            "the backup is the catalog before the upgrade"
+        );
+        drop(old);
+        // Opening at the same version again makes no new backup.
+        drop(open_at(3));
+        // Two more upgrades: only the newest two backups stay.
+        drop(open_at(4));
+        drop(open_at(5));
+        assert!(!backup(2).exists());
+        assert!(backup(3).exists() && backup(4).exists());
     }
 
     #[test]

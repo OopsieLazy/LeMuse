@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 6 224 224" width="1024" height="1024">
+  <!-- LeMuse app icon (owner's design, session 20): a magnifying glass.
+       Source for every icon size (npm run icons); app-icon-small.svg is the
+       bolder version used at 16-32 px. Coordinates follow the 256 px original. -->
+  <!-- Neck: under the lens and the handle. -->
+  <rect x="-24" y="-11" width="48" height="22" fill="#000" transform="translate(143 143) rotate(45)"/>
+  <!-- Handle with three yellow grips. -->
+  <g transform="translate(188 186) rotate(38)">
+    <rect x="-44" y="-15" width="88" height="30" rx="2" fill="#77d673" stroke="#000" stroke-width="3.5"/>
+    <g fill="#e2dc6a" stroke="#000" stroke-width="2.5">
+      <rect x="-33" y="-11" width="16" height="19" rx="1.5"/>
+      <rect x="-11" y="-11" width="16" height="19" rx="1.5"/>
+      <rect x="11" y="-11" width="16" height="19" rx="1.5"/>
+    </g>
+  </g>
+  <!-- Lens: black rim, green ring, black inner line, blue glass. -->
+  <g transform="rotate(-8 92 84)">
+    <ellipse cx="92" cy="84" rx="67" ry="73" fill="#000"/>
+    <ellipse cx="92" cy="84" rx="63.5" ry="69.5" fill="#77d673"/>
+    <ellipse cx="92" cy="84" rx="56.5" ry="62.5" fill="#000"/>
+    <ellipse cx="92" cy="84" rx="53.5" ry="59.5" fill="#86dcee"/>
+  </g>
+</svg>

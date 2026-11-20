@@ -80,11 +80,15 @@ export const FORBIDDEN_FILES = [
   /\.cdx\.json$/i,
   /(^|\/)SHA256SUMS$/,
   /\.(exe|msi|msix)$/i,
+  // Generated third-party notices (ADR-0030): third-party authors' emails.
+  /(^|\/)THIRD-PARTY-NOTICES[^/]*\.txt$/i,
+  /^app\/src-tauri\/notices\//,
+  // The portable app folder (ADR-0031): built by `npm run portable`, never committed.
+  /^app\/dist-portable\//,
 ];
 export const ALLOWED_FORBIDDEN = [
   /(^|\/)\.env\.example$/,
   /^app\/src-tauri\/icons\//,
-  /^app\/app-icon\.png$/,
 ];
 
 export const isForbiddenFile = (f) =>

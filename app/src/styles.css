@@ -1340,6 +1340,11 @@ ul.channel-list {
   font-size: var(--text-xs);
 }
 
+.nested {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .preview {
   display: grid;
   gap: var(--space-4);
@@ -1464,6 +1469,8 @@ ul.channel-list {
   left: var(--space-2);
   bottom: var(--space-2);
   z-index: var(--z-menu);
+  /* border-box: at the smallest mini size its padding pushed it past the window edge. */
+  box-sizing: border-box;
   width: min(var(--menu-width), calc(100% - 2 * var(--space-2)));
   overflow-y: auto;
   padding: var(--space-2);
@@ -1511,6 +1518,95 @@ ul.channel-list {
   background: var(--panel);
   box-shadow: var(--dialog-shadow);
   font-size: var(--text-sm);
+}
+
+/* Where the last Save as went (ADR-0031): stays until its × is pressed. */
+.save-note {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  left: var(--space-4);
+  z-index: var(--z-menu);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 560px;
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-5);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--dialog-shadow);
+  font-size: var(--text-sm);
+}
+
+.save-note-text {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding-top: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.save-note-title {
+  font-weight: var(--weight-medium);
+}
+
+.save-note-file {
+  color: var(--muted);
+}
+
+.save-note-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--target-min);
+  height: var(--target-min);
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.save-note-close svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* The mini player: the folder only (two lines at most), tight to the edges. */
+:root[data-mini="true"] .save-note {
+  top: var(--space-1);
+  right: var(--space-1);
+  left: var(--space-1);
+  gap: var(--space-1);
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+:root[data-mini="true"] .save-note-file {
+  display: none;
+}
+
+:root[data-mini="true"] .save-note-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.save-note-close:hover,
+.save-note-close:focus-visible {
+  background: var(--bg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1919,6 +2015,32 @@ ul.channel-list {
   margin: 0;
 }
 
+.shortcut.editable {
+  grid-template-columns: calc(72px * var(--ui-scale)) minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.shortcut .row-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+kbd.key-none,
+kbd.key-off {
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.key-capture {
+  min-width: calc(96px * var(--ui-scale));
+}
+
+.shortcut-note {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
 kbd {
   display: inline-block;
   min-width: 1.6em;
@@ -2295,4 +2417,14 @@ kbd {
   .clock-left {
     transition: none;
   }
+}
+
+/* Third-party licences (ADR-0030): long plain text, wrapped. */
+.notices-text {
+  margin: var(--space-4) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--fg);
 }

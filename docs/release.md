@@ -18,8 +18,9 @@ owner tags and publishes.
    git push origin v0.10.0
    ```
 
-3. **Wait for the `release` workflow** (GitHub → Actions). It runs the tests, builds the installers, writes
-   `SHA256SUMS` and the SBOM, attests where the files came from, and opens a **draft** release.
+3. **Wait for the `release` workflow** (GitHub → Actions). It runs the tests, builds the installers (with the
+   third-party notices inside), writes `SHA256SUMS`, the SBOM and `THIRD-PARTY-NOTICES.txt`, attests where the
+   files came from, and opens a **draft** release.
 4. **Read the draft** (GitHub → Releases): the files, the notes, the CHANGELOG entry. Click **Publish release**.
    From then on the app's update check offers it.
 
@@ -44,7 +45,18 @@ every release from then on (ADR-0028 §4).
 Turning on the Tauri updater needs a signing key pair, with the private key stored as a GitHub Actions secret.
 **Losing that key strands every installed copy.** See ADR-0028 §2 before starting.
 
+## A portable folder (no installer)
+
+`cd app && npm run portable` builds `app/dist-portable/LeMuse/` (ADR-0031 §8). Move the folder anywhere, then
+double-click `Add shortcuts.cmd` in it for Desktop and Start menu shortcuts. If LeMuse is running from
+`target/release`, close it first or set `CARGO_TARGET_DIR` to another folder.
+
+## App icon
+
+The icon is drawn in `app/app-icon.svg` (and `app/app-icon-small.svg` for 16–32 px). After changing either, run
+`cd app && npm run icons` and commit `app/src-tauri/icons/`.
+
 ## What never goes in git
 
-Installers, `SHA256SUMS`, SBOMs and the `release/` folder are build outputs (`.gitignore` and the secret
+Installers, the portable folder, `SHA256SUMS`, SBOMs and the `release/` folder are build outputs (`.gitignore` and the secret
 scanner refuse them).

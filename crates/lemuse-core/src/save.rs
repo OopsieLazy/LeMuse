@@ -5,8 +5,11 @@
 //! and again after redirects), must really be an image (magic bytes, not the
 //! URL decide the type), is stored once by content hash in `objects/`, and is
 //! hard-linked into `views/<folder>/` where you can browse it.
+//!
+//! Save as (ADR-0031): the app then copies that original to a file the user
+//! chose in the native Save dialog (`copy_to`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -51,6 +54,95 @@ pub fn image_ext(bytes: &[u8]) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// Image extensions a Save-as name may already carry.
+const IMAGE_EXTS: &[&str] = &[
+    "jpg", "jpeg", "png", "gif", "webp", "avif", "tif", "tiff", "bmp",
+];
+
+/// The file name Save as offers: the library's own name for it
+/// ("Oak_ chair_ [7].jpg"), with the stored type, else the original URL's,
+/// else jpg. A suggestion only; the user can change it in the dialog.
+pub fn suggested_name(catalog: &Catalog, block_id: i64) -> Result<String> {
+    let target = catalog
+        .save_target(block_id)?
+        .ok_or_else(|| refuse("that image is no longer in the catalog"))?;
+    let ext = match &target.stored {
+        Some((_, ext)) => ext.clone(),
+        None => target
+            .original_url
+            .as_deref()
+            .and_then(|u| u.split(['?', '#']).next())
+            .and_then(|u| u.rsplit('/').next())
+            .and_then(|f| f.rsplit_once('.'))
+            .map(|(_, e)| e.to_ascii_lowercase())
+            .filter(|e| IMAGE_EXTS.contains(&e.as_str()))
+            .unwrap_or_else(|| "jpg".into()),
+    };
+    let view = views::view_path(Path::new(""), "x", target.title.as_deref(), block_id, &ext);
+    Ok(view
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| format!("image [{block_id}].{ext}")))
+}
+
+/// `dest` with the image's real extension: kept when it already matches
+/// (jpg = jpeg, tif = tiff), replaced when it names another image type,
+/// appended otherwise ("notes" → "notes.png").
+fn with_real_ext(dest: &Path, real: &str) -> PathBuf {
+    let same = |a: &str, b: &str| {
+        let norm = |e: &str| match e {
+            "jpeg" => "jpg".to_string(),
+            "tiff" => "tif".to_string(),
+            other => other.to_string(),
+        };
+        norm(a) == norm(b)
+    };
+    match dest
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+    {
+        Some(e) if same(&e, real) => dest.to_path_buf(),
+        Some(e) if IMAGE_EXTS.contains(&e.as_str()) => dest.with_extension(real),
+        _ => {
+            let mut name = dest
+                .file_name()
+                .map(|n| n.to_os_string())
+                .unwrap_or_default();
+            name.push(format!(".{real}"));
+            dest.with_file_name(name)
+        }
+    }
+}
+
+/// Copy a saved original to `dest` (chosen in the Save dialog). It's written
+/// to `<name>.part` beside it and then renamed, so a failed copy never leaves
+/// half an image under the user's name; an existing file (the dialog asked)
+/// is replaced. The extension is corrected to the image's real type.
+/// Returns the final path.
+pub fn copy_to(paths: &LibraryPaths, saved: &Saved, dest: &Path) -> Result<PathBuf> {
+    let source = paths.root().join(&saved.view);
+    let real = source
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .ok_or_else(|| refuse("the saved original has no file type"))?;
+    if !dest.is_absolute() || dest.file_name().is_none() {
+        return Err(refuse("choose a file name in a folder"));
+    }
+    let dest = with_real_ext(dest, &real);
+    let mut part_name = dest
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_default();
+    part_name.push(".part");
+    let part = dest.with_file_name(part_name);
+    std::fs::copy(&source, &part).map_err(|e| Error::io(&part, e))?;
+    if let Err(e) = std::fs::rename(&part, &dest) {
+        let _ = std::fs::remove_file(&part);
+        return Err(Error::io(&dest, e));
+    }
+    Ok(dest)
 }
 
 fn refuse(message: impl Into<String>) -> Error {
@@ -216,6 +308,55 @@ mod tests {
         assert!(again.view.starts_with("views/Saved/"));
         assert_eq!(http.requests.lock().unwrap().len(), 2, "503 + 200 only");
         assert!(c.save_target(id).unwrap().unwrap().stored.is_some());
+    }
+
+    #[test]
+    fn save_as_copies_the_original_where_the_user_chose() {
+        let (d, paths, mut c) = library();
+        let url = "https://d2w9rnfcy7mm78.cloudfront.net/7/original.jpg?v=2";
+        let id = block(&mut c, "arena", url);
+        // Before any download: the title and the URL's type.
+        assert_eq!(
+            suggested_name(&c, id).unwrap(),
+            format!("Oak_ chair_ [{id}].jpg")
+        );
+        let http = FixtureClient::default();
+        http.push(url, 200, JPEG.to_vec());
+        let s = save_original(&paths, &c, &http, id, "Wood", false).unwrap();
+        let out = d.path().join("My refs");
+        std::fs::create_dir_all(&out).unwrap();
+        // The typed name keeps a matching type (jpeg = jpg)...
+        let a = copy_to(&paths, &s, &out.join("chair.JPEG")).unwrap();
+        assert_eq!(a, out.join("chair.JPEG"));
+        assert_eq!(std::fs::read(&a).unwrap(), JPEG);
+        // ...a wrong image type is corrected, a non-image one appended.
+        assert_eq!(
+            copy_to(&paths, &s, &out.join("chair.png")).unwrap(),
+            out.join("chair.jpg")
+        );
+        assert_eq!(
+            copy_to(&paths, &s, &out.join("chair v2")).unwrap(),
+            out.join("chair v2.jpg")
+        );
+        // An existing file is replaced (the dialog asked); no .part left behind.
+        std::fs::write(out.join("old.jpg"), b"old").unwrap();
+        copy_to(&paths, &s, &out.join("old.jpg")).unwrap();
+        assert_eq!(std::fs::read(out.join("old.jpg")).unwrap(), JPEG);
+        let parts = std::fs::read_dir(&out)
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".part")
+            })
+            .count();
+        assert_eq!(parts, 0);
+        // The library copy is untouched, and a missing folder is an error.
+        assert!(paths.root().join(&s.view).is_file());
+        assert!(copy_to(&paths, &s, &out.join("nope").join("x.jpg")).is_err());
+        assert!(copy_to(&paths, &s, Path::new("relative.jpg")).is_err());
     }
 
     #[test]

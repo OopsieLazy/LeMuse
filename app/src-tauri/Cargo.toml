@@ -25,3 +25,6 @@ tauri-plugin-opener = "=2.7.2"
 # A second launch focuses the running window instead of opening another
 # (ADR-0024). 2.5.5 is 21 days old (cooldown); pinned.
 tauri-plugin-single-instance = "=2.5.5"
+# Save as (owner, session 20): the native Save dialog, opened from Rust only
+# (no JS permission granted). 2.8.4 is 23 days old (cooldown); pinned.
+tauri-plugin-dialog = "=2.8.4"

@@ -5,6 +5,42 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-20 (session 20): before the merge: Save as, shortcuts, nested channels (work item 23)
+
+**Branch:** `chore/0023-guarded-engineering` (committed; **the owner pushes**) · **Status:** awaiting owner review
+
+- **Owner asked before merging:** changeable hotkeys; a key that brings the bar back; a saved image must stay;
+  "Translucent electronics" doesn't load; Save as with a folder note and ×.
+- **Built (ADR-0031):**
+  - Save as through the Windows dialog (Rust side; no page permission);
+  - `keys.ts` drives the key handler and the editable ? sheet;
+  - H opens the bar in every window;
+  - a stable shuffle (the save bug);
+  - nested channels listed in the preview (the channel holds 8 channels, no images).
+- **New check:** layout test at mini sizes; it caught the save note and an old mini-menu overflow (D-146).
+- **Checks:** 125 Rust; 21 UI unit; W3C 107; layout passed; `cargo audit` clean; secret scan clean.
+- **Then:** the owner's icon, redrawn as vectors (`npm run icons`), and a portable folder with shortcut scripts
+  (`npm run portable`; ADR-0031 §7–8).
+
+---
+
+## 2026-11-20 (session 19): guarded engineering with an AI; 1.0 (work item 23)
+
+**Branch:** `chore/0023-guarded-engineering` (committed; **the owner pushes**) · **Status:** awaiting owner review
+
+- **Owner merged** 0.11 as one PR (#3) and tagged v0.11.0. Then asked whether this was vibe coding and to remove
+  Claude's ability to push.
+- **Built (ADR-0030):**
+  - no-push rule and hook;
+  - guardrail gate (label);
+  - "Where to look" in PRs, and new process rules in CLAUDE.md;
+  - a backup before schema upgrades;
+  - third-party notices (279 packages, in the installer and About);
+  - version 1.0.0.
+- **Checks:** 123 Rust; 18 UI unit; W3C 103; layout 14,008; installer build with notices; secret scan clean.
+
+---
+
 ## 2026-11-19 (session 18): finish 1.0 items 3, 4, 5 (work item 22)
 
 **Branch:** `feat/0022-finish-1-0` (pushed, stacked on #21) · **Status:** awaiting owner review

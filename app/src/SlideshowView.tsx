@@ -113,9 +113,12 @@ export interface SlideshowViewProps {
   onToggleMiniMenu?: () => void;
   /** Copy the current image's links. */
   onCopyLink?: () => void;
-  /** Save the current image's original (desktop app). */
+  /** Save the current image's original (desktop app): Save as (ADR-0031). */
   onSave?: () => void;
   saving?: boolean;
+  /** Where the last save went; stays until its × is pressed. */
+  savedNote?: { folder: string; file: string } | null;
+  onDismissSavedNote?: () => void;
   /** Right-click menu on the image, at window coordinates (ADR-0022). */
   contextMenu?: { x: number; y: number } | null;
   onContextMenu?: (x: number, y: number) => void;
@@ -320,7 +323,10 @@ function emptyText(p: SlideshowViewProps): [string, string] {
     return ["No images match this filter", "Change or clear the category filter to see more."];
   if (!p.active) return ["No topic selected", "Pick a topic, or add an Are.na channel with the + button."];
   if (p.active.kind === "saved")
-    return ["Nothing saved yet", "Right-click an image and choose Save original: it lands in your LeMuse folder and here."];
+    return [
+      "Nothing saved yet",
+      "Right-click an image and choose Save original as… (or press Q): it goes to the folder you choose, and shows here.",
+    ];
   if (p.active.kind === "search")
     return [
       `Nothing found for “${p.active.query}”`,
@@ -338,7 +344,7 @@ function emptyText(p: SlideshowViewProps): [string, string] {
     ];
   return [
     `No images for ${p.activeLabel} yet`,
-    "Images appear here as soon as a refresh brings in their details. Nothing is downloaded; each one streams from its source.",
+    "Images appear here as soon as a refresh brings in their details. Nothing is downloaded; each one streams from its source. If it stays empty, its channel may hold only other channels: preview it in Find channels to add those.",
   ];
 }
 
@@ -730,7 +736,7 @@ export function SlideshowView(p: SlideshowViewProps) {
                       p.onSave?.();
                     }}
                   >
-                    {slide.saved ? "Save original to this folder too" : "Save original"}
+                    {slide.saved ? "Save original as… (again)" : "Save original as…"}
                   </button>
                 ) : (
                   isHttps(slide.original_url ?? slide.display_url) && (
@@ -789,6 +795,25 @@ export function SlideshowView(p: SlideshowViewProps) {
                     Open source page
                   </a>
                 )}
+              </div>
+            )}
+            {p.savedNote && (
+              <div className="save-note" role="status">
+                <p className="save-note-text" title={`${p.savedNote.folder}\\${p.savedNote.file}`}>
+                  <span className="save-note-title">Saved to {p.savedNote.folder}</span>
+                  <span className="save-note-file">{p.savedNote.file}</span>
+                </p>
+                <button
+                  type="button"
+                  className="save-note-close"
+                  onClick={p.onDismissSavedNote}
+                  aria-label="Dismiss the saved note"
+                  title="Dismiss"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6 6 18" />
+                  </svg>
+                </button>
               </div>
             )}
             {p.toast && (
@@ -1121,10 +1146,10 @@ export function SlideshowView(p: SlideshowViewProps) {
                   onClick={p.onSave}
                   disabled={!slide || p.mode !== "app" || p.saving}
                   data-saved={slide?.saved ? "true" : "false"}
-                  aria-label={slide?.saved ? "Saved: save into this folder too" : "Save original"}
+                  aria-label={slide?.saved ? "Saved: save original as… again" : "Save original as…"}
                   title={
                     p.mode === "app"
-                      ? "Save the full-size original into your LeMuse folder"
+                      ? "Save the full-size original to a folder you choose"
                       : "Saving works in the desktop app"
                   }
                 >
