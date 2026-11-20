@@ -438,6 +438,10 @@ input {
 
 .empty {
   max-width: var(--measure);
+  /* A card, so the message reads on any surround grey (ADR-0029). */
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
   text-align: center;
 }
 

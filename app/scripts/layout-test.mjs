@@ -135,7 +135,15 @@ const measure = String(async function run() {
         ".slide-title, .creator, .source, .refresh-label, .library-line, .rail-heading, .topic-name, .topic-count, .menu-empty, .settings-note, .list-label, .chip-label, .chip-count, .compact-credit, .study-badge, .session-pose, .session-time, .plan-rounds, .plan-total, .drawn-meta, .related-meta, .specs dt, .specs dd, .menu-title, .empty-body, .error-code";
       // Colour doesn't change with size: check at one desktop and one compact size.
       const contrastHere = (w === 1280 && h === 800) || (w === 800 && h === 600);
-      for (const t of contrastHere ? doc.querySelectorAll(textSel) : []) {
+      // Both themes, whatever this PC's own setting is (a dark-mode PC once
+      // hid a light-theme failure that CI found): force each in turn, unless
+      // the state chose a theme itself.
+      const ownTheme = root.getAttribute("data-theme");
+      const themes = contrastHere ? (ownTheme ? [ownTheme] : ["light", "dark"]) : [];
+      for (const theme of themes) {
+      if (!ownTheme) root.setAttribute("data-theme", theme);
+      void doc.body.offsetHeight;
+      for (const t of doc.querySelectorAll(textSel)) {
         if (!visible(t, win) || !t.textContent.trim() || t.closest("[disabled], :disabled, [aria-hidden=true]")) continue;
         if (t.closest(".rail") && win.getComputedStyle(t.closest(".rail")).visibility === "hidden") continue;
         if (t.closest(".frame") && !t.closest(".compact-credit, .study-badge, .session-clock, .empty")) continue;
@@ -150,8 +158,10 @@ const measure = String(async function run() {
         const large = size >= 24 || (size >= 18.66 && Number(cs.fontWeight) >= 700);
         checks++;
         if (ratio < (large ? 3 : 4.5) - 0.01)
-          fail(`text "${t.textContent.trim().slice(0, 24)}" (${t.className}) contrast ${ratio.toFixed(2)}:1, needs ${large ? 3 : 4.5}:1`);
+          fail(`${theme}: text "${t.textContent.trim().slice(0, 24)}" (${t.className}) contrast ${ratio.toFixed(2)}:1, needs ${large ? 3 : 4.5}:1`);
       }
+      }
+      if (!ownTheme) root.removeAttribute("data-theme");
       // Study grid (ADR-0025): same box as the image and the image's proportions,
       // so the lines sit on the picture, not on the empty bands around it.
       const grid = doc.querySelector(".frame .grid-overlay");

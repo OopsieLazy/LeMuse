@@ -16,7 +16,7 @@
   --panel-fill: var(--panel);
   --stage: #e2e2e2; /* zero chroma: the surround shifts how an image reads (art review) */
   --fg: #1b1c1e;
-  --muted: #64676d;
+  --muted: #5e6167; /* 4.8:1 on the stage, 5.6:1 on bg (layout test, both themes) */
   --line: #d9dbd7;
   --accent: #3150c2;
   --accent-ink: #ffffff;
