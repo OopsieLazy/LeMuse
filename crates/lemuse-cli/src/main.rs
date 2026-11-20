@@ -120,8 +120,15 @@ enum Command {
         #[arg(long)]
         topic: String,
     },
-    /// Remove a topic that has no channels or keywords left.
-    RemoveTopic { name: String },
+    /// Remove a topic. Without --with-channels only an empty one (no
+    /// channels or keywords) is removed. Images stay in playlists.
+    RemoveTopic {
+        name: String,
+        #[arg(long)]
+        with_channels: bool,
+    },
+    /// Rename a topic.
+    RenameTopic { from: String, to: String },
     /// Every stored link of a topic, a playlist, or All (default), to stdout.
     /// Links only; no image is downloaded.
     ExportLinks {
@@ -200,6 +207,7 @@ impl Command {
             Command::ImportFollowing { .. } => "import-following",
             Command::RemoveChannel { .. } => "remove-channel",
             Command::RemoveTopic { .. } => "remove-topic",
+            Command::RenameTopic { .. } => "rename-topic",
             Command::UpdateCheck => "update-check",
             Command::ExportLinks { .. } => "export-links",
             Command::Related { .. } => "related",
@@ -799,9 +807,28 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             };
             Ok(out(json!({ "removed": removed }), text))
         }
-        Command::RemoveTopic { name } => {
+        Command::RenameTopic { from, to } => {
             ensure_library(paths)?;
-            let removed = lemuse_core::config_edit::remove_empty_topic(&paths.config(), &name)?;
+            let renamed = lemuse_core::config_edit::rename_topic(&paths.config(), &from, &to)?;
+            let text = match &renamed {
+                Some(n) => format!("Renamed {from} to {n}.\n"),
+                None => format!("There's no topic named {from}.\n"),
+            };
+            Ok(out(
+                json!({ "renamed": renamed.is_some(), "name": renamed }),
+                text,
+            ))
+        }
+        Command::RemoveTopic {
+            name,
+            with_channels,
+        } => {
+            ensure_library(paths)?;
+            let removed = if with_channels {
+                lemuse_core::config_edit::remove_topic(&paths.config(), &name)?
+            } else {
+                lemuse_core::config_edit::remove_empty_topic(&paths.config(), &name)?
+            };
             let text = if removed {
                 format!("Removed the topic {name}.\n")
             } else {
