@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "LeMuse",
-  "version": "0.1.0",
+  "version": "0.11.0",
   "identifier": "dev.lemuse.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: https://images.are.na https://d2w9rnfcy7mm78.cloudfront.net https://www.artic.edu https://openaccess-cdn.clevelandart.org; style-src 'self' 'unsafe-inline'",
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: https://images.are.na https://d2w9rnfcy7mm78.cloudfront.net https://openaccess-cdn.clevelandart.org; style-src 'self' 'unsafe-inline'",
       "assetProtocol": {
         "enable": true,
         "scope": ["$PICTURE/LeMuse/**"]

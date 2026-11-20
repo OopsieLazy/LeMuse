@@ -22,4 +22,14 @@ toml_edit.workspace = true
 url.workspace = true
 getrandom.workspace = true
 
+# Windows Credential Manager for the Are.na token, and console echo off while
+# it's pasted (ADR-0023). Same windows-sys 0.61.2 already in Cargo.lock (Tauri,
+# rustls); only features are turned on, so no new crate is downloaded.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security_Credentials",
+    "Win32_System_Console",
+] }
+
 [dev-dependencies]

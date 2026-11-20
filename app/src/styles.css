@@ -39,7 +39,10 @@ input {
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
   grid-template-areas: "rail viewer";
   height: 100%;
+  /* The rail column eases to 0 when the window turns compact, and back. */
+  transition: grid-template-columns var(--dur-med) var(--ease);
 }
+
 
 :root[data-layout="rail-right"] .app {
   grid-template-columns: minmax(0, 1fr) var(--rail-width);
@@ -110,6 +113,7 @@ input {
   min-height: 0;
   background: var(--panel-fill);
   border-right: var(--border);
+  transition: transform var(--dur-med) var(--ease), visibility var(--dur-med);
 }
 
 .brand {
@@ -281,6 +285,50 @@ input {
   overflow: hidden;
 }
 
+/* Image, grid and empty state share the frame's one cell (ADR-0025). */
+.frame > :is(img, .grid-overlay, .empty, .grid-view) {
+  grid-area: 1 / 1;
+}
+
+/* The image fades in once it has loaded, so there's no blank flash
+   (ADR-0029). If a load event is ever missed, it shows anyway after 1.2 s. */
+.frame > img {
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease);
+  animation: image-reveal 0s 1.2s forwards;
+}
+
+.frame > img[data-ready="true"] {
+  opacity: 1;
+}
+
+@keyframes image-reveal {
+  to {
+    opacity: 1;
+  }
+}
+
+/* The surround (Settings → Image): a neutral grey behind the image. */
+:root[data-surround="white"] {
+  --stage: var(--surround-white);
+}
+
+:root[data-surround="light"] {
+  --stage: var(--surround-light);
+}
+
+:root[data-surround="mid"] {
+  --stage: var(--surround-mid);
+}
+
+:root[data-surround="dark"] {
+  --stage: var(--surround-dark);
+}
+
+:root[data-surround="black"] {
+  --stage: var(--surround-black);
+}
+
 .frame img {
   display: block;
   width: auto;
@@ -289,6 +337,27 @@ input {
   max-height: 100%;
   object-fit: contain;
   box-shadow: var(--image-shadow);
+}
+
+/* With a grid on, the image fills the cell (still contained), so the grid's
+   viewBox maps onto it exactly; the shadow would outline the empty bands. */
+.frame[data-grid="true"] img {
+  width: 100%;
+  height: 100%;
+  box-shadow: none;
+}
+
+/* Mirror and upside down turn the image and the grid together. */
+.frame[data-mirror="true"] > :is(img, .grid-overlay) {
+  transform: scaleX(-1);
+}
+
+.frame[data-upside="true"] > :is(img, .grid-overlay) {
+  transform: rotate(180deg);
+}
+
+.frame[data-mirror="true"][data-upside="true"] > :is(img, .grid-overlay) {
+  transform: scaleY(-1);
 }
 
 :root[data-fit="cover"] .frame {
@@ -302,8 +371,77 @@ input {
   box-shadow: none;
 }
 
+.grid-overlay {
+  place-self: stretch;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.grid-overlay line {
+  fill: none;
+}
+
+.grid-shade {
+  stroke: var(--grid-shade);
+  stroke-width: calc(var(--grid-line-width) * 3);
+}
+
+.grid-line {
+  stroke: var(--grid-line);
+  stroke-width: var(--grid-line-width);
+}
+
+.study-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* The pose clock on the image (top right), readable from the drawing board. */
+.session-clock {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 2;
+  display: grid;
+  justify-items: end;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--panel-fill);
+  color: var(--fg);
+  pointer-events: none;
+}
+
+.session-time {
+  font-family: var(--font-data);
+  font-size: var(--session-clock-size);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.session-pose {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+
+.session-clock[data-warn="true"] .session-time {
+  color: var(--error);
+}
+
+.session-clock[data-paused="true"] .session-time {
+  color: var(--muted);
+}
+
 .empty {
   max-width: var(--measure);
+  /* A card, so the message reads on any surround grey (ADR-0029). */
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
   text-align: center;
 }
 
@@ -362,7 +500,8 @@ input {
 }
 
 /* Marks the playlist button when the current image is in a playlist. */
-.icon-btn[data-in-playlist="true"] {
+.icon-btn[data-in-playlist="true"],
+.icon-btn[data-saved="true"] {
   color: var(--accent);
 }
 
@@ -897,6 +1036,106 @@ input {
   gap: var(--space-2);
 }
 
+/* ============ Errors and their pages (ADR-0024) ============ */
+
+.error-screen {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.error-card {
+  display: grid;
+  gap: var(--space-4);
+  width: min(100%, 40rem);
+  padding: var(--space-6);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--dialog-shadow);
+}
+
+.error-card h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.error-code {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--error);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.error-detail {
+  margin: 0;
+  max-height: 30vh;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.failed-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* "Details" inside the refresh line: a link-sized button. */
+.inline-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.inline-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.empty .primary-btn {
+  justify-self: center;
+  margin-top: var(--space-4);
+}
+
+/* Are.na account in Settings (ADR-0023) */
+.settings-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.text-link {
+  font-size: var(--text-sm);
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+
+.text-link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
 .form-status {
   flex: 1 1 var(--status-min);
   margin: 0;
@@ -1029,6 +1268,7 @@ ul.channel-list {
 .chip {
   display: inline-flex;
   align-items: center;
+  min-height: var(--target-min);
   gap: var(--space-2);
   max-width: 100%;
   padding: var(--space-1) var(--space-3);
@@ -1129,6 +1369,44 @@ ul.channel-list {
   background: var(--stage);
 }
 
+/* ============ Right-click menu on the image (ADR-0022) ============ */
+
+.context-menu {
+  position: fixed;
+  z-index: var(--z-drawer);
+  display: grid;
+  width: var(--context-menu-width);
+  padding: var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--dialog-shadow);
+  font-size: var(--text-sm);
+}
+
+.context-menu :is(button, a) {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.context-menu :is(button, a):is(:hover, :focus-visible) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.context-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ============ Mini player and Copy link (ADR-0016) ============ */
 
 /* Image only; the bar appears when the pointer is over the window or a
@@ -1222,6 +1500,9 @@ ul.channel-list {
   left: 50%;
   bottom: var(--space-6);
   z-index: var(--z-menu);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
   margin: 0;
   padding: var(--space-3) var(--space-5);
   transform: translateX(-50%);
@@ -1253,60 +1534,6 @@ ul.channel-list {
     max-height: var(--sheet-max-height);
   }
 
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .app {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      "rail"
-      "viewer";
-  }
-
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .rail {
-    border-right: 0;
-    border-left: 0;
-    border-bottom: var(--border);
-  }
-
-  /* Docked rail on a narrow window: one horizontal strip of All, topics and
-     playlists; section headings are dropped. */
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .rail-scroll {
-    display: flex;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0 var(--space-3) var(--space-4);
-  }
-
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .topic-list {
-    display: flex;
-    gap: var(--space-2);
-    padding: 0 var(--space-2);
-  }
-
-  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) :is(.rail-heading, .rail-hint) {
-    display: none;
-  }
-
-  .brand {
-    padding: var(--space-5) var(--space-6) var(--space-3);
-  }
-
-  .topic {
-    white-space: nowrap;
-    width: auto;
-  }
-
-  .rail-foot {
-    display: none;
-  }
-
-  .caption-settings {
-    display: grid;
-  }
-
-  .frame {
-    padding: min(var(--stage-pad), var(--stage-pad-narrow));
-  }
-
   .caption-body {
     gap: var(--space-4) var(--space-6);
     padding: var(--space-4) var(--space-6) var(--space-5);
@@ -1314,5 +1541,758 @@ ul.channel-list {
 
   .meta {
     flex-basis: 100%;
+  }
+}
+
+/* ============ Compact: tablets and small windows ============
+   Like the mini player as a window shrinks: the image gets the window,
+   topics open as a ☰ drawer, and the control bar stays hidden until the
+   image is tapped. The bar never covers the image (owner rule, D-33);
+   while it's hidden a small credit stays on the image (attribution). */
+
+.compact-tap,
+.compact-burger,
+.compact-credit {
+  display: none;
+}
+
+.compact-tap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.compact-tap:focus-visible {
+  outline-offset: calc(-1 * var(--focus-offset) - 2px);
+}
+
+.compact-burger {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: var(--z-menu);
+  background: var(--panel-fill);
+}
+
+.compact-credit {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 2;
+  max-width: calc(100% - 2 * var(--space-3));
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--panel-fill);
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+:root[data-mini="true"] .compact-credit {
+  display: block;
+}
+
+@media (max-width: 1024px), (max-height: 560px) {
+  :root:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .app {
+    grid-template-columns: 0px minmax(0, 1fr);
+  }
+
+  :root[data-layout="rail-right"]:not([data-layout="cinema"]):not([data-layout="minimal"]):not([data-immersive="true"]):not([data-mini="true"]) .app {
+    grid-template-columns: minmax(0, 1fr) 0px;
+  }
+
+  :root:not([data-mini="true"]) .rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: var(--z-drawer);
+    width: min(var(--rail-width), 85vw);
+    border-left: 0;
+    border-right: var(--border);
+    box-shadow: var(--dialog-shadow);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform var(--dur-med) var(--ease), visibility var(--dur-med);
+  }
+
+  :root:not([data-mini="true"]) .app[data-rail-open="true"] .rail {
+    transform: none;
+    visibility: visible;
+  }
+
+  :root:not([data-mini="true"]) :is(.compact-burger, .caption-settings) {
+    display: grid;
+  }
+
+  :root:not([data-mini="true"]) .compact-tap {
+    display: block;
+  }
+
+  /* The ☰ button replaces the bar's Topics button; tapping replaces Reveal. */
+  :root:not([data-mini="true"]) :is(.only-overlay:not(.caption-settings), .reveal) {
+    display: none;
+  }
+
+  /* max-height (not display:none) so the bar slides open and closed. */
+  :root:not([data-mini="true"]) .caption {
+    max-height: var(--compact-bar-max);
+    transition: max-height var(--dur-med) var(--ease), visibility var(--dur-med);
+  }
+
+  :root[data-compact-bar="hidden"]:not([data-mini="true"]) .caption {
+    max-height: 0;
+    overflow: hidden;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    visibility: hidden;
+  }
+
+  :root:not([data-mini="true"]) .frame {
+    transition: padding var(--dur-med) var(--ease);
+  }
+
+  :root[data-compact-bar="hidden"]:not([data-mini="true"]) .compact-credit {
+    display: block;
+  }
+
+  :root:not([data-mini="true"]) .frame {
+    padding: min(var(--stage-pad), var(--space-2));
+  }
+
+  /* A slimmer bar: title, credit and controls; no specs or tags. */
+  :root:not([data-mini="true"]) :is(.specs, .slide-tags, .label-line, .credit-line) {
+    display: none;
+  }
+
+  :root:not([data-mini="true"]) .caption-body {
+    gap: var(--space-2) var(--space-5);
+    padding: var(--space-3) var(--space-5);
+  }
+
+  :root:not([data-mini="true"]) .slide-title {
+    font-size: var(--text-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app,
+  .rail,
+  .caption,
+  .frame {
+    transition: none;
+  }
+}
+
+/* ============ Practice tools (ADR-0025) ============ */
+
+/* ♥: outlined when off, filled when the image is a favourite. */
+[data-favourite="true"] {
+  color: var(--accent);
+}
+
+[data-favourite="true"] svg path {
+  fill: currentColor;
+}
+
+.study-menu {
+  width: min(var(--study-menu-width), calc(100vw - 2 * var(--space-6)));
+}
+
+.study-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.study-toggle .chip-mark::before {
+  content: "+";
+}
+
+.study-toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.study-toggle[aria-pressed="true"] .chip-mark::before {
+  content: "\2713";
+  color: inherit;
+}
+
+.study-set .choice-options {
+  gap: var(--space-2);
+}
+
+.study-set .choice-option span {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.study-balance {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.study-balance input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/* Session planner and summary */
+.plan-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(180px * var(--ui-scale)), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.plan-option {
+  position: relative;
+  display: grid;
+}
+
+.plan-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.plan-card {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.plan-option input:checked + .plan-card {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.plan-option input:focus-visible + .plan-card {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.plan-name {
+  font-weight: var(--weight-medium);
+}
+
+.plan-rounds,
+.plan-total {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.plan-total {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.custom-rounds {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.round-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-6);
+}
+
+.round-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.round-row input {
+  width: calc(64px * var(--ui-scale));
+}
+
+.round-row :is(input, select) {
+  padding: var(--space-1) var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.session-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0;
+}
+
+.session-stats strong {
+  font-family: var(--font-data);
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.drawn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--drawn-thumb), 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drawn-item {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.drawn-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--stage);
+}
+
+.drawn-caption {
+  display: grid;
+  min-width: 0;
+  font-size: var(--text-2xs);
+}
+
+.drawn-title,
+.drawn-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawn-meta {
+  color: var(--muted);
+}
+
+.drawn-fav {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  background: var(--panel-fill);
+}
+
+/* Keyboard shortcuts sheet */
+.shortcut-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.shortcut {
+  display: grid;
+  grid-template-columns: calc(72px * var(--ui-scale)) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: baseline;
+}
+
+.shortcut dd {
+  margin: 0;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 var(--space-2);
+  border: var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* While a study aid is on, the image says so (bottom right), so a mirrored or
+   posterized reference is never mistaken for the real one. */
+.study-badge {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 2;
+  max-width: 45%;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--panel-fill);
+  color: var(--fg);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The value strip on the badge: the tones the value view uses, dark to light
+   (ADR-0026). Nine fixed greys; each swatch says its tone, not a colour. */
+.value-strip {
+  display: inline-flex;
+  margin-right: var(--space-2);
+  vertical-align: middle;
+  border: 1px solid var(--line);
+}
+
+.value-swatch {
+  display: inline-block;
+  width: var(--value-swatch);
+  height: var(--value-swatch);
+}
+.value-swatch[data-tone="0"] {
+  background: var(--tone-0);
+}
+
+.value-swatch[data-tone="1"] {
+  background: var(--tone-1);
+}
+
+.value-swatch[data-tone="2"] {
+  background: var(--tone-2);
+}
+
+.value-swatch[data-tone="3"] {
+  background: var(--tone-3);
+}
+
+.value-swatch[data-tone="4"] {
+  background: var(--tone-4);
+}
+
+.value-swatch[data-tone="5"] {
+  background: var(--tone-5);
+}
+
+.value-swatch[data-tone="6"] {
+  background: var(--tone-6);
+}
+
+.value-swatch[data-tone="7"] {
+  background: var(--tone-7);
+}
+
+.value-swatch[data-tone="8"] {
+  background: var(--tone-8);
+}
+
+/* The practice log (ADR-0027): eight weekly bars, oldest first. Heights are
+   levels 0–8 of the busiest week; an empty week is a thin line, not a gap. */
+.log-bars {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-2);
+  height: var(--log-bar-height);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-week {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+}
+
+.log-bar {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--accent);
+}
+
+.log-bar[data-level="0"] {
+  height: 0%;
+}
+
+.log-bar[data-level="1"] {
+  height: 12%;
+}
+
+.log-bar[data-level="2"] {
+  height: 25%;
+}
+
+.log-bar[data-level="3"] {
+  height: 38%;
+}
+
+.log-bar[data-level="4"] {
+  height: 50%;
+}
+
+.log-bar[data-level="5"] {
+  height: 62%;
+}
+
+.log-bar[data-level="6"] {
+  height: 75%;
+}
+
+.log-bar[data-level="7"] {
+  height: 88%;
+}
+
+.log-bar[data-level="8"] {
+  height: 100%;
+}
+
+.update-line {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+/* "Add all new" from Channels you follow (ADR-0026). */
+.follow-all select {
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+/* ============ Finishing 1.0 (ADR-0029) ============ */
+
+.toast-undo {
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+/* Search at the top of the topic list. */
+.rail-search {
+  margin: 0 var(--space-4) var(--space-2);
+}
+
+.rail-search input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+/* The museum label: date · medium · dimensions, then the credit line. */
+.label-line,
+.credit-line {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.credit-line {
+  font-style: italic;
+}
+
+.rights-badge {
+  align-self: center;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--chip-radius);
+  color: var(--accent);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-label);
+}
+
+.rights-badge[data-rights="creator"] {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+/* Grid view: the whole view as a contact sheet, inside the image frame. */
+.grid-view {
+  place-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--grid-thumb), 1fr));
+  align-content: start;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-2);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.grid-item {
+  content-visibility: auto;
+  contain-intrinsic-size: var(--grid-thumb) var(--grid-thumb);
+}
+
+.grid-pick {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.grid-pick[aria-current="true"] {
+  border-color: var(--accent);
+}
+
+.grid-pick:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.frame .grid-pick img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  box-shadow: none;
+}
+
+/* The pose clock as a large ring (Settings → Practice). */
+.session-clock[data-style="ring"] {
+  grid-template-areas: "ring";
+  place-items: center;
+  justify-items: center;
+  padding: var(--space-2);
+  border-radius: 50%;
+}
+
+.session-clock[data-style="ring"] > * {
+  grid-area: ring;
+}
+
+.session-clock[data-style="ring"] .session-time {
+  font-size: var(--clock-ring-text);
+}
+
+.session-clock[data-style="ring"] .session-pose {
+  margin-top: calc(var(--clock-ring-text) * 1.6);
+}
+
+.clock-ring {
+  width: var(--clock-ring-size);
+  height: var(--clock-ring-size);
+}
+
+.clock-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.clock-track {
+  stroke: var(--line);
+}
+
+.clock-left {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dasharray 200ms linear;
+}
+
+.session-clock[data-warn="true"] .clock-left {
+  stroke: var(--error);
+}
+
+.session-clock[data-paused="true"] .clock-left {
+  stroke: var(--muted);
+}
+
+/* A quiet cue on each new pose: a brief accent frame that fades. */
+.pose-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  box-shadow: inset 0 0 0 var(--flash-width) var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  animation: pose-flash 700ms ease-out;
+}
+
+@keyframes pose-flash {
+  from {
+    opacity: 0.9;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.topic-manage {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.topic-manage input {
+  flex: 1 1 calc(160px * var(--ui-scale));
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.welcome-topics {
+  margin-top: var(--space-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame > img {
+    transition: none;
+  }
+
+  .pose-flash {
+    display: none;
+  }
+
+  .clock-left {
+    transition: none;
   }
 }

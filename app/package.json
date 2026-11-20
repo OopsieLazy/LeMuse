@@ -2,7 +2,7 @@
   "name": "lemuse-ui",
   "private": true,
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.11.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,8 @@
     "preview:web": "vite --mode preview",
     "build:dashboard": "tsc && vite build --mode dashboard --outDir dist-dashboard --emptyOutDir",
     "preview:artifact": "vite build --mode preview --outDir dist-preview --emptyOutDir && node scripts/make-artifact.mjs",
-    "test:layout": "npm run build && npm run build:snapshot && node scripts/layout-test.mjs"
+    "test:layout": "npm run build && npm run build:snapshot && node scripts/layout-test.mjs",
+    "test:unit": "vite build --ssr scripts/unit-test.ts --outDir .snapshot/unit --emptyOutDir && node --test .snapshot/unit/unit-test.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",

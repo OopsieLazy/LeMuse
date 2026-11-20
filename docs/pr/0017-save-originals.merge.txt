@@ -1,0 +1,19 @@
+What: Save downloads an image's full-size original into the LeMuse
+folder (views/<topic or playlist>/); downloads only from each source's
+own CDN and only real images; retries on network and 5xx failures;
+lemuse save.
+Why: last missing piece of M1 and the next roadmap step (v0.8);
+closes A-37 and D-2. ADR-0022.
+
+✅ Save button and lemuse save; folder from the topic or playlist
+✅ Host allow-list before and after redirects (also for download mode)
+✅ Type from magic bytes; non-images refused; stored once by hash
+✅ Error::Transient + shared retry (1, 2, 4 s) for refreshes and saves
+✅ Saves spaced 500 ms apart in the app; no new dependency or capability
+✅ Right-click on the image: Save original, Copy link, Open source page
+✅ Re-saves (same source image and size) shown once; migration 0007
+✅ End of a page moves on to the next page instead of looping
+⬜ Stream big downloads to disk (D-1); save CAD attachments (D-94)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0017-save-originals.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Least-privilege capability set for the main window (ADR-0012, ADR-0015, ADR-0016). Every addition is justified in an ADR. Links open only on the source sites LeMuse shows.",
+  "description": "Least-privilege capability set for the main window (ADR-0012, ADR-0015, ADR-0016). Every addition is justified in an ADR. Links open only on the source sites LeMuse shows, and on LeMuse's own GitHub pages (ADR-0024).",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -21,7 +21,8 @@
         { "url": "https://are.na/*" },
         { "url": "https://clevelandart.org/*" },
         { "url": "https://www.clevelandart.org/*" },
-        { "url": "https://www.artic.edu/*" }
+        { "url": "https://github.com/OopsieLazy/LeMuse" },
+        { "url": "https://github.com/OopsieLazy/LeMuse/*" }
       ]
     }
   ]

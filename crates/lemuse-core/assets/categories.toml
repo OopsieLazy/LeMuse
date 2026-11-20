@@ -447,11 +447,35 @@ label = "Abstract & geometric"
 terms = ["abstract", "abstraction", "geometric", "geometry", "pattern", "patterns", "op art", "kinetic", "grid",
   "modular", "tessellation", "symmetry", "organic form", "biomorphic"]
 
+# Content (ADR-0027). "nudity" is LeMuse's nudity sensor: it reads the same
+# Left out on purpose (checked on a real 15,600-image library): "sensual"
+# (design writing: "sensual curves"), "pin up" (PIN-UP is a design magazine),
+# "nu" ("nu metal"), "venus" (the planet).
+# texts as every category (title, description, museum type, channel names),
+# so it catches what is labelled, not every image. The app hides it unless you
+# choose to show it. "hidden" has no terms: it holds the images you hid
+# yourself (right-click → Hide this image), kept in the catalog's block_flags.
+[[group]]
+id = "content"
+label = "Content"
+
+[[group.category]]
+id = "nudity"
+label = "Nudity"
+terms = ["nude", "naked", "nudity", "topless", "bare breasted", "erotic", "erotica", "odalisque", "bather",
+  "life drawing", "life model", "nude model", "figure study", "boudoir", "lingerie",
+  "nsfw", "explicit", "undressed", "unclothed", "bathing woman", "bathing women", "venus pudica",
+  "three graces", "leda and the swan", "danae", "susanna and the elders", "bathsheba", "akt",
+  "desnudo", "nudo"]
+
+[[group.category]]
+id = "hidden"
+label = "Hidden by you"
+
 # ── Search words (Discover, ADR-0015) ───────────────────────────────────
 # Extra words for the Discover word list. Every category label and term above
 # is offered too; these add practice- and craft-oriented searches that make
 # good Are.na channel searches but are too broad to sort images by.
-
 [[discover]]
 label = "Drawing practice"
 words = ["gesture drawing", "figure drawing", "life drawing", "anatomy reference", "hands reference",

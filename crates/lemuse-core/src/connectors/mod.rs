@@ -150,11 +150,43 @@ pub fn json_or_error(connector: &str, url: &str, resp: HttpResponse) -> Result<V
                 retry_after_secs: retry,
             })
         }
+        s @ 500..=599 => Err(Error::Transient {
+            connector: connector.into(),
+            message: format!("HTTP {s} from {url}"),
+        }),
         s => Err(Error::Connector {
             connector: connector.into(),
             message: format!("HTTP {s} from {url}"),
         }),
     }
+}
+
+/// Hosts each source may download files from (Save, download mode). Images
+/// and attachments come only from the source's own CDN (review 0008 A-37).
+pub fn download_hosts(connector: &str) -> &'static [&'static str] {
+    match connector {
+        "arena" => &[
+            "d2w9rnfcy7mm78.cloudfront.net",
+            "attachments.are.na",
+            "images.are.na",
+        ],
+        "cleveland" => &["openaccess-cdn.clevelandart.org"],
+        "aic" => &["www.artic.edu"],
+        _ => &[],
+    }
+}
+
+/// Is `url` an https download from one of the connector's own hosts (no
+/// port, no credentials)? Parsed, never prefix-matched.
+pub fn download_allowed(connector: &str, url: &str) -> bool {
+    url::Url::parse(url).is_ok_and(|u| {
+        u.scheme() == "https"
+            && u.port().is_none()
+            && u.username().is_empty()
+            && u.password().is_none()
+            && u.host_str()
+                .is_some_and(|h| download_hosts(connector).contains(&h))
+    })
 }
 
 /// Percent-encode a query-string value (RFC 3986 unreserved chars kept).

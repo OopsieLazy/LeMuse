@@ -91,6 +91,20 @@ pub fn parse_search_page(v: &Value, skip: u64) -> Result<Page> {
     Ok(Page { items, next })
 }
 
+/// A label field: one trimmed line of plain text, at most 300 characters.
+fn text(v: &Value) -> Option<String> {
+    let s: String = v
+        .as_str()?
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let s: String = s.chars().take(300).collect();
+    (!s.is_empty()).then_some(s)
+}
+
 /// Cleveland returns image dimensions as strings ("1019").
 fn dim(v: &Value) -> Option<u32> {
     v.as_str()
@@ -184,6 +198,12 @@ fn map_artwork(a: &Value) -> Option<RemoteItem> {
         media,
         files: Vec::new(),
         remote_updated_at: a["updated_at"].as_str().map(str::to_string),
+        label: crate::model::BlockLabel {
+            date: text(&a["creation_date"]),
+            medium: text(&a["technique"]),
+            dimensions: text(&a["measurements"]),
+            credit: text(&a["creditline"]),
+        },
     };
     Some(RemoteItem {
         block,
@@ -219,6 +239,24 @@ mod tests {
         );
         assert!(page.items[0].downloads[0].url.ends_with("_print.jpg"));
         assert_eq!(page.items[0].downloads[0].expected_size, Some(4_397_507));
+        // The museum label (ADR-0029).
+        assert_eq!(b.label.date.as_deref(), Some("1900s"));
+        assert_eq!(b.label.medium.as_deref(), Some("Wood"));
+        assert_eq!(
+            b.label.dimensions.as_deref(),
+            Some("Overall: 49.9 x 2.6 x 4.6 cm (19 5/8 x 1 x 1 13/16 in.)")
+        );
+        assert_eq!(
+            b.label.credit.as_deref(),
+            Some("Gift of the Gilpin Players of Karamu House")
+        );
+        // A record without them simply has none.
+        assert_eq!(page.items[1].block.label.credit, None);
+        assert_eq!(
+            text(&Value::String("  a\n  b  ".into())).as_deref(),
+            Some("a b")
+        );
+        assert_eq!(text(&Value::String("   ".into())), None);
     }
 
     #[test]

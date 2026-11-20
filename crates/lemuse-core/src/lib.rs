@@ -18,14 +18,17 @@ pub mod categories;
 pub mod config;
 pub mod config_edit;
 pub mod connectors;
+pub mod credentials;
 pub mod error;
 pub mod export;
 pub mod import;
 pub mod model;
+pub mod save;
 pub mod serve;
 pub mod store;
 pub mod sync;
 pub mod ui_settings;
+pub mod update;
 
 pub use error::{Error, Result};
 

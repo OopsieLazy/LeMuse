@@ -11,7 +11,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ChannelPreview, Playlist, Slide, TopicInfo, Vocabulary } from "../src/api";
 import { DiscoverPanel, type DiscoverPanelProps } from "../src/DiscoverPanel";
 import { LibraryPanel, type LibraryPanelProps } from "../src/LibraryPanel";
-import { SettingsPanel } from "../src/SettingsPanel";
+import { SettingsPanel, type ArenaTokenView, type SettingsPanelProps } from "../src/SettingsPanel";
+import { ErrorScreen } from "../src/ErrorScreen";
+import { RefreshDetails } from "../src/RefreshDetails";
+import { PracticePanel, type PracticePanelProps } from "../src/PracticePanel";
+import { WelcomePanel } from "../src/WelcomePanel";
+import { ShortcutsPanel } from "../src/ShortcutsPanel";
+import { NO_STUDY, weeklyLog, type SessionResult } from "../src/practice";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
 import { SlideshowView, type SlideshowViewProps } from "../src/SlideshowView";
 import sample from "./sample-data.json";
@@ -31,6 +37,16 @@ const slides: Slide[] = sample.topics[0].slides.map((s, i) => ({
   ...s,
   categories: ["image", ...CATS[i % CATS.length]],
   connector: i % 2 ? "arena" : "cleveland",
+  // Museum slides carry a label and CC0 (ADR-0029); Are.na ones don't.
+  ...(i % 2
+    ? {}
+    : {
+        date: "c. 1650–1700",
+        medium: "Walnut, with later upholstery",
+        dimensions: "Overall: 104.1 x 52.7 x 48.3 cm (41 x 20 3/4 x 19 in.)",
+        credit: "Gift of a long-named family foundation in memory of a collector, 1929.323",
+        license_id: "CC0-1.0",
+      }),
 }));
 
 // A slice of the built-in vocabulary (crates/lemuse-core/assets/categories.toml).
@@ -119,17 +135,152 @@ interface State {
   settings?: Partial<UiSettings>;
   fullscreen?: boolean;
   panel?: boolean;
+  /** The Are.na account section of Settings (ADR-0023). */
+  arena?: ArenaTokenView;
+  /** Settings → About (ADR-0024). */
+  about?: { version: string; licence: string; repository: string };
+  /** The crash page instead of the app (ADR-0024). */
+  crash?: { code: string; message: string };
+  /** Refresh details dialog (ADR-0024). */
+  refreshDetails?: { failed: string[]; total: number };
   library?: Partial<LibraryPanelProps>;
   discover?: Partial<DiscoverPanelProps>;
   mini?: boolean;
+  /** Compact windows: the tapped-open bar. */
+  compactBar?: boolean;
+  /** The timed-session planner or summary (ADR-0025). */
+  practice?: Partial<PracticePanelProps>;
+  /** Extra Settings props (Content, Updates; ADR-0027, ADR-0028). */
+  settingsExtra?: Partial<SettingsPanelProps>;
+  shortcuts?: boolean;
+  /** The first-run welcome (ADR-0029). */
+  welcome?: boolean;
 }
 
 // A tall portrait image is the case that used to run under the control bar.
 const tall: Slide = { ...slides[0], block_id: 9001, width: 1200, height: 3000, title: "Tall portrait test image" };
 const wide: Slide = { ...slides[0], block_id: 9002, width: 4000, height: 900, title: "Wide panorama test image" };
 
+// Practice tools (ADR-0025).
+const studyOn = { ...NO_STUDY, mirror: true, tones: 3 as const, balance: 0.2, grid: "thirds" as const };
+const running = { planName: "Class", pose: 7, poses: 18, round: 1, rounds: 4, left: 24, total: 30, paused: false };
+const sessionResult: SessionResult = {
+  startedAt: Date.UTC(2026, 10, 19, 14, 5),
+  planName: "Gesture warm-up",
+  from: topics[0].name,
+  drawn: slides.slice(0, 8).map((s) => ({
+    block_id: s.block_id,
+    title: s.title,
+    display_url: s.display_url,
+    creator: s.creator,
+    seconds: 30,
+  })),
+  seconds: 240,
+  skipped: 2,
+  finished: true,
+};
+const practiceBase: PracticePanelProps = {
+  view: "plan",
+  planId: "class",
+  customRounds: [{ count: 5, seconds: 60 }],
+  sound: true,
+  from: topics[0].name,
+  images: 420,
+};
+
 export const STATES: Record<string, State> = {
   playing: { props: base },
+  "study-menu": { props: { ...base, studyMenuOpen: true, study: studyOn } },
+  "study-aids": { props: { ...base, slides: [tall], index: 0, study: { ...studyOn, grid: "squares", upside: true } } },
+  "study-notan-squint": { props: { ...base, study: { ...NO_STUDY, tones: 2, squint: true, grid: "diagonals" } } },
+  "study-cover": { props: { ...base, study: { ...NO_STUDY, grey: true, grid: "quarters" } }, settings: { fit: "cover" } },
+  favourite: { props: { ...base, favourite: true } },
+  "favourites-empty": {
+    props: { ...base, playlists: [...playlists, { id: 3, name: "Favourites", items: 0 }], active: { kind: "playlist", id: 3 }, activeLabel: "Favourites", slides: [], index: 0 },
+  },
+  "session-running": { props: { ...base, session: running } },
+  "session-paused": { props: { ...base, session: { ...running, paused: true, left: 3 } } },
+  "session-mini": { props: { ...base, mini: true, session: { ...running, left: 4 } }, mini: true },
+  "practice-plan": { props: base, practice: {} },
+  "practice-custom": {
+    props: base,
+    practice: { planId: "custom", customRounds: [{ count: 10, seconds: 30 }, { count: 3, seconds: 300 }] },
+  },
+  "practice-summary": {
+    props: base,
+    practice: { view: "summary", result: sessionResult, favourites: [slides[1].block_id], kept: "Kept as “Session 19 Nov, 14:05” (8 images). It's in Playlists." },
+  },
+  "practice-summary-empty": {
+    props: base,
+    practice: { view: "summary", result: { ...sessionResult, drawn: [], seconds: 0, finished: false }, onResume: () => undefined },
+  },
+  shortcuts: { props: base, shortcuts: true },
+  // Finishing 1.0 (ADR-0029).
+  "museum-label": { props: { ...base, index: 0 } },
+  "museum-label-compact": { props: { ...base, index: 0, compactBarOpen: true }, compactBar: true },
+  "grid-view": { props: { ...base, grid: true, index: 2 } },
+  "grid-view-cinema": { props: { ...base, grid: true }, settings: { layout: "cinema" } },
+  "session-ring": { props: { ...base, session: { ...running, total: 30 }, clockStyle: "ring", flashKey: 3 } },
+  "session-small-warn": { props: { ...base, session: { ...running, total: 30, left: 4 }, clockStyle: "small" } },
+  "session-clock-hidden": { props: { ...base, session: { ...running, total: 30 }, clockStyle: "hidden" } },
+  "toast-undo": { props: { ...base, toast: "Hidden. Settings → Content shows it again.", onUndo: () => undefined } },
+  "search-results": { props: { ...base, active: { kind: "search", query: "chair" }, activeLabel: "“chair”", savedCount: 12 } },
+  "search-empty": {
+    props: { ...base, active: { kind: "search", query: "zzz" }, activeLabel: "“zzz”", slides: [], index: 0, total: 0 },
+  },
+  "saved-empty": { props: { ...base, active: { kind: "saved" }, activeLabel: "Saved", slides: [], index: 0, total: 0 } },
+  "surround-mid": { props: base, settings: { surround: "mid" } },
+  "surround-black-dark": { props: base, settings: { surround: "black", mode: "dark" } },
+  welcome: { props: base, welcome: true },
+  "image-ready": { props: { ...base, imageReady: true } },
+  // Followed channels as their own topics, under a heading (ADR-0026 addendum).
+  "rail-following": {
+    props: {
+      ...base,
+      topics: [
+        ...topics,
+        ...["Jewellery", "Jewellery · Ben", "False planets", "Typography :: Retro", "A followed channel with a long name that wraps"].map(
+          (name, i) => ({ name, slide_seconds: 8, shuffle: true, sources: 1, slides: 120 + i * 37, channels: [`c-${i}`], group: "Following on Are.na" }),
+        ),
+      ],
+    },
+  },
+  // Session 17 (ADR-0026, ADR-0027, ADR-0028).
+  "study-9-darks": { props: { ...base, study: { ...NO_STUDY, tones: 9, focus: "darks" } } },
+  "study-5-extremes": { props: { ...base, slides: [tall], index: 0, study: { ...NO_STUDY, tones: 5, focus: "extremes" } } },
+  "study-strokes": { props: { ...base, study: { ...NO_STUDY, effect: "vertical", tones: 4, squint: true } } },
+  "study-lines-cover": { props: { ...base, study: { ...NO_STUDY, effect: "lines", tones: 3, grid: "thirds" } }, settings: { fit: "cover" } },
+  "study-menu-effects": {
+    props: { ...base, studyMenuOpen: true, study: { ...NO_STUDY, tones: 7, focus: "lights", effect: "cross" } },
+  },
+  "update-available": { props: { ...base, update: { version: "1.0.0", url: "https://github.com/OopsieLazy/LeMuse/releases/tag/v1.0.0" } } },
+  "settings-content-updates": {
+    props: base,
+    panel: true,
+    about: { version: "0.10.0", licence: "MIT", repository: "https://github.com/OopsieLazy/LeMuse" },
+    settingsExtra: {
+      marks: { hidden: 12, nudity: 3 },
+      contentNote: "Cleared 4 practice sessions.",
+      update: {
+        state: "available",
+        release: { version: "1.0.0", name: "LeMuse 1.0.0", url: "https://github.com/OopsieLazy/LeMuse/releases/tag/v1.0.0", published_at: null, newer: true },
+      },
+    },
+    settings: { showNudity: false, singleKeys: false },
+  },
+  "practice-plan-log": {
+    props: base,
+    practice: {
+      log: weeklyLog(
+        [
+          { started_at: Date.UTC(2026, 10, 18) / 1000, drawings: 24, seconds: 1800 },
+          { started_at: Date.UTC(2026, 10, 12) / 1000, drawings: 10, seconds: 300 },
+          { started_at: Date.UTC(2026, 9, 30) / 1000, drawings: 36, seconds: 3600 },
+        ],
+        Date.UTC(2026, 10, 19, 12),
+      ),
+    },
+  },
   paused: { props: { ...base, playing: false, index: 0 } },
   refreshing: { props: { ...base, refresh: { label: "Refreshing topics", busy: true, tone: "idle" } } },
   "empty-topic": { props: { ...base, active: { kind: "topic", name: "Molds" }, activeLabel: "Molds", slides: [], index: 0 } },
@@ -184,6 +335,77 @@ export const STATES: Record<string, State> = {
   "blueprint-technical": { props: base, settings: { preset: "blueprint", font: "technical", uiScale: 1.2 } },
   "millennium-cover": { props: base, settings: { preset: "millennium", font: "millennium", fit: "cover" } },
   "settings-open": { props: base, settings: { accent: "#c2410c" }, panel: true },
+  "settings-token-none": {
+    props: base,
+    panel: true,
+    arena: { mode: "app", status: { saved: false, account: null } },
+  },
+  "settings-token-saved": {
+    props: base,
+    panel: true,
+    arena: {
+      mode: "app",
+      status: { saved: true, account: "example-person" },
+      message: { text: "Saved for example-person (free account). The next refresh uses it.", tone: "ok" },
+    },
+  },
+  "settings-token-refused": {
+    props: { ...base, refresh: { label: "Are.na refused your saved token, so this refresh ran as a guest.", busy: false, tone: "error" } },
+    panel: true,
+    arena: {
+      mode: "app",
+      status: { saved: false, account: null },
+      message: { text: "Are.na didn't accept that token. Make a new one and paste it again.", tone: "error" },
+    },
+  },
+  "settings-about": {
+    props: base,
+    panel: true,
+    arena: { mode: "app", status: { saved: true, account: "example-person" } },
+    about: { version: "0.8.0", licence: "MIT", repository: "https://github.com/OopsieLazy/LeMuse" },
+  },
+  "crash-screen": {
+    props: base,
+    crash: { code: "ui_crash", message: "Cannot read properties of undefined (reading 'display_url')" },
+  },
+  "refresh-details": {
+    props: {
+      ...base,
+      refresh: { label: "Updated 120 images, 2 sources failed", busy: false, tone: "error", details: true },
+    },
+    refreshDetails: {
+      failed: [
+        "arena: That channel is private. Save your Are.na token in Settings to open your own private channels.",
+        "temporary problem reaching cleveland: timed out after 3 tries",
+      ],
+      total: 2,
+    },
+  },
+  offline: { props: { ...base, slides: [], offline: true } },
+  "images-failed": { props: { ...base, slides: [], imagesFailed: 12 } },
+  "discover-following": {
+    props: base,
+    discover: {
+      canFollow: true,
+      following: {
+        result: {
+          channels: [
+            { slug: "chairs-xyz", title: "Chairs", owner: "Example Person", contents: 412, in_topics: [topics[0].name], suggested: topics[0].name, own_topic: "Chairs" },
+            { slug: "joinery-abc", title: "Joinery details", owner: null, contents: 88, in_topics: [], suggested: topics[1].name, own_topic: "Joinery details" },
+            { slug: "a-very-long-channel-name-for-wrapping", title: "A very long followed channel title that has to wrap neatly", owner: "Someone", contents: 1203, in_topics: [], suggested: topics[1].name, own_topic: "A very long followed channel title that has to wrap neatly" },
+          ],
+          total: 21,
+          next_page: 2,
+        },
+      },
+    },
+  },
+  "discover-following-no-token": { props: base, discover: { canFollow: false } },
+  "settings-token-preview": { props: { ...base, mode: "preview" }, panel: true, arena: { mode: "preview", status: null } },
+  // ---- Compact windows (tablets, small windows); wide sizes are unaffected ----
+  "compact-bar": { props: { ...base, compactBarOpen: true }, compactBar: true },
+  "compact-drawer": { props: { ...base, railOpen: true } },
+  "compact-bar-menu": { props: { ...base, compactBarOpen: true, playlistMenuOpen: true }, compactBar: true },
   // ---- ADR-0016: mini player, Copy link ----
   mini: { props: { ...base, mini: true }, mini: true },
   "mini-bar": { props: { ...base, mini: true, miniBarOpen: true }, mini: true },
@@ -191,6 +413,11 @@ export const STATES: Record<string, State> = {
   "mini-tall": { props: { ...base, mini: true, slides: [tall], index: 0 }, mini: true },
   "mini-empty": { props: { ...base, mini: true, slides: [], index: 0, total: 0 }, mini: true },
   "link-copied": { props: { ...base, toast: "Link copied" } },
+  "context-menu": { props: { ...base, contextMenu: { x: 300, y: 200 } } },
+  "context-menu-preview": { props: { ...base, mode: "preview", contextMenu: { x: 300, y: 200 } } },
+  saved: {
+    props: { ...base, slides: base.slides.map((s) => ({ ...s, saved: true })), toast: "Saved to LeMuse › views › Wood objects" },
+  },
   // ---- ADR-0015: pages, categories, Find channels ----
   pages: { props: { ...base, active: { kind: "all" }, activeLabel: "All", total: 4489, page: 1 } },
   "pages-cinema": {
@@ -253,16 +480,31 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").repl
 
 function documentFor(name: string, st: State, extraHead = "") {
   const settings = sanitize({ ...DEFAULTS, ...st.settings });
-  const { attrs, style } = rootAttributes(settings, { fullscreen: st.fullscreen, mini: st.mini });
+  const { attrs, style } = rootAttributes(settings, {
+    fullscreen: st.fullscreen,
+    mini: st.mini,
+    compactBar: st.compactBar,
+  });
   const attrText = Object.entries(attrs)
     .map(([k, v]) => ` ${k}="${esc(v)}"`)
     .join("");
   const styleText = Object.entries(style)
     .map(([k, v]) => `${k}: ${v}`)
     .join("; ");
+  if (st.crash) {
+    return page(name, attrText, styleText, renderToStaticMarkup(<ErrorScreen {...st.crash} />), extraHead);
+  }
   const body =
-    renderToStaticMarkup(<SlideshowView {...st.props} controlsHidden={settings.controlsHidden} />) +
-    (st.panel ? renderToStaticMarkup(<SettingsPanel settings={settings} staticOpen />) : "") +
+    renderToStaticMarkup(<SlideshowView {...st.props} controlsHidden={settings.controlsHidden} cover={settings.fit === "cover"} />) +
+    (st.panel
+      ? renderToStaticMarkup(
+          <SettingsPanel settings={settings} arena={st.arena} about={st.about} staticOpen {...st.settingsExtra} />,
+        )
+      : "") +
+    (st.refreshDetails ? renderToStaticMarkup(<RefreshDetails {...st.refreshDetails} staticOpen />) : "") +
+    (st.practice ? renderToStaticMarkup(<PracticePanel {...practiceBase} {...st.practice} staticOpen />) : "") +
+    (st.shortcuts ? renderToStaticMarkup(<ShortcutsPanel staticOpen />) : "") +
+    (st.welcome ? renderToStaticMarkup(<WelcomePanel topics={st.props.topics} staticOpen />) : "") +
     (st.library
       ? renderToStaticMarkup(
           <LibraryPanel
@@ -285,6 +527,10 @@ function documentFor(name: string, st: State, extraHead = "") {
           />,
         )
       : "");
+  return page(name, attrText, styleText, body, extraHead);
+}
+
+function page(name: string, attrText: string, styleText: string, body: string, extraHead: string) {
   return `<!doctype html>
 <html lang="en"${attrText} style="${esc(styleText)}">
 <head>

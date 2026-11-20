@@ -1,0 +1,13 @@
+feat: keep your Are.na token in Credential Manager (#18)
+
+✅ Settings → Are.na account: paste a token, Check and save, Remove token
+✅ Checked with Are.na before saving; kept in Windows Credential Manager only
+✅ 120 reads a minute and private channels with a free account's token
+✅ Each refresh re-checks the token; a refused one falls back to guest with a note
+✅ lemuse arena-token status | set | clear (hidden input)
+✅ .gitignore and secret scanner refuse token-looking files
+✅ No new crate, capability or CSP host; 106 tests, W3C, layout all pass
+⬜ Import followed channels; single instance; queue reads during refresh (D-74)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0018-arena-token.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

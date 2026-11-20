@@ -3,6 +3,13 @@ description: Something is broken
 title: "fix: "
 labels: ["type: bug", "status: triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **This issue is public.** Before you paste anything, remove:
+        your Are.na token (it never expires; if one leaked, make a new one on Are.na and delete the old),
+        your Windows user name (it's in paths like `C:\Users\<name>\…`; LeMuse's Copy details already hides it),
+        and links to private channels. Security problems: see SECURITY.md instead of opening an issue.
   - type: textarea
     id: what
     attributes:
@@ -26,9 +33,17 @@ body:
     id: version
     attributes:
       label: Version / commit
+      description: Settings → About shows it; Report a problem fills it in.
   - type: textarea
     id: logs
     attributes:
       label: Logs / sync_runs summary
-      description: Remove any tokens before pasting.
+      description: Remove any tokens, user names and private links before pasting.
       render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I removed tokens, my Windows user name and private links from what I pasted.
+          required: true

@@ -63,6 +63,30 @@ Yes, in stages.
 
   Talk to Are.na before stage 2 is public or anything is charged (Q23).
 
+### Addendum (2026-11-18, owner): "is there even a SaaS product here?"
+
+An honest answer: **not yet, and not as "the desktop app, hosted".**
+- **The pictures aren't ours.** LeMuse's value is other people's Are.na channels and museum collections. Charging
+  to stream Are.na content is a business question for Are.na (Q23). Museum CC0 content is fine.
+- **What people pay for in this space:**
+  - drawing practice tools are mostly free or donation-funded;
+  - reference organisers usually sell a one-time licence;
+  - moodboard tools are the subscriptions.
+- **The desktop app's best parts don't need a server:** Save to disk, the mini player on top, Task Scheduler
+  refreshes, the private token.
+- **The MIT licence** lets anyone host it. A hosted version would sell convenience, not the code.
+
+**What would make it SaaS-able:** features that need a shared server and that a group would pay for.
+- **Classes and studios:** a teacher curates a wall, and students get the same timed sessions and the day's sheet.
+  A seat price for a school, with a free tier for individuals.
+- **Practice history and sync across desktop, web and phone:** this needs accounts ("Sign in with Are.na", OAuth
+  PKCE). It is stage 2.
+- **Scheduled extras:** the daily mailer and sheets (ADR-0021).
+
+**Recommendation:** keep the desktop app free and the main product. Ship stage 1 (LeMuse Web, static, no
+accounts) to see whether anyone outside the owner uses it. Only if they do, talk to Are.na (Q23) before stage 2
+or any price. ADR-0023's token is the desktop half of stage 2's sign-in.
+
 ## Options considered
 
 | Option | Verdict |

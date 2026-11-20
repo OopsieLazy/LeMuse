@@ -6,11 +6,27 @@ Every command accepts `--json` and then prints exactly **one** JSON document on 
 { "lemuse": 1, "command": "status", "ok": true, "data": { … } }
 ```
 
-On failure, `ok` is `false`, `error` holds the message, and the exit code is 1:
+On failure, `ok` is `false`, `code` is a stable error code (ADR-0024), `error` holds the message for people,
+and the exit code says the same as `code`:
 
 ```json
-{ "lemuse": 1, "command": "slides", "ok": false, "error": "invalid config: no topic named `Nope`" }
+{ "lemuse": 1, "command": "slides", "ok": false, "code": "not_found", "error": "no topic named `Nope`" }
 ```
+
+| `code` | Meaning | Exit code |
+|---|---|---|
+| `invalid` | Bad input or a bad `lemuse.toml` | 3 |
+| `not_found` | No such topic, playlist, channel or image | 4 |
+| `busy` | Another refresh holds the library (try again later) | 5 |
+| `rate_limited` | A source asked LeMuse to slow down | 6 |
+| `network` | Can't reach a source, or it answered 5xx (worth retrying) | 7 |
+| `source` | A source answered with a problem (a private channel, odd data) | 8 |
+| `token` | The Are.na token was refused or can't be read | 9 |
+| `io`, `catalog` | Files or the database in the library | 10 |
+| `unsupported` | Not built yet | 1 |
+
+Exit code 2 means the command line itself was wrong (unknown command or flag). Codes are only ever added, never
+renamed.
 
 `lemuse` is the envelope version. It changes only for breaking changes; new fields may appear at any time. Use
 `--library <folder>` or `LEMUSE_LIBRARY` to pick a library.
@@ -23,14 +39,25 @@ On failure, `ok` is `false`, `error` holds the message, and the exit code is 1:
 | `topics` | `[{ name, images, slide_seconds, shuffle, keywords, sources: [{ source, key }] }]` |
 | `slides "<topic>" [--limit N]` | `[Slide]`: `{ block_id, title, display_url, width, height, page_url, creator, attribution, saved, categories, connector, original_url, fallback_urls }` |
 | `search "<words>"` | `{ query, block_ids }` |
-| `sync [--trigger cli\|schedule]` | `{ targets_seen, targets_skipped, targets_recent, blocks_upserted, blocks_unchanged, files_stored, errors }` |
+| `sync [--trigger cli\|schedule]` | `{ targets_seen, targets_skipped, targets_recent, blocks_upserted, blocks_unchanged, files_stored, errors, notes? }`; `notes` appears when there is something to know, such as a refused Are.na token |
 | `add-channel <link> --topic <name> [--new-topic]` | `{ added: { topic, channel: { slug, title, contents }, added }, refresh: <sync summary> \| null }` |
 | `preview-channel <link>` | `{ channel: { slug, title, contents }, items: [{ title, image_url, kind }] }` |
 | `related <block-id> [--page N]` | `{ channels: [{ slug, title, owner, contents }], total, next_page }` |
 | `export-links [--topic T \| --playlist P]` | `[{ block_id, connector, title, creator, page_url, origin_url, images: [[role, url]] }]` |
 | `init` | `{ root, config }` |
-| `sheet [--topic T \| --playlist P] [--count N] [--seed S]` | `{ heading, seed, count, html }` (without `--json`: the HTML itself) |
+| `sheet [--topic T \| --playlist P] [--count N] [--seed S] [--show-nudity]` | `{ heading, seed, count, html }` (without `--json`: the HTML itself). Hidden images never appear; likely nudity only with `--show-nudity` (ADR-0027) |
 | `sync --full` | Same as `sync`, reading every channel to its end |
+| `save <block-id> [--topic T \| --playlist P]` | `{ block_id, view, bytes, already_stored }`; `view` is relative to the library |
+| `arena-token status` | `{ saved, account }` (never the token) |
+| `arena-token set` | `{ slug, name, tier }` once Are.na accepts it. Reads the token from the terminal (hidden) or a pipe, never an argument |
+| `arena-token check` | `{ slug, name, tier }` when Are.na still accepts the saved token (one read); code `token` if not |
+| `arena-token following [--page N]` | `{ channels: [{ slug, title, owner, contents }], total, next_page }`: channels your account follows (one read) |
+| `arena-token clear` | `{ removed }` |
+| `import-following [--topic T \| --match] [--dry-run]` | `{ followed, already, dry_run, planned: [{ slug, title, topic }], added: [{ slug, title, topic, added }] }`: adds the channels you follow that aren't in a topic yet, each as **its own topic** named after the channel, under "Following on Are.na" (or all into `--topic`, or each into its best-matching topic with `--match`). One read per page of the list, nothing else; run `sync` after (ADR-0026) |
+| `remove-channel <slug> --topic T` | `{ removed }`: takes an Are.na channel out of a topic; its images stay in playlists |
+| `remove-topic <name> [--with-channels]` | `{ removed }`: removes a topic; without `--with-channels` only one with no channels or keywords left |
+| `rename-topic <from> <to>` | `{ renamed, name }`: renames a topic (the new name must be free) |
+| `update-check` | `{ current, latest: { version, name, url, published_at, newer } \| null }`: one request to GitHub's Releases API, no token; nothing is downloaded (ADR-0028) |
 | `preview-data` | Always JSON (for the UI preview), without the envelope |
 
 Without `--json`, `export-links --format csv|json|txt` writes a CSV (escaped and guarded against formula
@@ -113,7 +140,7 @@ The same JSON as the CLI, over HTTP (`Authorization: Bearer <token>`):
 | `/api/v1/status` | `{ schema, blocks, loading }` (no file paths) |
 | `/api/v1/topics` | `[{ name, images, slide_seconds, shuffle }]` |
 | `/api/v1/playlists` | `[{ id, name, items }]` |
-| `/api/v1/slides?source=all\|topic:<name>\|playlist:<id>&page=0&include=wood&exclude=painting` | `{ source, page, page_size, total, slides }` |
+| `/api/v1/slides?source=all\|topic:<name>\|playlist:<id>&page=0&include=wood&exclude=painting[&nudity=show]` | `{ source, page, page_size, total, slides }`. Hidden images never; likely nudity only with `nudity=show` (ADR-0027) |
 | `/api/v1/preview-data?per_topic=300` | The page's own data (no envelope) |
 
 ```powershell

@@ -20,15 +20,59 @@ export interface TopicInfo {
   slides: number;
   /** Are.na channel slugs in this topic (Add-channel dialog). */
   channels: string[];
+  /** The topic-list heading it sits under, e.g. "Following on Are.na". */
+  group?: string | null;
 }
 
-/** What the slideshow plays: everything, one topic, or one playlist. */
-export type SlideSource = { kind: "all" } | { kind: "topic"; name: string } | { kind: "playlist"; id: number };
+/** What the slideshow plays: everything, one topic, a playlist, your saved images or a search (ADR-0029). */
+export type SlideSource =
+  | { kind: "all" }
+  | { kind: "topic"; name: string }
+  | { kind: "playlist"; id: number }
+  | { kind: "saved" }
+  | { kind: "search"; query: string };
 
 export function sourceKey(s: SlideSource | null): string {
   if (!s) return "";
-  if (s.kind === "all") return "all";
-  return s.kind === "topic" ? `topic:${s.name}` : `playlist:${s.id}`;
+  switch (s.kind) {
+    case "all":
+    case "saved":
+      return s.kind;
+    case "topic":
+      return `topic:${s.name}`;
+    case "playlist":
+      return `playlist:${s.id}`;
+    case "search":
+      return `search:${s.query}`;
+  }
+}
+
+/** The other way round, for "remember where I was": a stored key back to a source, or null. */
+export function parseSourceKey(key: unknown): SlideSource | null {
+  if (typeof key !== "string" || key.length > 300) return null;
+  if (key === "all" || key === "saved") return { kind: key };
+  if (key.startsWith("topic:") && key.length > 6) return { kind: "topic", name: key.slice(6) };
+  if (key.startsWith("search:") && key.slice(7).trim()) return { kind: "search", query: key.slice(7, 207) };
+  const m = /^playlist:(\d{1,12})$/.exec(key);
+  return m ? { kind: "playlist", id: Number(m[1]) } : null;
+}
+
+/** "Oil on canvas · c. 1650 · 50 x 40 cm": the label's middle line, in museum order (ADR-0029). */
+export function labelLine(s: Pick<Slide, "date" | "medium" | "dimensions">): string {
+  return [s.date, s.medium, s.dimensions]
+    .map((x) => x?.trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Sharper museum images on big windows (ADR-0029): Cleveland's "web" image is
+ * 900 px, its "print" 3,400 px. On a window wider than about 1,200 device
+ * pixels, show the print and keep the web image as the first fallback.
+ */
+export function sharpSlide(s: Slide, bigWindow: boolean): Slide {
+  if (!bigWindow || s.connector !== "cleveland" || !s.original_url || s.original_url === s.display_url) return s;
+  return { ...s, display_url: s.original_url, fallback_urls: [s.display_url, ...(s.fallback_urls ?? [])] };
 }
 
 /** A local list of images (ADR-0014). */
@@ -71,9 +115,40 @@ export interface Slide {
   original_url?: string | null;
   /** Other stored sizes, tried in turn when `display_url` fails (ADR-0016). */
   fallback_urls?: string[];
+  /** Museum label (ADR-0029). */
+  date?: string | null;
+  medium?: string | null;
+  dimensions?: string | null;
+  credit?: string | null;
+  /** "CC0-1.0" for open-access museum works; null when rights are unknown. */
+  license_id?: string | null;
+  /** A small size for the grid view. */
+  thumb_url?: string;
+}
+
+/** Result of Save (ADR-0022). `view` is relative to the library folder. */
+export interface Saved {
+  block_id: number;
+  view: string;
+  bytes: number;
+  already_stored: boolean;
 }
 
 /** Where the mini player sat last time, in physical pixels. */
+/** Where Are.na makes personal access tokens (free accounts too). */
+export const ARENA_TOKEN_PAGE = "https://www.are.na/settings/personal-access-tokens";
+
+export interface TokenStatus {
+  saved: boolean;
+  account: string | null;
+}
+
+export interface ArenaAccount {
+  slug: string;
+  name: string;
+  tier: "guest" | "free" | "premium" | "supporter";
+}
+
 export interface MiniBounds {
   x: number;
   y: number;
@@ -139,6 +214,86 @@ export interface RelatedChannels {
   next_page: number | null;
 }
 
+/** A channel you follow, marked against your topics (ADR-0026). */
+export interface FollowedChannel extends ChannelSummary {
+  /** Topics that already have it; empty means not imported yet. */
+  in_topics: string[];
+  /** The existing topic that fits it best ("best-matching topic"). */
+  suggested: string;
+  /** Its own topic, named after the channel: where Add puts it. */
+  own_topic: string;
+}
+
+export interface FollowedPage {
+  channels: FollowedChannel[];
+  total: number | null;
+  next_page: number | null;
+}
+
+export interface FollowedPick {
+  slug: string;
+  title: string;
+  /** Tells two same-named channels apart in their topic names. */
+  owner?: string | null;
+  /** null: its own topic, named after the channel. */
+  topic: string | null;
+}
+
+/** The user's marks on an image (ADR-0027); each is also a category id. */
+export type BlockFlag = "hidden" | "nudity";
+
+/** A timed session to keep in the practice log (ADR-0027). */
+export interface PracticeRecord {
+  /** Unix seconds. */
+  started_at: number;
+  seconds: number;
+  skipped: number;
+  plan: string;
+  source: string;
+  finished: boolean;
+  drawn: { block_id: number; seconds: number }[];
+}
+
+export interface PracticeSession {
+  id: number;
+  started_at: number;
+  seconds: number;
+  drawings: number;
+  skipped: number;
+  plan: string;
+  source: string;
+  finished: boolean;
+}
+
+/** The newest LeMuse release on GitHub (ADR-0028). */
+export interface Release {
+  version: string;
+  name: string;
+  url: string;
+  published_at: string | null;
+  newer: boolean;
+}
+
+/**
+ * The content defaults every view starts from (ADR-0027): images you hid,
+ * never; likely nudity, only when you choose to show it. A filter that names
+ * one of them itself is left alone. Mirrors CategoryFilter::with_content_defaults.
+ */
+export function withContentDefaults(f: CategoryFilter, showNudity: boolean): CategoryFilter {
+  const named = (id: string) => f.include.includes(id) || f.exclude.includes(id);
+  const exclude = [...f.exclude];
+  if (!named("hidden")) exclude.push("hidden");
+  if (!showNudity && !named("nudity")) exclude.push("nudity");
+  return { include: f.include, exclude };
+}
+
+export interface AddedFollowed {
+  slug: string;
+  title: string;
+  topic: string;
+  added: boolean;
+}
+
 /** Are.na's own search page for a word, opened in the system browser
  * (the search API is Premium-only, ADR-0015). Built with URL, not by
  * splicing text. */
@@ -150,8 +305,69 @@ export function arenaSearchUrl(word: string): string {
 
 export type RefreshEvent =
   | { state: "running"; trigger: string }
-  | { state: "done"; trigger: string; blocks_upserted: number; errors: number }
-  | { state: "error"; trigger: string; message: string };
+  | {
+      state: "done";
+      trigger: string;
+      blocks_upserted: number;
+      errors: number;
+      note?: string;
+      /** What failed and why (first 20), for Refresh details. */
+      failed?: string[];
+    }
+  | { state: "error"; trigger: string; code?: string; message: string };
+
+/**
+ * A failure with a stable code (ADR-0024): `invalid`, `not_found`, `busy`,
+ * `rate_limited`, `network`, `source`, `token`, `io`, `catalog`,
+ * `unsupported` or `internal`. The message is for people.
+ */
+export class AppError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AppError";
+  }
+}
+
+/** The code of any thrown value (`internal` when it has none). */
+export function errorCode(e: unknown): string {
+  return e instanceof AppError ? e.code : "internal";
+}
+
+export interface About {
+  version: string;
+  licence: string;
+  repository: string;
+}
+
+/** The project's own pages, the only GitHub links LeMuse opens. */
+export const PROJECT_URL = "https://github.com/OopsieLazy/LeMuse";
+
+/**
+ * "Report a problem": GitHub's bug form with only the version filled in.
+ * The issue is public, so nothing else from this PC goes into the link (ADR-0025).
+ */
+export function reportUrl(version?: string): string {
+  const q = new URLSearchParams({ template: "bug.yml" });
+  if (version && /^[0-9A-Za-z.+-]{1,32}$/.test(version)) q.set("version", version);
+  return `${PROJECT_URL}/issues/new?${q.toString()}`;
+}
+
+/**
+ * Text that may be pasted somewhere public (Copy details): replaces the
+ * Windows user folder (it holds the user name) and anything shaped like a
+ * token or key. A best effort: the report form also asks people to check.
+ */
+export function redact(text: string): string {
+  return text
+    // A user name can hold spaces, so take everything up to the next separator.
+    .replace(/[A-Za-z]:[\\/]+Users[\\/]+[^\\/"'`\r\n]+/gi, "%USERPROFILE%")
+    .replace(/\/(?:Users|home)\/[^/"'`\r\n]+/g, "~")
+    .replace(/\b(Bearer|token|key|secret|password)([\s:=]+)\S+/gi, "$1$2[redacted]")
+    .replace(/\b[A-Za-z0-9_-]{32,}\b/g, "[redacted]");
+}
 
 export interface Backend {
   kind: "app" | "preview";
@@ -167,8 +383,30 @@ export interface Backend {
   setMini(on: boolean, saved: MiniBounds | null): Promise<MiniBounds | null>;
   /** Put text on the clipboard. */
   copyText(text: string): Promise<void>;
+  /** Save the image's original into the library folder for this source. */
+  saveImage(blockId: number, source: SlideSource): Promise<Saved>;
   /** Open an https link outside the app (system browser). */
   openExternal(url: string): Promise<void>;
+  /** Whether an Are.na token is saved, and whose (never the token itself; ADR-0023). */
+  arenaTokenStatus(): Promise<TokenStatus>;
+  /** Check a pasted token with Are.na, then keep it in Credential Manager. */
+  setArenaToken(token: string): Promise<ArenaAccount>;
+  clearArenaToken(): Promise<boolean>;
+  /** Channels the token's account follows: one page, one read (ADR-0024). */
+  followedChannels(page: number): Promise<FollowedPage>;
+  /** Add followed channels to topics (no API reads), then one refresh. */
+  addFollowed(picks: FollowedPick[]): Promise<AddedFollowed[]>;
+  /** Hide an image, or mark nudity the sensor missed. */
+  setBlockFlag(blockId: number, flag: BlockFlag, on: boolean): Promise<void>;
+  flagCounts(): Promise<[string, number][]>;
+  clearBlockFlags(flag: BlockFlag): Promise<number>;
+  /** Keep a session in the practice log (only if something was drawn). */
+  recordPractice(record: PracticeRecord): Promise<number | null>;
+  practiceSessions(since: number): Promise<PracticeSession[]>;
+  clearPractice(): Promise<number>;
+  /** The newest release on GitHub, or null when none is published. */
+  checkUpdate(): Promise<Release | null>;
+  about(): Promise<About>;
   libraryStatus(): Promise<LibraryStatus>;
   topics(): Promise<TopicInfo[]>;
   /** Image count for "All". */
@@ -186,6 +424,10 @@ export interface Backend {
   /** Paste-a-link import; the core validates the link (ADR-0014). */
   addChannel(link: string, topic: string, createTopic: boolean): Promise<AddedChannel>;
   removeChannel(topic: string, channel: string): Promise<boolean>;
+  /** Rename a topic; resolves to the stored name (ADR-0029). */
+  renameTopic(from: string, to: string): Promise<string>;
+  /** Remove a topic with its channels. Images stay in playlists. */
+  removeTopic(name: string): Promise<boolean>;
   playlists(): Promise<Playlist[]>;
   createPlaylist(name: string): Promise<Playlist>;
   renamePlaylist(id: number, name: string): Promise<boolean>;
@@ -241,12 +483,15 @@ export function isHttps(url: string): boolean {
 
 /** Sites the desktop app may open in the browser; mirrors the opener scope
  * in src-tauri/capabilities/default.json (ADR-0015). */
-const OPEN_HOSTS = new Set(["www.are.na", "are.na", "clevelandart.org", "www.clevelandart.org", "www.artic.edu"]);
+const OPEN_HOSTS = new Set(["www.are.na", "are.na", "clevelandart.org", "www.clevelandart.org"]);
 
 export function isOpenable(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.protocol === "https:" && !u.username && !u.password && !u.port && OPEN_HOSTS.has(u.hostname);
+    if (u.protocol !== "https:" || u.username || u.password || u.port) return false;
+    // GitHub only for LeMuse's own pages (About, Report a problem; ADR-0024).
+    if (u.hostname === "github.com") return u.pathname === "/OopsieLazy/LeMuse" || u.pathname.startsWith("/OopsieLazy/LeMuse/");
+    return OPEN_HOSTS.has(u.hostname);
   } catch {
     return false;
   }
@@ -262,8 +507,20 @@ let restore: (MiniBounds & { maximized: boolean }) | null = null;
 
 function tauriBackend(): Backend {
   // Lazy imports keep @tauri-apps/api out of the preview's critical path.
-  const invoke = async <T,>(cmd: string, args?: Record<string, unknown>) =>
-    (await import("@tauri-apps/api/core")).invoke<T>(cmd, args);
+  // Commands reject with `{ code, message }` (ADR-0024); turn that into an
+  // AppError so callers get a message and a code.
+  const invoke = async <T,>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+    const core = await import("@tauri-apps/api/core");
+    try {
+      return await core.invoke<T>(cmd, args);
+    } catch (e) {
+      if (e && typeof e === "object" && "message" in e) {
+        const o = e as { code?: unknown; message?: unknown };
+        throw new AppError(typeof o.code === "string" ? o.code : "internal", String(o.message));
+      }
+      throw new AppError("internal", String(e));
+    }
+  };
   return {
     kind: "app",
     libraryStatus: () => invoke<LibraryStatus>("library_status"),
@@ -278,6 +535,8 @@ function tauriBackend(): Backend {
     relatedChannels: (blockId, page) => invoke<RelatedChannels>("related_channels", { blockId, page }),
     addChannel: (link, topic, createTopic) => invoke<AddedChannel>("add_channel", { link, topic, createTopic }),
     removeChannel: (topic, channel) => invoke<boolean>("remove_channel", { topic, channel }),
+    renameTopic: (from, to) => invoke<string>("rename_topic", { from, to }),
+    removeTopic: (name) => invoke<boolean>("remove_topic", { name }),
     playlists: () => invoke<Playlist[]>("playlists"),
     createPlaylist: (name) => invoke<Playlist>("create_playlist", { name }),
     renamePlaylist: (id, name) => invoke<boolean>("rename_playlist", { id, name }),
@@ -343,6 +602,20 @@ function tauriBackend(): Backend {
       return now;
     },
     copyText: (text) => navigator.clipboard.writeText(text),
+    saveImage: (blockId, source) => invoke<Saved>("save_image", { blockId, source }),
+    arenaTokenStatus: () => invoke<TokenStatus>("arena_token_status"),
+    setArenaToken: (token) => invoke<ArenaAccount>("set_arena_token", { token }),
+    clearArenaToken: () => invoke<boolean>("clear_arena_token"),
+    followedChannels: (page) => invoke<FollowedPage>("followed_channels", { page }),
+    addFollowed: (picks) => invoke<AddedFollowed[]>("add_followed", { picks }),
+    setBlockFlag: (blockId, flag, on) => invoke<void>("set_block_flag", { blockId, flag, on }),
+    flagCounts: () => invoke<[string, number][]>("flag_counts"),
+    clearBlockFlags: (flag) => invoke<number>("clear_block_flags", { flag }),
+    recordPractice: (record) => invoke<number | null>("record_practice", { record }),
+    practiceSessions: (since) => invoke<PracticeSession[]>("practice_sessions", { since }),
+    clearPractice: () => invoke<number>("clear_practice"),
+    checkUpdate: () => invoke<Release | null>("check_update"),
+    about: () => invoke<About>("about"),
     async openExternal(url) {
       if (!isOpenable(url)) throw new Error("LeMuse only opens Are.na and museum pages.");
       const { openUrl } = await import("@tauri-apps/plugin-opener");
@@ -406,17 +679,28 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     let list: Slide[];
     if (source.kind === "all") list = await allSlides();
     else if (source.kind === "topic") list = (await data()).topics.find((t) => t.name === source.name)?.slides ?? [];
-    else {
+    else if (source.kind === "saved") list = (await allSlides()).filter((s) => s.saved);
+    else if (source.kind === "search") {
+      // Every word, as a prefix, in the title or the creator (like the desktop's search).
+      const words = source.query.toLowerCase().split(/\s+/).filter(Boolean);
+      const text = (s: Slide) => `${s.title ?? ""} ${s.creator ?? ""}`.toLowerCase();
+      list = words.length
+        ? (await allSlides()).filter((s) => words.every((w) => text(s).split(/[^\p{L}\p{N}]+/u).some((t) => t.startsWith(w))))
+        : [];
+    } else {
       const d = await data();
       const known = [...(await allSlides()), ...(d.playlists ?? []).flatMap((p) => p.slides)];
       const byId = new Map(known.map((s) => [s.block_id, s]));
       list = (lists.get(source.id)?.ids ?? []).flatMap((id) => byId.get(id) ?? []);
     }
     return list.filter((s) => {
-      const cats = s.categories ?? [];
+      const cats = [...(s.categories ?? []), ...(flags.get(s.block_id) ?? [])];
       return filter.include.every((c) => cats.includes(c)) && !filter.exclude.some((c) => cats.includes(c));
     });
   };
+  // Marks and the practice log live in memory for this page view, like playlists.
+  const flags = new Map<number, Set<string>>();
+  const sessions: PracticeSession[] = [];
   const checkName = (name: string, except?: number) => {
     const problem = nameProblem("playlist", name);
     if (problem) throw new Error(problem);
@@ -461,6 +745,12 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     },
     removeChannel: async () => {
       throw new Error("Removing channels works in the desktop app.");
+    },
+    renameTopic: async () => {
+      throw new Error("Renaming topics works in the desktop app.");
+    },
+    removeTopic: async () => {
+      throw new Error("Removing topics works in the desktop app.");
     },
     playlists: async () =>
       (await data()) &&
@@ -520,6 +810,47 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     openExternal: async (url) => {
       if (isHttps(url)) window.open(url, "_blank", "noopener,noreferrer");
     },
+    saveImage: async () => {
+      throw new Error("Saving works in the desktop app; it writes into your LeMuse folder.");
+    },
+    // The browser has no Credential Manager: the token is desktop-only.
+    arenaTokenStatus: async () => ({ saved: false, account: null }),
+    setArenaToken: async () => {
+      throw new Error("The Are.na token is saved by the desktop app, in Windows Credential Manager.");
+    },
+    clearArenaToken: async () => false,
+    followedChannels: async () => {
+      throw new AppError("unsupported", "Channels you follow need the desktop app and your Are.na token.");
+    },
+    addFollowed: async () => {
+      throw new AppError("unsupported", "Adding channels needs the desktop app.");
+    },
+    setBlockFlag: async (blockId, flag, on) => {
+      const set = flags.get(blockId) ?? new Set<string>();
+      if (on) set.add(flag);
+      else set.delete(flag);
+      flags.set(blockId, set);
+    },
+    flagCounts: async () => {
+      const n = new Map<string, number>();
+      for (const set of flags.values()) for (const f of set) n.set(f, (n.get(f) ?? 0) + 1);
+      return [...n];
+    },
+    clearBlockFlags: async (flag) => {
+      let n = 0;
+      for (const set of flags.values()) if (set.delete(flag)) n++;
+      return n;
+    },
+    recordPractice: async (r) => {
+      if (!r.drawn.length) return null;
+      const id = sessions.length + 1;
+      sessions.unshift({ id, started_at: r.started_at, seconds: r.seconds, drawings: r.drawn.length, skipped: r.skipped, plan: r.plan, source: r.source, finished: r.finished });
+      return id;
+    },
+    practiceSessions: async (since) => sessions.filter((x) => x.started_at >= since),
+    clearPractice: async () => sessions.splice(0).length,
+    checkUpdate: async () => null,
+    about: async () => ({ version: "preview", licence: "MIT", repository: PROJECT_URL }),
     // The browser can't resize itself: the preview shows the mini layout only.
     setMini: async () => null,
     copyText: async (text) => {

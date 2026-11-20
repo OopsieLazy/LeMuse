@@ -5,6 +5,106 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-19 (session 18): finish 1.0 items 3, 4, 5 (work item 22)
+
+**Branch:** `feat/0022-finish-1-0` (pushed, stacked on #21) · **Status:** awaiting owner review
+
+- **Built (ADR-0029):**
+  - remember where you were;
+  - ring clock and pose flash; fade-in; surround picker; undo toasts; a first-run welcome;
+  - museum label (schema 9) and sharper museum images;
+  - grid view, search, Saved, rename/remove topics.
+- **Live:** schema 9; one refresh re-read the museum records (0 errors) and labelled 1,986 of 1,992.
+- **Found by tests and screenshots:**
+  - a restore race;
+  - a clamped block id;
+  - W3C rejecting `pathLength`;
+  - a ring text overflow;
+  - stray headless Edge processes (cleaned by profile path).
+- **Checks:** 122 Rust; 18 UI unit; W3C 102; layout 10,919; secret scan clean.
+
+---
+
+## 2026-11-19 (session 17): road to 1.0 (work item 21)
+
+**Branch:** `feat/0021-road-to-1-0` (pushed, stacked on #20) · **Status:** awaiting owner review
+
+- **Followed channels, live:** 27 followed, 7 were in topics. `import-following` added 20 (best-matching topics or
+  Following), and a refresh brought 3,968 images with 0 errors. The app shows "in …" or "new: would go to …" with
+  Add all (ADR-0026).
+- **Built:**
+  - values 2–9 with darks/lights isolation;
+  - drawing effects (lines, strokes, cross-hatch; SVG, checked visually);
+  - a nudity sensor (18 of 15,602 flagged after tuning) with Hide / Mark;
+  - the practice log;
+  - an update check and a release workflow;
+  - 24 px and contrast gates (84 fixes);
+  - a single-key switch.
+- **Answers:** Q25 (check now, updater later), Q26 (desk search clean), Q27–Q29 done. Q24 signing still open.
+- **Checks:** 117 Rust; 14 UI unit; W3C 86; layout 8,702; secret scan clean.
+- **Then (owner):** followed channels became **their own topics** under "Following on Are.na" (no catch-all);
+  the library was restructured, 0 errors. SignPath researched (332 projects; solo roles not addressed in its
+  terms), then declined: releases ship unsigned with checksums and attestation (Q24).
+
+---
+
+## 2026-11-19 (session 16): practice tools; design and art review (work item 20)
+
+**Branch:** `feat/0020-practice-tools` (pushed, stacked on #19) · **Status:** awaiting owner review
+
+- **Built (ADR-0025):**
+  - timed sessions (6 plans + your own; the clock waits for the image and pauses when minimised; a summary with
+    ♥, Keep as a playlist and Resume);
+  - study aids on screen only (mirror, upside down, greyscale, values/notan, squint, grids);
+  - ♥ Favourites and a ? sheet; v0.9.0.
+- **Research:** 5 tracks → [report](../reports/LeMuse%20design%20and%20art%20review.md). The missing piece was the
+  session itself. Quick wins fixed; the rest re-ordered the path to 1.0 (craft before breadth). Q24–Q29 opened.
+- **Enterprise:** redacted Copy details, version-only bug link, public-issue warning, CODE_OF_CONDUCT, takedown.
+- **Owner hands-on:** [docs/guide/hands-on.md](guide/hands-on.md); first UI unit tests (in CI).
+- **Checks:** 109 Rust tests; 9 UI unit; W3C 78; layout 480; clippy; secret scan clean.
+
+---
+
+## 2026-11-19 (session 15): polish for a complete app (work item 19)
+
+**Branch:** `feat/0019-polish` (pushed, stacked on #18) · **Status:** awaiting owner review
+
+- **Token tested live:** accepted (free tier); 21 followed channels. `Pictures\LeMuse` filled on its first real
+  refresh (7,366 images, 0 errors).
+- **Built (ADR-0024):** error codes (CLI exits 3–10, `--json` `code`, app `{ code, message }`); dashboard error
+  pages and headers; crash page, offline, "can't load" and Refresh details; nothing on the UI thread; reads wait
+  during a refresh (D-74); Channels you follow; single instance; About; v0.8.0.
+- **Checks:** 109 tests; W3C 64; layout 372; cargo audit and npm gate; secret scan clean.
+- **Next:** path to 1.0 in PLAN (practice tools first).
+
+---
+
+## 2026-11-18 (session 14): Are.na token (work item 18); is there a SaaS product?
+
+**Branch:** `feat/0018-arena-token` (pushed, stacked on #17) · **Status:** awaiting owner review
+
+- **Owner asked:** where the token goes and whether to git-ignore it. It goes in no file: Settings → Are.na account
+  (or `lemuse arena-token set`) checks it with Are.na, then keeps it in Windows Credential Manager (ADR-0023).
+- **Found:** Are.na quietly treats a bad token as a guest, so each refresh re-checks it (`/v3/me`, slug, name and
+  tier only) and falls back to guest with a note. `.gitignore` and the scanner now refuse token-looking files.
+- **SaaS:** ADR-0020 addendum: not yet; stage 1 web first, group features later, ask Are.na before charging.
+- **Checks:** 106 tests (+1 vault test run once); W3C 57; layout 330; clippy; secret scan clean; no new crate.
+
+---
+
+## 2026-11-18 (session 13): v0.7.0 merged; compact windows
+
+**Branches:** `feat/0016-compact-layout`, `feat/0017-save-originals` (pushed) · **Status:** awaiting owner review
+
+- **Owner merged** #1 and #2 and tagged v0.7.0. The CI fix had no PR, so it's carried in this one.
+- **Built:** below 1,024 px wide or 560 px tall the app works like the mini player (image fills it, ☰ drawer,
+  tap for a slimmer bar, credit stays on the image). Layout test adds 768 × 1024 and an image-fill check.
+- **Then (same session):** smooth compact transitions (#16); **Save originals** (#17, ADR-0022): host
+  allow-list, magic bytes, retries on network/5xx; real saves from Are.na and Cleveland checked.
+- **Checks:** 99 tests; W3C 51; layout 294 renders; secret scan clean.
+
+---
+
 ## 2026-11-18 (session 12): public-repo hygiene (work item 15)
 
 **Branch:** `chore/0015-public-repo-hygiene` (pushed, stacked on #14) · **Status:** awaiting owner review

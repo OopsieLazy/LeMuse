@@ -1,0 +1,13 @@
+feat: remember your place, museum label, grid view, search and Saved (#22)
+
+✅ Remembers your view, page, image and study aids between launches
+✅ Session ring clock (or small, or hidden) and a flash on each new pose
+✅ Images fade in once loaded; surround picker (5 neutral greys); Undo after hide, mark, un-♥
+✅ First run: "What are you drawing today?"
+✅ Museum label: creator, CC0 / © creator, date · medium · dimensions, credit line; sharper museum images
+✅ Grid view (W), search (/), Saved view; rename and remove topics
+✅ Schema 9 (museum records re-read once); 122 Rust, 18 UI unit, W3C 102, layout 10,919; version 0.11.0
+⬜ Search across channel names, drag to reorder playlists (PLAN)
+
+Reviewed-by: admin, developer passes (docs/reviews/0022-finish-1-0.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

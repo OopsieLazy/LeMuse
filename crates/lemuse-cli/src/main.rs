@@ -14,6 +14,7 @@
 //! lemuse export-links --playlist "Chairs" --format csv > chairs.csv
 //! lemuse sheet --topic "Wood objects" --count 24 > sheet.html
 //! lemuse serve            # dashboard on http://127.0.0.1:47555
+//! lemuse arena-token set  # paste your Are.na token (kept in Credential Manager)
 //! ```
 //!
 //! `--json` makes every command print exactly one JSON document on stdout:
@@ -95,6 +96,39 @@ enum Command {
     },
     /// Show an Are.na channel's first images without adding it (2 reads).
     PreviewChannel { link: String },
+    /// Is there a newer LeMuse? One request to GitHub's Releases API; nothing
+    /// is downloaded (ADR-0028).
+    UpdateCheck,
+    /// Add the Are.na channels you follow that aren't in a topic yet (needs
+    /// the token; one read per page of the list, nothing else). Each becomes
+    /// its own topic, named after the channel, under "Following on Are.na".
+    /// Then run `lemuse sync`.
+    ImportFollowing {
+        /// Put them all in this topic instead (created if needed).
+        #[arg(long, conflicts_with = "r#match")]
+        topic: Option<String>,
+        /// Put each into the existing topic that fits it best instead.
+        #[arg(long = "match")]
+        r#match: bool,
+        /// Only show what would be added.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove an Are.na channel from a topic (its images stay in playlists).
+    RemoveChannel {
+        channel: String,
+        #[arg(long)]
+        topic: String,
+    },
+    /// Remove a topic. Without --with-channels only an empty one (no
+    /// channels or keywords) is removed. Images stay in playlists.
+    RemoveTopic {
+        name: String,
+        #[arg(long)]
+        with_channels: bool,
+    },
+    /// Rename a topic.
+    RenameTopic { from: String, to: String },
     /// Every stored link of a topic, a playlist, or All (default), to stdout.
     /// Links only; no image is downloaded.
     ExportLinks {
@@ -129,6 +163,25 @@ enum Command {
         count: usize,
         #[arg(long)]
         seed: Option<String>,
+        /// Include images the nudity sensor flagged (hidden by default).
+        #[arg(long)]
+        show_nudity: bool,
+    },
+    /// Save an image's full-size original into views/<topic or playlist>/
+    /// (views/Saved/ by default). The block id is in `slides` output.
+    Save {
+        block_id: i64,
+        #[arg(long, conflicts_with = "playlist")]
+        topic: Option<String>,
+        #[arg(long)]
+        playlist: Option<String>,
+    },
+    /// Your Are.na personal access token, kept in Windows Credential Manager,
+    /// never in a file (ADR-0023). Make one at
+    /// https://www.are.na/settings/personal-access-tokens
+    ArenaToken {
+        #[command(subcommand)]
+        action: TokenAction,
     },
     /// Public Are.na channels a block is also in (1 read per page).
     Related {
@@ -151,13 +204,41 @@ impl Command {
             Command::Search { .. } => "search",
             Command::AddChannel { .. } => "add-channel",
             Command::PreviewChannel { .. } => "preview-channel",
+            Command::ImportFollowing { .. } => "import-following",
+            Command::RemoveChannel { .. } => "remove-channel",
+            Command::RemoveTopic { .. } => "remove-topic",
+            Command::RenameTopic { .. } => "rename-topic",
+            Command::UpdateCheck => "update-check",
             Command::ExportLinks { .. } => "export-links",
             Command::Related { .. } => "related",
             Command::Serve { .. } => "serve",
             Command::Sheet { .. } => "sheet",
+            Command::Save { .. } => "save",
+            Command::ArenaToken { .. } => "arena-token",
         }
     }
 }
+
+#[derive(Subcommand)]
+enum TokenAction {
+    /// Whether a token is saved, and for which account (no network).
+    Status,
+    /// Paste a token (hidden as you type, or piped in). Are.na checks it
+    /// first (one read); nothing is saved if it's refused.
+    Set,
+    /// Ask Are.na whether the saved token still works (one read).
+    Check,
+    /// Channels your Are.na account follows (one read per page; needs the token).
+    Following {
+        #[arg(long, default_value_t = 1)]
+        page: u32,
+    },
+    /// Remove the saved token; refreshes run as a guest again.
+    Clear,
+}
+
+/// Where Are.na makes personal access tokens (free accounts too).
+const TOKEN_PAGE: &str = "https://www.are.na/settings/personal-access-tokens";
 
 #[derive(Clone, Copy, ValueEnum)]
 enum LinkFormat {
@@ -210,15 +291,13 @@ fn main() -> ExitCode {
     if cli.json {
         let doc = match &result {
             Ok(o) => json!({ "lemuse": JSON_VERSION, "command": name, "ok": true, "data": o.data }),
-            Err(e) => {
-                json!({ "lemuse": JSON_VERSION, "command": name, "ok": false, "error": e.to_string() })
-            }
+            Err(e) => json!({ "lemuse": JSON_VERSION, "command": name, "ok": false,
+                              "code": e.code(), "error": e.to_string() }),
         };
         println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
-        return if result.is_ok() {
-            ExitCode::SUCCESS
-        } else {
-            ExitCode::FAILURE
+        return match &result {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(e) => ExitCode::from(exit_code(e)),
         };
     }
     match result {
@@ -227,9 +306,26 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("error: {e}");
-            ExitCode::FAILURE
+            eprintln!("error [{}]: {e}", e.code());
+            ExitCode::from(exit_code(&e))
         }
+    }
+}
+
+/// Process exit codes, one per error code (docs/automation.md). 2 is clap's
+/// own "bad arguments".
+fn exit_code(e: &lemuse_core::Error) -> u8 {
+    use lemuse_core::error::code;
+    match e.code() {
+        code::INVALID => 3,
+        code::NOT_FOUND => 4,
+        code::BUSY => 5,
+        code::RATE_LIMITED => 6,
+        code::NETWORK => 7,
+        code::SOURCE => 8,
+        code::TOKEN => 9,
+        code::IO | code::CATALOG => 10,
+        _ => 1,
     }
 }
 
@@ -356,6 +452,7 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             let cfg = Config::load(&paths.config())?;
             let mut catalog = Catalog::open(&paths.catalog())?;
             catalog.ensure_categories(lemuse_core::categories::vocabulary())?;
+            catalog.ensure_dupes()?;
             Ok(pretty(lemuse_core::serve::preview_data(
                 &cfg, &catalog, per_topic,
             )?))
@@ -509,6 +606,7 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             playlist,
             count,
             seed,
+            show_nudity,
         } => {
             use lemuse_core::export;
             let cfg = Config::load(&paths.config())?;
@@ -528,7 +626,10 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             };
             let mut all = Vec::new();
             for page in 0..SHEET_PAGES {
-                let got = catalog.slides_in(&scope, &Default::default(), 500, page * 500)?;
+                // Hidden images never; likely nudity only when asked (ADR-0027).
+                let filter = lemuse_core::store::catalog::CategoryFilter::default()
+                    .with_content_defaults(show_nudity);
+                let got = catalog.slides_in(&scope, &filter, 500, page * 500)?;
                 let last = got.len() < 500;
                 all.extend(got);
                 if last {
@@ -553,6 +654,274 @@ fn run(cmd: Command, paths: &LibraryPaths, json_mode: bool) -> lemuse_core::Resu
             Ok(out(
                 json!({ "heading": heading, "seed": seed, "count": picked.len(), "html": html }),
                 html,
+            ))
+        }
+        Command::Save {
+            block_id,
+            topic,
+            playlist,
+        } => {
+            let cfg = ensure_library(paths)?;
+            let catalog = Catalog::open(&paths.catalog())?;
+            let folder = match (topic, playlist) {
+                (Some(t), _) => cfg.topic(&t).ok_or_else(|| no_topic(&t))?.name.clone(),
+                (_, Some(p)) => {
+                    catalog.playlist_id(&p)?.ok_or_else(|| {
+                        lemuse_core::Error::Config(format!("no playlist named `{p}`"))
+                    })?;
+                    p
+                }
+                _ => lemuse_core::save::DEFAULT_FOLDER.to_string(),
+            };
+            let http = lemuse_core::sync::production_client(&cfg);
+            let saved = lemuse_core::save::save_original(
+                paths,
+                &catalog,
+                http.as_ref(),
+                block_id,
+                &folder,
+                true,
+            )?;
+            let text = format!(
+                "{} {}\n",
+                if saved.already_stored {
+                    "already stored; linked to"
+                } else {
+                    "saved to"
+                },
+                saved.view
+            );
+            Ok(out(to_value!(&saved), text))
+        }
+        Command::ArenaToken { action } => {
+            use lemuse_core::credentials;
+            match action {
+                TokenAction::Status => {
+                    let s = credentials::arena_status()?;
+                    let text = match (&s.saved, &s.account) {
+                        (true, Some(a)) => format!("Are.na token saved for {a}.\n"),
+                        (true, None) => "Are.na token saved.\n".to_string(),
+                        _ => format!(
+                            "No Are.na token saved: refreshes run as a guest (30 reads a minute).\n\
+                             Make one at {TOKEN_PAGE}, then run: lemuse arena-token set\n"
+                        ),
+                    };
+                    Ok(out(to_value!(&s), text))
+                }
+                TokenAction::Set => {
+                    use std::io::IsTerminal;
+                    let cfg = ensure_library(paths)?;
+                    if std::io::stdin().is_terminal() {
+                        eprint!("Paste your Are.na token (it won't show), then press Enter: ");
+                    }
+                    let line = credentials::read_secret_line()
+                        .map_err(|e| lemuse_core::Error::io("stdin", e))?;
+                    if std::io::stdin().is_terminal() {
+                        eprintln!();
+                    }
+                    let account = lemuse_core::sync::save_arena_token(&cfg, &line)?;
+                    let text = format!(
+                        "Saved in Windows Credential Manager for {} ({} account): up to {} reads a \
+                         minute, and your private channels.\n",
+                        account.slug,
+                        account.tier.name(),
+                        account.tier.read_limit_per_min()
+                    );
+                    Ok(out(to_value!(&account), text))
+                }
+                TokenAction::Check => {
+                    let cfg = ensure_library(paths)?;
+                    let token = credentials::arena_token()?.ok_or_else(|| {
+                        lemuse_core::Error::Token(format!(
+                            "No Are.na token saved. Make one at {TOKEN_PAGE}, then run: lemuse arena-token set"
+                        ))
+                    })?;
+                    let client = lemuse_core::sync::client_with(&cfg, Some(token));
+                    match lemuse_core::connectors::arena::account(client.as_ref())? {
+                        Some(account) => {
+                            let text = format!(
+                                "Are.na accepts the token: {} ({} account), up to {} reads a minute.\n",
+                                account.slug,
+                                account.tier.name(),
+                                account.tier.read_limit_per_min()
+                            );
+                            Ok(out(to_value!(&account), text))
+                        }
+                        None => Err(lemuse_core::Error::Token(
+                            lemuse_core::sync::TOKEN_REFUSED_SHORT.into(),
+                        )),
+                    }
+                }
+                TokenAction::Following { page } => {
+                    let cfg = ensure_library(paths)?;
+                    let account = credentials::arena_status()?.account.ok_or_else(|| {
+                        lemuse_core::Error::Token(
+                            "Save your Are.na token first: lemuse arena-token set".into(),
+                        )
+                    })?;
+                    let http = lemuse_core::sync::production_client(&cfg);
+                    let list = lemuse_core::connectors::arena::followed_channels(
+                        http.as_ref(),
+                        &account,
+                        page,
+                    )?;
+                    Ok(pretty(to_value!(&list)))
+                }
+                TokenAction::Clear => {
+                    let removed = credentials::clear_arena_token()?;
+                    let text = if removed {
+                        "Removed the Are.na token. Refreshes run as a guest.\n"
+                    } else {
+                        "No Are.na token was saved.\n"
+                    };
+                    Ok(out(json!({ "removed": removed }), text))
+                }
+            }
+        }
+        Command::UpdateCheck => {
+            // No library needed and no Are.na token: a plain client to GitHub.
+            let http = lemuse_core::update::client();
+            let current = env!("CARGO_PKG_VERSION");
+            let latest = lemuse_core::update::latest_release(http.as_ref(), current)?;
+            let text = match &latest {
+                Some(r) if r.newer => format!(
+                    "LeMuse {} is available (you have {current}): {}\n",
+                    r.version, r.url
+                ),
+                Some(r) => format!(
+                    "You have the latest LeMuse ({current}; newest release {}).\n",
+                    r.version
+                ),
+                None => format!("No LeMuse release is published yet (you have {current}).\n"),
+            };
+            Ok(out(json!({ "current": current, "latest": latest }), text))
+        }
+        Command::RemoveChannel { channel, topic } => {
+            ensure_library(paths)?;
+            let removed =
+                lemuse_core::config_edit::remove_channel(&paths.config(), &topic, &channel)?;
+            let text = if removed {
+                format!("Removed {channel} from {topic}.\n")
+            } else {
+                format!("{channel} wasn't in {topic}.\n")
+            };
+            Ok(out(json!({ "removed": removed }), text))
+        }
+        Command::RenameTopic { from, to } => {
+            ensure_library(paths)?;
+            let renamed = lemuse_core::config_edit::rename_topic(&paths.config(), &from, &to)?;
+            let text = match &renamed {
+                Some(n) => format!("Renamed {from} to {n}.\n"),
+                None => format!("There's no topic named {from}.\n"),
+            };
+            Ok(out(
+                json!({ "renamed": renamed.is_some(), "name": renamed }),
+                text,
+            ))
+        }
+        Command::RemoveTopic {
+            name,
+            with_channels,
+        } => {
+            ensure_library(paths)?;
+            let removed = if with_channels {
+                lemuse_core::config_edit::remove_topic(&paths.config(), &name)?
+            } else {
+                lemuse_core::config_edit::remove_empty_topic(&paths.config(), &name)?
+            };
+            let text = if removed {
+                format!("Removed the topic {name}.\n")
+            } else {
+                format!("There's no topic named {name}.\n")
+            };
+            Ok(out(json!({ "removed": removed }), text))
+        }
+        Command::ImportFollowing {
+            topic,
+            r#match,
+            dry_run,
+        } => {
+            let cfg = ensure_library(paths)?;
+            if let Some(t) = &topic {
+                lemuse_core::config::check_topic_name(t)?;
+            }
+            let account = lemuse_core::credentials::arena_status()?
+                .account
+                .ok_or_else(|| {
+                    lemuse_core::Error::Token(
+                        "Save your Are.na token first: lemuse arena-token set".into(),
+                    )
+                })?;
+            let http = lemuse_core::sync::production_client(&cfg);
+            // The whole followed list, one read per page (at most 20 pages).
+            let mut followed = Vec::new();
+            let mut page = Some(1);
+            while let Some(p) = page.filter(|p| *p <= 20) {
+                let list =
+                    lemuse_core::connectors::arena::followed_channels(http.as_ref(), &account, p)?;
+                let annotated = lemuse_core::import::annotate_followed(&cfg, list);
+                page = annotated.next_page;
+                followed.extend(annotated.channels);
+            }
+            let picks: Vec<lemuse_core::import::FollowedPick> = followed
+                .iter()
+                .filter(|f| f.in_topics.is_empty())
+                .map(|f| lemuse_core::import::FollowedPick {
+                    slug: f.channel.slug.clone(),
+                    title: f.channel.title.clone(),
+                    owner: f.channel.owner.clone(),
+                    // None: its own topic (the default).
+                    topic: topic
+                        .clone()
+                        .or_else(|| r#match.then(|| f.suggested.clone())),
+                })
+                .collect();
+            // For the dry-run listing: where each one would go.
+            let target = |p: &lemuse_core::import::FollowedPick| {
+                p.topic.clone().unwrap_or_else(|| {
+                    followed
+                        .iter()
+                        .find(|f| f.channel.slug == p.slug)
+                        .map(|f| f.own_topic.clone())
+                        .unwrap_or_default()
+                })
+            };
+            let already = followed.len() - picks.len();
+            let added = if dry_run {
+                Vec::new()
+            } else {
+                lemuse_core::import::add_followed(&paths.config(), &picks)?
+            };
+            let mut text = format!(
+                "You follow {} channels on Are.na; {already} are already in a topic.
+",
+                followed.len()
+            );
+            for p in &picks {
+                let to = target(p);
+                let verb = if dry_run { "would add" } else { "added" };
+                text.push_str(&format!(
+                    "  {verb} {} ({}) → {to}
+",
+                    p.title, p.slug
+                ));
+            }
+            if picks.is_empty() {
+                text.push_str(
+                    "Nothing new to add.
+",
+                );
+            } else if !dry_run {
+                text.push_str(
+                    "Run `lemuse sync` (or press Refresh in the app) to load their images.
+",
+                );
+            }
+            Ok(out(
+                json!({ "followed": followed.len(), "already": already, "dry_run": dry_run,
+                        "planned": picks.iter().map(|p| json!({"slug": p.slug, "title": p.title, "topic": target(p)})).collect::<Vec<_>>(),
+                        "added": added }),
+                text,
             ))
         }
         Command::Related { block_id, page } => {

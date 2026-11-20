@@ -100,6 +100,10 @@ pub struct Topic {
     /// no explicit `query` runs one search per keyword (ADR-0008).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keywords: Vec<String>,
+    /// A heading the topic list shows it under (ADR-0026 addendum), e.g.
+    /// "Following on Are.na" for channels imported from the follow list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
     #[serde(default, rename = "source")]
     pub sources: Vec<TopicSource>,
 }
@@ -278,7 +282,11 @@ impl Config {
 
     pub fn load(path: &Path) -> Result<Self> {
         let text = std::fs::read_to_string(path).map_err(|e| Error::io(path, e))?;
-        Self::from_toml_str(&text)
+        // Say which file is wrong; other `Config` errors are bad input.
+        Self::from_toml_str(&text).map_err(|e| match e {
+            Error::Config(m) => Error::Config(format!("lemuse.toml: {m}")),
+            other => other,
+        })
     }
 
     pub fn to_toml(&self) -> Result<String> {
@@ -337,6 +345,9 @@ impl Config {
                 return Err(Error::Config("every [[topic]] needs a `name`".into()));
             }
             check_topic_name(&t.name)?;
+            if let Some(g) = &t.group {
+                check_name("group", g)?;
+            }
             if t.sources.len() > MAX_SOURCES {
                 return Err(Error::Config(format!(
                     "topic `{}`: at most {MAX_SOURCES} sources",

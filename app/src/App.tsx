@@ -16,17 +16,61 @@ import {
   type RefreshEvent,
   type Slide,
   type SlideSource,
+  type About,
+  type FollowedPage,
+  type FollowedPick,
+  type BlockFlag,
+  withContentDefaults,
+  parseSourceKey,
+  sharpSlide,
+  type TokenStatus,
   type TopicInfo,
   type Vocabulary,
 } from "./api";
-import { DiscoverPanel, type RelatedState } from "./DiscoverPanel";
+import { DiscoverPanel, type FollowingState, type RelatedState } from "./DiscoverPanel";
+import { RefreshDetails } from "./RefreshDetails";
 import { LibraryPanel, type PanelStatus } from "./LibraryPanel";
-import { SettingsPanel } from "./SettingsPanel";
+import { SettingsPanel, type ArenaTokenView, type UpdateView } from "./SettingsPanel";
 import { applyToDocument, DEFAULTS, sanitize, type UiSettings } from "./settings";
 import { SlideshowView, type RefreshState } from "./SlideshowView";
+import { PracticePanel } from "./PracticePanel";
+import { ShortcutsPanel } from "./ShortcutsPanel";
+import { WelcomePanel } from "./WelcomePanel";
+import {
+  FAVOURITES,
+  finishPose,
+  EFFECTS,
+  FOCI,
+  GRIDS,
+  nextOf,
+  NO_STUDY,
+  planFor,
+  poseCount,
+  poseMs,
+  posesBefore,
+  restartPose,
+  logSince,
+  sessionPlaylistName,
+  weeklyLog,
+  type LogWeek,
+  startSession as firstPose,
+  stopSession,
+  tickSession,
+  TONES,
+  type Running,
+  type SessionResult,
+  type StudyAids,
+} from "./practice";
+import * as cue from "./sound";
+
+/** How often the pose clock steps (ms). */
+const SESSION_TICK_MS = 200;
 
 /** Debounce for saving settings while a slider is dragged. */
 const SAVE_DELAY_MS = 300;
+
+/** How often an empty view looks again during a refresh (catalog reads only). */
+const FIRST_FILL_POLL_MS = 10_000;
 
 /** How many upcoming images to warm in memory (CLAUDE.md: at most 2). */
 const PRELOAD_AHEAD = 2;
@@ -43,7 +87,7 @@ function shuffled<T>(items: T[]): T[] {
 /** Errors from the core arrive as strings; keep the readable part. */
 function message(e: unknown): string {
   const s = e instanceof Error ? e.message : String(e);
-  return s.replace(/^(invalid config|arena): /, "");
+  return s.replace(/^arena: /, "");
 }
 
 function refreshLabel(e: RefreshEvent): RefreshState {
@@ -51,6 +95,7 @@ function refreshLabel(e: RefreshEvent): RefreshState {
     case "running":
       return { label: "Refreshing topics", busy: true, tone: "idle" };
     case "done":
+      if (e.note) return { label: e.note, busy: false, tone: "error", details: e.errors > 0 };
       return {
         label:
           e.errors > 0
@@ -58,9 +103,24 @@ function refreshLabel(e: RefreshEvent): RefreshState {
             : `Up to date · ${e.blocks_upserted} new or changed`,
         busy: false,
         tone: e.errors > 0 ? "error" : "ok",
+        details: e.errors > 0,
       };
     case "error":
-      return { label: `Refresh failed: ${e.message}`, busy: false, tone: "error" };
+      return { label: refreshFailure(e.code, e.message), busy: false, tone: "error" };
+  }
+}
+
+/** A whole refresh that failed, in words that say what to do (ADR-0024). */
+function refreshFailure(code: string | undefined, msg: string): string {
+  switch (code) {
+    case "network":
+      return "Can't reach the sources right now. LeMuse tries again at the next refresh.";
+    case "busy":
+      return "Another refresh is already running (the command line or Task Scheduler).";
+    case "rate_limited":
+      return "Are.na asked LeMuse to slow down. The next refresh carries on.";
+    default:
+      return `Refresh failed: ${msg}`;
   }
 }
 
@@ -82,6 +142,12 @@ export function App() {
   // Mini player (ADR-0016) and the short "Link copied" note.
   const [mini, setMini] = useState(false);
   const [miniBarOpen, setMiniBarOpen] = useState(false);
+  const [compactBarOpen, setCompactBarOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [arenaToken, setArenaToken] = useState<TokenStatus | null>(null);
+  const [arenaBusy, setArenaBusy] = useState(false);
+  const [arenaMessage, setArenaMessage] = useState<ArenaTokenView["message"]>(undefined);
   const [miniMenuOpen, setMiniMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | undefined>();
   // Per image: how many stored fallback sizes have been tried.
@@ -108,6 +174,46 @@ export function App() {
   const [relatedFor, setRelatedFor] = useState<{ blockId: number; page: number } | null>(null);
   const [discoverBusy, setDiscoverBusy] = useState(false);
   const [discoverStatus, setDiscoverStatus] = useState<PanelStatus | undefined>();
+  const [following, setFollowing] = useState<FollowingState | null>(null);
+  const [followingPage, setFollowingPage] = useState(1);
+  // Refresh details and the network state (ADR-0024).
+  const [refreshFailed, setRefreshFailed] = useState<{ list: string[]; total: number }>({ list: [], total: 0 });
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [about, setAbout] = useState<About | null>(null);
+  // Practice tools (ADR-0025).
+  const [study, setStudy] = useState<StudyAids>(NO_STUDY);
+  const [studyOpen, setStudyOpen] = useState(false);
+  const [natural, setNatural] = useState<{ id: number; width: number; height: number } | null>(null);
+  const [session, setSession] = useState<Running | null>(null);
+  const [result, setResult] = useState<SessionResult | null>(null);
+  const [practiceView, setPracticeView] = useState<"plan" | "summary">("plan");
+  const [kept, setKept] = useState<string | undefined>();
+  const [keeping, setKeeping] = useState(false);
+  const [drawnFavs, setDrawnFavs] = useState<number[]>([]);
+  const practiceRef = useRef<HTMLDialogElement>(null);
+  // Content marks, the practice log and updates (ADR-0027, ADR-0028).
+  const [marks, setMarks] = useState<{ hidden: number; nudity: number }>({ hidden: 0, nudity: 0 });
+  const [contentNote, setContentNote] = useState<string | undefined>();
+  const [log, setLog] = useState<LogWeek[] | null>(null);
+  const [update, setUpdate] = useState<UpdateView>({ state: "idle" });
+  const [settingsReady, setSettingsReady] = useState(false);
+  // Finishing 1.0 (ADR-0029): Saved, grid, sharper museum images, undo, flash.
+  const [savedCount, setSavedCount] = useState(0);
+  const [grid, setGrid] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [flashKey, setFlashKey] = useState(0);
+  const [undoable, setUndoable] = useState(false);
+  const undoRef = useRef<(() => void) | null>(null);
+  const welcomeRef = useRef<HTMLDialogElement>(null);
+  const restored = useRef(false);
+  /** The image to show again once its own view has loaded (remember where you were). */
+  const pendingBlock = useRef<{ key: string; id: number } | null>(null);
+  const bigNow = () =>
+    typeof window !== "undefined" &&
+    (window.innerWidth * (window.devicePixelRatio || 1) > 1200 || window.innerHeight * (window.devicePixelRatio || 1) > 1000);
+  const [bigWindow, setBigWindow] = useState(bigNow);
+  const shortcutsRef = useRef<HTMLDialogElement>(null);
+  const refreshDetailsRef = useRef<HTMLDialogElement>(null);
   const settingsRef = useRef<HTMLDialogElement>(null);
   const libraryRef = useRef<HTMLDialogElement>(null);
   const discoverRef = useRef<HTMLDialogElement>(null);
@@ -132,7 +238,16 @@ export function App() {
       setStatus(s);
       setTopics(t);
       setAllCount(all);
-      if (s.refreshing) setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
+      api
+        .slideCount({ kind: "saved" }, withContentDefaults(NO_FILTER, false))
+        .then(setSavedCount)
+        .catch(() => undefined);
+      if (s.refreshing)
+        setRefresh({
+          label: all === 0 ? "First refresh: images appear as they arrive" : "Refreshing topics",
+          busy: true,
+          tone: "idle",
+        });
     } catch (e) {
       setNotice(message(e));
     }
@@ -150,16 +265,39 @@ export function App() {
     loadLibrary();
     return api.onRefresh((e) => {
       setRefresh(refreshLabel(e));
+      if (e.state === "done") setRefreshFailed({ list: e.failed ?? [], total: e.errors });
       if (e.state !== "running") loadLibrary();
     });
   }, [loadLibrary]);
 
   const topic = active?.kind === "topic" ? topics.find((t) => t.name === active.name) : undefined;
   const playlist = active?.kind === "playlist" ? playlists.find((l) => l.id === active.id) : undefined;
-  const activeLabel = active?.kind === "all" ? "All" : (topic?.name ?? playlist?.name ?? "");
+  const activeLabel =
+    active?.kind === "all"
+      ? "All"
+      : active?.kind === "saved"
+        ? "Saved"
+        : active?.kind === "search"
+          ? `“${active.query}”`
+          : (topic?.name ?? playlist?.name ?? "");
   // What changes when new images arrive, so the slideshow reloads.
-  const activeCount = active?.kind === "all" ? allCount : (topic?.slides ?? playlist?.items ?? 0);
+  const activeCount =
+    active?.kind === "all" || active?.kind === "search"
+      ? allCount
+      : active?.kind === "saved"
+        ? savedCount
+        : (topic?.slides ?? playlist?.items ?? 0);
   const activeKey = sourceKey(active);
+
+  // While a refresh runs and this view is still empty (a new library's
+  // first refresh, or a just-added topic), look again every 10 s so images
+  // show as they arrive instead of zeros until the refresh ends. A view that
+  // already has images isn't reloaded mid-slideshow.
+  useEffect(() => {
+    if (!refresh.busy || activeCount > 0) return;
+    const t = window.setInterval(loadLibrary, FIRST_FILL_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [refresh.busy, activeCount, loadLibrary]);
 
   // A deleted playlist or removed topic falls back to All.
   useEffect(() => {
@@ -174,12 +312,13 @@ export function App() {
       .catch(() => setSettings(DEFAULTS))
       .finally(() => {
         loaded.current = true;
+        setSettingsReady(true);
       });
   }, []);
 
   useEffect(() => {
-    applyToDocument(settings, { fullscreen, idle, mini });
-  }, [settings, fullscreen, idle, mini]);
+    applyToDocument(settings, { fullscreen, idle, mini, compactBar: compactBarOpen });
+  }, [settings, fullscreen, idle, mini, compactBarOpen]);
 
   useEffect(() => {
     if (!loaded.current) return;
@@ -202,7 +341,7 @@ export function App() {
   }, []);
 
   // ---- Auto-hide the control bar when the pointer rests ----
-  const anyMenu = menuOpen || filterOpen;
+  const anyMenu = menuOpen || filterOpen || studyOpen;
   useEffect(() => {
     if (!settings.autoHide || anyMenu) {
       setIdle(false);
@@ -241,14 +380,16 @@ export function App() {
 
   // Load one page of what's playing, its total and the category counts;
   // reload when a refresh, a playlist edit, the page or the filter changes.
-  const fKey = filterKey(filter);
+  // What every view shows: your filter plus the content defaults (ADR-0027).
+  const viewFilter = useMemo(() => withContentDefaults(filter, settings.showNudity), [filter, settings.showNudity]);
+  const fKey = filterKey(viewFilter);
   useEffect(() => {
     if (!active) return;
     let stale = false;
     Promise.all([
-      api.slides(active, filter, PAGE_SIZE, page * PAGE_SIZE),
-      api.slideCount(active, filter),
-      api.categoryCounts(active, filter),
+      api.slides(active, viewFilter, PAGE_SIZE, page * PAGE_SIZE),
+      api.slideCount(active, viewFilter),
+      api.categoryCounts(active, viewFilter),
     ])
       .then(([s, n, c]) => {
         if (stale) return;
@@ -265,11 +406,12 @@ export function App() {
     return () => {
       stale = true;
     };
-  }, [activeKey, activeCount, page, fKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeKey, activeCount, page, fKey, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (active?.kind === "topic") setShuffle(topic?.shuffle ?? true);
-    else setShuffle(active?.kind !== "playlist");
+    // Playlists keep your order, search its best matches first, Saved the newest first.
+    else setShuffle(active?.kind === "all");
   }, [activeKey, topic?.shuffle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Shuffle once per load/toggle; a failed image must not reshuffle the order.
@@ -279,12 +421,19 @@ export function App() {
     () =>
       slides
         .filter((s) => !failed.has(s.block_id))
-        .map((s) => {
+        .map((raw) => {
+          // Cleveland's print size on big windows (ADR-0029); the web size stays a fallback.
+          const s = sharpSlide(raw, bigWindow);
           const n = attempts.get(s.block_id) ?? 0;
           return n > 0 && s.fallback_urls?.[n - 1] ? { ...s, display_url: s.fallback_urls[n - 1] } : s;
         }),
-    [slides, failed, attempts],
+    [slides, failed, attempts, bigWindow],
   );
+  useEffect(() => {
+    const onResize = () => setBigWindow(bigNow());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const safeIndex = visible.length ? index % visible.length : 0;
   const slide = visible[safeIndex] as Slide | undefined;
 
@@ -304,22 +453,51 @@ export function App() {
     };
   }, [slide?.block_id, playlists]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // At the last image of a page, move on to the next page instead of
+  // starting the same 500 again.
+  const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
   const go = useCallback(
     (delta: number) => {
       if (!visible.length) return;
+      if (delta > 0 && safeIndex === visible.length - 1 && page < lastPage) {
+        setPage(page + 1);
+        return;
+      }
       setIndex((i) => (i + delta + visible.length) % visible.length);
       setTick((n) => n + 1);
     },
-    [visible.length],
+    [visible.length, safeIndex, page, lastPage],
   );
 
-  // Auto-advance (paused while a menu is open).
+  // The right-click menu closes on any click elsewhere, a key, a scroll or a
+  // new image; it opens inside the window.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest(".context-menu")) return;
+      setContextMenu(null);
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setContextMenu(null);
+    window.addEventListener("mousedown", close);
+    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("wheel", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", key);
+    };
+  }, [contextMenu]);
+  useEffect(() => setContextMenu(null), [slide?.block_id]);
+
+  // Auto-advance (paused while a menu is open; a timed session drives itself).
   const seconds = settings.slideSeconds ?? topic?.slide_seconds ?? 8;
   useEffect(() => {
-    if (!playing || anyMenu || visible.length < 2) return;
+    if (!playing || anyMenu || visible.length < 2 || session) return;
     const id = window.setTimeout(() => go(1), seconds * 1000);
     return () => window.clearTimeout(id);
-  }, [playing, anyMenu, seconds, tick, go, visible.length]);
+  }, [playing, anyMenu, seconds, tick, go, visible.length, session]);
 
   // Warm the next images in memory only. In the desktop app the WebView runs
   // InPrivate, so nothing reaches a disk cache (ADR-0009).
@@ -337,12 +515,44 @@ export function App() {
   const toggleMenu = useCallback(() => {
     setMenuError(undefined);
     setFilterOpen(false);
+    setStudyOpen(false);
     setMenuOpen((o) => !o);
   }, []);
   const toggleFilter = useCallback(() => {
     setMenuOpen(false);
+    setStudyOpen(false);
     setFilterOpen((o) => !o);
   }, []);
+  const toggleStudy = useCallback(() => {
+    setMenuOpen(false);
+    setFilterOpen(false);
+    setStudyOpen((o) => !o);
+  }, []);
+  const changeStudy = useCallback((p: Partial<StudyAids>) => setStudy((s) => ({ ...s, ...p })), []);
+
+  // ---- ♥ Favourites: a playlist made on the first ♥ (ADR-0025) ----
+  const favId = playlists.find((l) => l.name === FAVOURITES)?.id;
+  const favourite = favId !== undefined && inPlaylists.includes(favId);
+  // One ♥ at a time, so a double press can't make Favourites twice (review 0020 D-118).
+  const favBusy = useRef(false);
+  const setFavourite = useCallback(
+    async (blockId: number, present: boolean) => {
+      if (favBusy.current) return;
+      favBusy.current = true;
+      try {
+        let id = favId;
+        if (id === undefined) {
+          if (!present) return;
+          id = (await api.createPlaylist(FAVOURITES)).id;
+        }
+        await api.setInPlaylist(id, blockId, present);
+        await loadPlaylists();
+      } finally {
+        favBusy.current = false;
+      }
+    },
+    [favId, loadPlaylists],
+  );
 
   // ---- Related channels for the current Are.na image (one read per page) ----
   // Answers for an image the user has moved away from are dropped.
@@ -394,11 +604,28 @@ export function App() {
 
   // ---- Copy link: the source page and the full-size image ----
   const toastTimer = useRef(0);
-  const say = useCallback((text: string) => {
+  /** A short note; with `undo`, an Undo button for a few seconds (ADR-0029). */
+  const say = useCallback((text: string, undo?: () => void) => {
     setToast(text);
+    undoRef.current = undo ?? null;
+    setUndoable(Boolean(undo));
     window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(undefined), 2500);
+    toastTimer.current = window.setTimeout(
+      () => {
+        setToast(undefined);
+        undoRef.current = null;
+        setUndoable(false);
+      },
+      undo ? 6000 : 2500,
+    );
   }, []);
+  const runUndo = () => {
+    const u = undoRef.current;
+    undoRef.current = null;
+    setUndoable(false);
+    setToast(undefined);
+    u?.();
+  };
   const copyLink = useCallback(() => {
     if (!slide) return;
     const lines = [
@@ -412,24 +639,277 @@ export function App() {
       .catch(() => say("Couldn't reach the clipboard"));
   }, [slide, say]);
 
-  // Keyboard: ← → Space S F H T P C R D M L A , Esc. Ignored while typing or in a dialog.
+  // ---- Save the original (ADR-0022) ----
+  const saveCurrent = useCallback(async () => {
+    if (!slide || !active) return;
+    const id = slide.block_id;
+    setSaving(true);
+    try {
+      const r = await api.saveImage(id, active);
+      setSource((list) => list.map((s) => (s.block_id === id ? { ...s, saved: true } : s)));
+      if (!r.already_stored) setSavedCount((n) => n + 1);
+      const folder = r.view.split("/").slice(0, -1).join(" › ");
+      say(`Saved to LeMuse › ${folder}`);
+    } catch (e) {
+      say(message(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [slide, active, say]);
+
+  // ---- Timed sessions (ADR-0025) ----
+  // The session lives in state for the view and in a ref for the clock, so
+  // the clock never works from a stale copy. `commit` updates both.
+  const plan = planFor(settings.practicePlan, settings.customRounds);
+  const sessionRef = useRef<Running | null>(null);
+  const resumable = useRef<Running | null>(null);
+  const slideRef = useRef(slide);
+  slideRef.current = slide;
+  const commit = useCallback((s: Running | null) => {
+    sessionRef.current = s;
+    setSession(s);
+  }, []);
+
+  const loadLog = useCallback(() => {
+    if (!settings.showPracticeLog) return setLog(null);
+    const now = Date.now();
+    api
+      .practiceSessions(logSince(now))
+      .then((list) => setLog(weeklyLog(list, now)))
+      .catch(() => setLog(null));
+  }, [settings.showPracticeLog]);
+  useEffect(loadLog, [loadLog]);
+
+  const openPractice = useCallback(() => {
+    setPracticeView("plan");
+    setKept(undefined);
+    loadLog();
+    openDialog(practiceRef.current);
+  }, [openDialog, loadLog]);
+
+  /** Show the summary (the plan finished, or the session was stopped). */
+  const showResult = useCallback(
+    (r: SessionResult, before: Running | null) => {
+      // Ended early by mistake? Resume puts it back exactly as it was.
+      resumable.current = r.finished || !before ? null : { ...before, paused: true };
+      commit(null);
+      setResult(r);
+      // The practice log keeps sessions that drew something (ADR-0027).
+      api
+        .recordPractice({
+          started_at: Math.floor(r.startedAt / 1000),
+          seconds: Math.round(r.seconds),
+          skipped: r.skipped,
+          plan: r.planName.slice(0, 80),
+          source: r.from.slice(0, 120),
+          finished: r.finished,
+          drawn: r.drawn.map((d) => ({ block_id: d.block_id, seconds: d.seconds })),
+        })
+        .then(() => loadLog())
+        .catch(() => undefined);
+      setPracticeView("summary");
+      setKept(undefined);
+      if (r.finished && settings.practiceSound) cue.finish();
+      openDialog(practiceRef.current);
+    },
+    [commit, openDialog, settings.practiceSound, loadLog],
+  );
+  const endSession = useCallback((s: Running) => showResult(stopSession(s, slideRef.current), s), [showResult]);
+
+  const many = visible.length > 1;
+  const startSession = useCallback(() => {
+    practiceRef.current?.close();
+    if (!visible.length) return;
+    if (settings.practiceSound) {
+      cue.primeSound();
+      cue.change();
+    }
+    setPlaying(false);
+    setResult(null);
+    setStudyOpen(false);
+    setGrid(false);
+    resumable.current = null;
+    commit(firstPose(plan, activeLabel, many, Date.now()));
+    if (many) go(1);
+  }, [visible.length, many, settings.practiceSound, plan, activeLabel, go, commit]);
+
+  /** Finish this pose (its time ran out, or → skipped it) and move on. */
+  const advancePose = useCallback(
+    (kind: "done" | "skip") => {
+      const s = sessionRef.current;
+      if (!s) return;
+      const step = finishPose(s, slideRef.current, kind, many, Date.now());
+      if ("result" in step) return showResult(step.result, null);
+      commit(step.next);
+      if (many) go(1);
+      if (settings.practiceSound) cue.change();
+    },
+    [commit, showResult, go, many, settings.practiceSound],
+  );
+  const advanceRef = useRef(advancePose);
+  advanceRef.current = advancePose;
+
+  /** ← in a session: the previous image, and this pose starts over. */
+  const backPose = useCallback(() => {
+    const s = sessionRef.current;
+    if (!s) return;
+    go(-1);
+    commit(restartPose(s, many, Date.now()));
+  }, [go, commit, many]);
+
+  const togglePause = useCallback(() => {
+    const s = sessionRef.current;
+    if (s) commit({ ...s, paused: !s.paused });
+  }, [commit]);
+
+  // The pose clock (practice.ts tickSession): counts only while the image is
+  // on screen, beeps in the last three seconds, starts a slow pose anyway.
+  const running = session !== null && !session.paused;
+  const sound = settings.practiceSound;
+  useEffect(() => {
+    if (!running) return;
+    let last = performance.now();
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      const dt = now - last;
+      last = now;
+      const s = sessionRef.current;
+      if (!s) return;
+      const step = tickSession(s, dt, Date.now());
+      if (step.done) return advanceRef.current("done");
+      if (step.beep && sound) cue.tick();
+      if (step.s !== s) commit(step.s);
+    }, SESSION_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [running, sound, commit]);
+
+  // Minimised or hidden: pause, so a pose isn't lost while you look away.
+  useEffect(() => {
+    const onHide = () => {
+      const s = sessionRef.current;
+      if (document.hidden && s && !s.paused) commit({ ...s, paused: true });
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [commit]);
+
+  const onImageLoad = useCallback(
+    (id: number, width: number, height: number) => {
+      setNatural({ id, width, height });
+      const s = sessionRef.current;
+      if (s?.waiting && id === slideRef.current?.block_id) commit({ ...s, waiting: false });
+    },
+    [commit],
+  );
+
+  const sessionView = session
+    ? {
+        planName: session.plan.name,
+        pose: posesBefore(session.plan, session.at) + 1,
+        poses: poseCount(session.plan),
+        round: session.at.round + 1,
+        rounds: session.plan.rounds.length,
+        left: Math.max(0, session.left / 1000),
+        total: poseMs(session) / 1000,
+        paused: session.paused,
+      }
+    : null;
+  // A quiet flash on each new pose (Settings → Practice; CSS drops it for reduced motion).
+  const poseId = session ? `${session.at.round}-${session.at.pose}` : "";
+  useEffect(() => {
+    if (poseId && settings.poseFlash) setFlashKey((k) => k + 1);
+  }, [poseId, settings.poseFlash]);
+
+  // The summary's ♥ marks: which drawn images are already favourites.
+  useEffect(() => {
+    if (!result || favId === undefined) {
+      setDrawnFavs([]);
+      return;
+    }
+    let stale = false;
+    const ids = [...new Set(result.drawn.map((d) => d.block_id))];
+    Promise.all(ids.map((id) => api.playlistsWith(id).then((l) => (l.includes(favId) ? id : null))))
+      .then((x) => !stale && setDrawnFavs(x.filter((n): n is number => n !== null)))
+      .catch(() => !stale && setDrawnFavs([]));
+    return () => {
+      stale = true;
+    };
+  }, [result, favId, playlists]);
+
+  const keepSession = async () => {
+    if (!result) return;
+    setKeeping(true);
+    try {
+      const l = await api.createPlaylist(sessionPlaylistName(new Date()));
+      const ids = [...new Set(result.drawn.map((d) => d.block_id))];
+      for (const id of ids) await api.setInPlaylist(l.id, id, true);
+      await loadPlaylists();
+      setKept(`Kept as “${l.name}” (${ids.length} image${ids.length === 1 ? "" : "s"}). It's in Playlists.`);
+    } catch (e) {
+      setKept(message(e));
+    } finally {
+      setKeeping(false);
+    }
+  };
+
+  const toggleFavourite = useCallback(() => {
+    if (!slide) return;
+    const id = slide.block_id;
+    const removing = favourite;
+    setFavourite(id, !removing)
+      .then(() =>
+        removing
+          ? say("Removed from Favourites", () => setFavourite(id, true).catch((e) => say(message(e))))
+          : say("♥ Added to Favourites"),
+      )
+      .catch((e) => say(message(e)));
+  }, [slide, favourite, setFavourite, say]);
+
+  // Keyboard: ← → Space S F H T P C R D M L A , Esc, and the practice keys
+  // N K X U G V I E B O 0 ? (ShortcutsPanel lists them all). Ignored while typing or in a dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "Escape" && (menuOpen || filterOpen || miniMenuOpen)) {
+      if (e.key === "Escape" && (menuOpen || filterOpen || miniMenuOpen || studyOpen || grid)) {
         setMenuOpen(false);
         setFilterOpen(false);
         setMiniMenuOpen(false);
+        setStudyOpen(false);
+        setGrid(false);
         return;
       }
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, dialog")) return;
+      // Single-letter shortcuts can be turned off (WCAG 2.1.4); Space stays.
+      if (!settings.singleKeys && e.key.length === 1 && e.key !== " ") return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (k === "ArrowRight") go(1);
-      else if (k === "ArrowLeft") go(-1);
+      const s = sessionRef.current;
+      if (k === "ArrowRight") (s ? advancePose("skip") : go(1));
+      else if (k === "ArrowLeft") (s ? backPose() : go(-1));
       else if (k === " ") {
         e.preventDefault();
-        setPlaying((p) => !p);
-      } else if (k === "s") setShuffle((s) => !s);
+        if (s) togglePause();
+        else setPlaying((p) => !p);
+      } else if (k === "Escape" && s) endSession(s);
+      else if (k === "n" && !s) openPractice();
+      else if (k === "k") toggleFavourite();
+      else if (k === "x") changeStudy({ mirror: !study.mirror });
+      else if (k === "u") changeStudy({ upside: !study.upside });
+      else if (k === "g") changeStudy({ grey: !study.grey, tones: 0 });
+      else if (k === "v") changeStudy({ tones: nextOf(TONES, study.tones) });
+      else if (k === "b") changeStudy({ squint: !study.squint });
+      else if (k === "e") changeStudy({ effect: nextOf(EFFECTS, study.effect) });
+      // Isolating darks or lights needs at least 3 values; start from 5.
+      else if (k === "i") changeStudy({ focus: nextOf(FOCI, study.focus), tones: study.tones > 2 ? study.tones : 5 });
+      else if (k === "o") changeStudy({ grid: nextOf(GRIDS, study.grid) });
+      else if (k === "w" && !s) setGrid((g) => !g);
+      else if (k === "/") {
+        e.preventDefault();
+        setRailOpen(true);
+        document.getElementById("rail-search")?.focus();
+      }
+      else if (k === "0") setStudy(NO_STUDY);
+      else if (k === "?") openDialog(shortcutsRef.current);
+      else if (k === "s") setShuffle((s) => !s);
       else if (k === "f") toggleFullscreen();
       else if (k === "h") patch({ controlsHidden: !settings.controlsHidden });
       else if (k === "t") setRailOpen((o) => !o);
@@ -445,7 +925,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, slide, fullscreen]);
+  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, grid, slide, fullscreen, settings.singleKeys, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
@@ -453,6 +933,260 @@ export function App() {
     e.preventDefault();
     api.openExternal(url).catch((err) => setNotice(message(err)));
   };
+
+  // ---- Offline and back online: retry the images that failed (ADR-0024) ----
+  useEffect(() => {
+    const on = () => {
+      setOnline(true);
+      setFailed(new Set());
+      setAttempts(new Map());
+    };
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+  useEffect(() => {
+    api.about().then(setAbout, () => setAbout(null));
+  }, []);
+
+  // ---- Channels you follow on Are.na (token; one read per page) ----
+  const loadFollowing = useCallback(async (nextPage: number) => {
+    setDiscoverBusy(true);
+    try {
+      const r: FollowedPage = await api.followedChannels(nextPage);
+      setFollowing((prev) => ({
+        result: {
+          ...r,
+          channels: nextPage > 1 && prev?.result ? [...prev.result.channels, ...r.channels] : r.channels,
+        },
+      }));
+      setFollowingPage(nextPage);
+      setDiscoverStatus(undefined);
+    } catch (e) {
+      setFollowing(null);
+      setDiscoverStatus({ tone: "error", text: message(e) });
+    } finally {
+      setDiscoverBusy(false);
+    }
+  }, []);
+
+  // "Add" / "Add all new" from Channels you follow (ADR-0026): no reads; one refresh after.
+  const addFollowed = async (picks: FollowedPick[]) => {
+    setDiscoverBusy(true);
+    setDiscoverStatus({ tone: "idle", text: `Adding ${picks.length === 1 ? picks[0].title : `${picks.length} channels`}` });
+    try {
+      const done = await api.addFollowed(picks);
+      const added = done.filter((a) => a.added);
+      const where = new Map(done.map((a) => [a.slug, a.topic]));
+      setFollowing((prev) =>
+        prev?.result
+          ? {
+              result: {
+                ...prev.result,
+                channels: prev.result.channels.map((c) => {
+                  const t = where.get(c.slug);
+                  return t && !c.in_topics.includes(t) ? { ...c, in_topics: [...c.in_topics, t] } : c;
+                }),
+              },
+            }
+          : prev,
+      );
+      const topicsUsed = [...new Set(added.map((a) => a.topic))];
+      setDiscoverStatus({
+        tone: "ok",
+        text: added.length
+          ? `Added ${added.length === 1 ? added[0].title : `${added.length} channels`} to ${topicsUsed.join(", ")}. Their images are loading now.`
+          : "They were already in those topics.",
+      });
+      if (added.length) setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
+      await loadLibrary();
+    } catch (e) {
+      setDiscoverStatus({ tone: "error", text: message(e) });
+    } finally {
+      setDiscoverBusy(false);
+    }
+  };
+
+  // ---- Are.na token (ADR-0023): checked by Are.na, kept in Credential Manager ----
+  useEffect(() => {
+    api.arenaTokenStatus().then(setArenaToken, () => setArenaToken(null));
+  }, []);
+  const saveArenaToken = async (token: string) => {
+    setArenaBusy(true);
+    setArenaMessage({ text: "Checking with Are.na", tone: "idle" });
+    try {
+      const a = await api.setArenaToken(token);
+      setArenaToken({ saved: true, account: a.slug });
+      setArenaMessage({ text: `Saved for ${a.slug} (${a.tier} account). The next refresh uses it.`, tone: "ok" });
+    } catch (e) {
+      setArenaMessage({ text: message(e), tone: "error" });
+    } finally {
+      setArenaBusy(false);
+    }
+  };
+  const clearArenaToken = async () => {
+    setArenaBusy(true);
+    try {
+      await api.clearArenaToken();
+      setArenaToken({ saved: false, account: null });
+      setFollowing(null);
+      setArenaMessage({ text: "Removed. Refreshes run as a guest.", tone: "ok" });
+    } catch (e) {
+      setArenaMessage({ text: message(e), tone: "error" });
+    } finally {
+      setArenaBusy(false);
+    }
+  };
+
+  // ---- Remember where you were (ADR-0029) ----
+  // Restore once, when settings and the topic list are in; then keep the
+  // place (view, page, image) and the study aids in ui.json.
+  useEffect(() => {
+    if (restored.current || !settingsReady) return;
+    if (!topics.length && allCount === 0) return;
+    restored.current = true;
+    setStudy(settings.study);
+    const last = settings.last;
+    const src = parseSourceKey(last?.source);
+    if (!src || !last) return;
+    if (src.kind === "topic" && !topics.some((t) => t.name === src.name)) return;
+    if (src.kind === "playlist" && !playlists.some((l) => l.id === src.id)) return;
+    if (last.blockId !== null) pendingBlock.current = { key: sourceKey(src), id: last.blockId };
+    setActive(src);
+    setPage(last.page);
+  }, [settingsReady, topics, playlists, allCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const want = pendingBlock.current;
+    // Only in its own view; an earlier view's images may still be on screen.
+    if (!want || want.key !== activeKey || !visible.length) return;
+    const at = visible.findIndex((x) => x.block_id === want.id);
+    if (at >= 0) {
+      pendingBlock.current = null;
+      setIndex(at);
+      setTick((t) => t + 1);
+    }
+  }, [visible, activeKey]);
+  useEffect(() => {
+    if (!restored.current || !active) return;
+    patch({ last: { source: sourceKey(active), page, blockId: slide?.block_id ?? null } });
+  }, [activeKey, page, slide?.block_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (restored.current) patch({ study });
+  }, [study]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // First run: one question instead of setup (ADR-0029).
+  useEffect(() => {
+    if (settingsReady && !settings.welcomed && topics.length && api.kind === "app") openDialog(welcomeRef.current);
+  }, [settingsReady, settings.welcomed, topics.length, openDialog]);
+  const chooseSource = (next: SlideSource) => {
+    pendingBlock.current = null;
+    setFailed(new Set());
+    setAttempts(new Map());
+    setNotice(undefined);
+    setMenuOpen(false);
+    setMiniMenuOpen(false);
+    setGrid(false);
+    setActive(next);
+    setPage(0);
+    setIndex(0);
+    setRailOpen(false);
+  };
+
+  // ---- Topics: rename and remove (ADR-0029) ----
+  const renameTopic = async (from: string, to: string) => {
+    const problem = nameProblem("topic", to);
+    if (problem) return setLibraryStatus({ tone: "error", text: problem });
+    setLibraryBusy(true);
+    try {
+      const stored = await api.renameTopic(from, to);
+      if (active?.kind === "topic" && active.name === from) setActive({ kind: "topic", name: stored });
+      await loadLibrary();
+      setLibraryStatus({ tone: "ok", text: `Renamed ${from} to ${stored}.` });
+    } catch (e) {
+      setLibraryStatus({ tone: "error", text: message(e) });
+    } finally {
+      setLibraryBusy(false);
+    }
+  };
+  const removeTopic = async (name: string) => {
+    setLibraryBusy(true);
+    try {
+      await api.removeTopic(name);
+      if (active?.kind === "topic" && active.name === name) chooseSource({ kind: "all" });
+      await loadLibrary();
+      setLibraryStatus({ tone: "ok", text: `Removed ${name}. Images in your playlists and saved files stay.` });
+    } catch (e) {
+      setLibraryStatus({ tone: "error", text: message(e) });
+    } finally {
+      setLibraryBusy(false);
+    }
+  };
+
+  // ---- Content marks (ADR-0027) ----
+  const loadMarks = useCallback(() => {
+    api
+      .flagCounts()
+      .then((rows) => {
+        const n = Object.fromEntries(rows);
+        setMarks({ hidden: n.hidden ?? 0, nudity: n.nudity ?? 0 });
+      })
+      .catch(() => undefined);
+  }, []);
+  useEffect(loadMarks, [loadMarks]);
+  const markCurrent = async (flag: BlockFlag) => {
+    if (!slide) return;
+    const id = slide.block_id;
+    try {
+      await api.setBlockFlag(id, flag, true);
+      // Gone from this view at once (unless nudity is shown).
+      if (flag === "hidden" || !settings.showNudity) setSource((list) => list.filter((x) => x.block_id !== id));
+      say(flag === "hidden" ? "Hidden. Settings → Content shows it again." : "Marked as nudity.", () => {
+        api
+          .setBlockFlag(id, flag, false)
+          .then(() => {
+            setReloadKey((k) => k + 1);
+            loadMarks();
+          })
+          .catch((e) => say(message(e)));
+      });
+      loadMarks();
+    } catch (e) {
+      say(message(e));
+    }
+  };
+  const clearMarks = async (flag: BlockFlag) => {
+    try {
+      const n = await api.clearBlockFlags(flag);
+      setContentNote(flag === "hidden" ? `${n} hidden image${n === 1 ? " is" : "s are"} back.` : `Forgot ${n} nudity mark${n === 1 ? "" : "s"}.`);
+      loadMarks();
+      loadLibrary();
+    } catch (e) {
+      setContentNote(message(e));
+    }
+  };
+
+  // ---- Updates (ADR-0028): at most once a day, only if switched on ----
+  const checkUpdate = useCallback(() => {
+    setUpdate({ state: "checking" });
+    api
+      .checkUpdate()
+      .then((r) => {
+        setUpdate({ state: !r ? "none" : r.newer ? "available" : "latest", release: r });
+        patch({ lastUpdateCheck: Date.now() });
+      })
+      .catch((e) => setUpdate({ state: "error", text: `Couldn't reach GitHub: ${message(e)}` }));
+  }, [patch]);
+  const updateChecked = useRef(false);
+  useEffect(() => {
+    if (!settingsReady || updateChecked.current || api.kind !== "app" || !settings.checkUpdates) return;
+    updateChecked.current = true;
+    const last = settings.lastUpdateCheck ?? 0;
+    if (Date.now() - last > 24 * 3600 * 1000) checkUpdate();
+  }, [settingsReady, settings.checkUpdates, settings.lastUpdateCheck, checkUpdate]);
 
   const onRefresh = () => {
     setRefresh({ label: "Refreshing topics", busy: true, tone: "idle" });
@@ -585,13 +1319,32 @@ export function App() {
         activeLabel={activeLabel}
         slides={visible}
         index={safeIndex}
-        playing={playing}
+        playing={session ? !session.paused && !session.waiting : playing}
         shuffle={shuffle}
-        slideSeconds={seconds}
+        slideSeconds={session ? poseMs(session) / 1000 : seconds}
+        cover={settings.fit === "cover"}
+        study={study}
+        studyMenuOpen={studyOpen}
+        onToggleStudyMenu={toggleStudy}
+        onStudy={changeStudy}
+        onResetStudy={() => setStudy(NO_STUDY)}
+        session={sessionView}
+        onSession={() => (session ? endSession(session) : openPractice())}
+        favourite={favourite}
+        onToggleFavourite={toggleFavourite}
+        imageSize={natural && natural.id === slide?.block_id ? natural : undefined}
+        onImageLoad={onImageLoad}
         tick={tick}
         status={status}
         refresh={refresh}
         notice={notice}
+        offline={!online}
+        imagesFailed={visible.length ? 0 : failed.size}
+        onRetryImages={() => {
+          setFailed(new Set());
+          setAttempts(new Map());
+        }}
+        onShowRefreshDetails={() => openDialog(refreshDetailsRef.current)}
         fullscreen={fullscreen}
         controlsHidden={settings.controlsHidden}
         railOpen={railOpen}
@@ -621,6 +1374,12 @@ export function App() {
         onRelated={openRelated}
         mini={mini}
         onToggleMini={toggleMini}
+        compactBarOpen={compactBarOpen}
+        onToggleCompactBar={() => {
+          // A tap with the drawer open just closes the drawer.
+          if (railOpen) setRailOpen(false);
+          else setCompactBarOpen((o) => !o);
+        }}
         miniBarOpen={miniBarOpen}
         miniMenuOpen={miniMenuOpen}
         onToggleMiniBar={() => {
@@ -629,18 +1388,29 @@ export function App() {
         }}
         onToggleMiniMenu={() => setMiniMenuOpen((o) => !o)}
         onCopyLink={copyLink}
-        toast={toast}
-        onSelect={(next) => {
-          setFailed(new Set());
-          setAttempts(new Map());
-          setNotice(undefined);
-          setMenuOpen(false);
-          setMiniMenuOpen(false);
-          setActive(next);
-          setPage(0);
-          setIndex(0);
-          setRailOpen(false);
+        onSave={saveCurrent}
+        saving={saving}
+        contextMenu={contextMenu}
+        onContextMenu={(x, y) => setContextMenu({ x, y })}
+        onCloseContextMenu={() => setContextMenu(null)}
+        onHideImage={() => markCurrent("hidden")}
+        savedCount={savedCount}
+        onSearch={(query) => chooseSource({ kind: "search", query })}
+        grid={grid}
+        onToggleGrid={() => setGrid((g) => !g)}
+        onPickSlide={(i) => {
+          setIndex(i);
+          setTick((t) => t + 1);
+          setGrid(false);
         }}
+        imageReady={natural?.id === slide?.block_id}
+        clockStyle={settings.sessionClock}
+        flashKey={settings.poseFlash ? flashKey : 0}
+        onUndo={undoable ? runUndo : undefined}
+        onMarkNudity={() => markCurrent("nudity")}
+        update={update.state === "available" && update.release ? update.release : null}
+        toast={toast}
+        onSelect={chooseSource}
         onOpenLibrary={openLibrary}
         onTogglePlaylistMenu={toggleMenu}
         onSetInPlaylist={setInPlaylist}
@@ -650,13 +1420,14 @@ export function App() {
         onToggleRail={() => setRailOpen((o) => !o)}
         onOpenSettings={openSettings}
         onOpenLink={onOpenLink}
-        onPrev={() => go(-1)}
-        onNext={() => go(1)}
-        onTogglePlay={() => setPlaying((p) => !p)}
+        onPrev={() => (session ? backPose() : go(-1))}
+        onNext={() => (session ? advancePose("skip") : go(1))}
+        onTogglePlay={() => (session ? togglePause() : setPlaying((p) => !p))}
         onToggleShuffle={() => setShuffle((s) => !s)}
         onRefresh={onRefresh}
         onImageError={(id) => {
-          const s = slides.find((x) => x.block_id === id);
+          const raw = slides.find((x) => x.block_id === id);
+          const s = raw && sharpSlide(raw, bigWindow);
           const n = attempts.get(id) ?? 0;
           if (s && n < (s.fallback_urls?.length ?? 0)) setAttempts((m) => new Map(m).set(id, n + 1));
           else setFailed((f) => new Set(f).add(id));
@@ -671,6 +1442,14 @@ export function App() {
         preview={preview}
         previewLink={previewLink}
         related={related}
+        canFollow={Boolean(arenaToken?.saved)}
+        following={following}
+        onShowFollowing={() => {
+          setFollowing({ result: null });
+          loadFollowing(1);
+        }}
+        onMoreFollowing={() => loadFollowing(followingPage + 1)}
+        onAddFollowed={addFollowed}
         busy={discoverBusy}
         status={discoverStatus}
         onSearch={searchArena}
@@ -683,7 +1462,96 @@ export function App() {
           if (relatedFor && next) loadRelated(relatedFor.blockId, next);
         }}
       />
-      <SettingsPanel ref={settingsRef} settings={settings} onChange={patch} onReset={() => setSettings(DEFAULTS)} />
+      <SettingsPanel
+        ref={settingsRef}
+        settings={settings}
+        onChange={patch}
+        onReset={() => setSettings(DEFAULTS)}
+        arena={{ mode: api.kind, status: arenaToken, busy: arenaBusy, message: arenaMessage }}
+        onSaveArenaToken={saveArenaToken}
+        onClearArenaToken={clearArenaToken}
+        onOpenLink={onOpenLink}
+        about={about}
+        marks={marks}
+        onShowHidden={() => clearMarks("hidden")}
+        onForgetNudityMarks={() => clearMarks("nudity")}
+        onClearPractice={() => {
+          api
+            .clearPractice()
+            .then((n) => {
+              setContentNote(`Cleared ${n} practice session${n === 1 ? "" : "s"}.`);
+              loadLog();
+            })
+            .catch((e) => setContentNote(message(e)));
+        }}
+        contentNote={contentNote}
+        update={update}
+        onCheckUpdate={checkUpdate}
+      />
+      <PracticePanel
+        ref={practiceRef}
+        view={practiceView}
+        log={settings.showPracticeLog ? log : null}
+        onHideLog={() => patch({ showPracticeLog: false })}
+        planId={settings.practicePlan}
+        customRounds={settings.customRounds}
+        sound={settings.practiceSound}
+        from={activeLabel || "All"}
+        images={visible.length}
+        result={result}
+        favourites={drawnFavs}
+        kept={kept}
+        busy={keeping}
+        onPlan={(id) => patch({ practicePlan: id })}
+        onCustom={(rounds) => patch({ customRounds: rounds })}
+        onSound={(on) => patch({ practiceSound: on })}
+        onStart={startSession}
+        onToggleFavourite={(id) => {
+          setFavourite(id, !drawnFavs.includes(id)).catch((e) => setKept(message(e)));
+        }}
+        onKeep={keepSession}
+        onAgain={() => {
+          resumable.current = null;
+          setPracticeView("plan");
+          setKept(undefined);
+        }}
+        onResume={
+          resumable.current
+            ? () => {
+                const s = resumable.current;
+                resumable.current = null;
+                practiceRef.current?.close();
+                setResult(null);
+                if (s) commit({ ...s, paused: false });
+              }
+            : undefined
+        }
+      />
+      <ShortcutsPanel ref={shortcutsRef} />
+      <WelcomePanel
+        ref={welcomeRef}
+        topics={topics}
+        onPick={(name) => {
+          welcomeRef.current?.close();
+          chooseSource({ kind: "topic", name });
+        }}
+        onSurprise={() => {
+          welcomeRef.current?.close();
+          chooseSource({ kind: "all" });
+          setShuffle(true);
+          setPlaying(true);
+        }}
+        onClose={() => patch({ welcomed: true })}
+      />
+      <RefreshDetails
+        ref={refreshDetailsRef}
+        failed={refreshFailed.list}
+        total={refreshFailed.total}
+        onRetry={() => {
+          refreshDetailsRef.current?.close();
+          onRefresh();
+        }}
+      />
       <LibraryPanel
         ref={libraryRef}
         mode={api.kind}
@@ -695,6 +1563,8 @@ export function App() {
         playlistStatus={playlistStatus}
         onAddChannel={addChannel}
         onRemoveChannel={removeChannel}
+        onRenameTopic={renameTopic}
+        onRemoveTopic={removeTopic}
         onCreatePlaylist={(name) => createPlaylist(name, false)}
         onRenamePlaylist={(id, name) => {
           const problem = nameProblem("playlist", name);

@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useMemo, useState, type FormEvent } from "react";
-import type { ChannelPreview, RelatedChannels, TopicInfo, Vocabulary } from "./api";
+import type { ChannelPreview, FollowedPage, FollowedPick, RelatedChannels, TopicInfo, Vocabulary } from "./api";
 import type { PanelStatus } from "./LibraryPanel";
 
 // "Find channels" (ADR-0015), a native <dialog> like Settings.
@@ -19,6 +19,11 @@ export interface RelatedState {
   result: RelatedChannels | null;
 }
 
+/** "Channels you follow" (ADR-0024): null until asked for. */
+export interface FollowingState {
+  result: FollowedPage | null;
+}
+
 export interface DiscoverPanelProps {
   mode: "app" | "preview";
   vocabulary: Vocabulary | null;
@@ -28,6 +33,13 @@ export interface DiscoverPanelProps {
   /** The link or slug the preview is for (what Add uses). */
   previewLink?: string;
   related?: RelatedState | null;
+  /** A token is saved, so the followed channels can be listed. */
+  canFollow?: boolean;
+  following?: FollowingState | null;
+  onShowFollowing?: () => void;
+  onMoreFollowing?: () => void;
+  /** Add followed channels to topics (one, or all the new ones). */
+  onAddFollowed?: (picks: FollowedPick[]) => void;
   busy?: boolean;
   status?: PanelStatus;
   /** Render with the `open` attribute (W3C/layout snapshots). */
@@ -40,6 +52,8 @@ export interface DiscoverPanelProps {
 }
 
 const NEW_TOPIC = "__new__";
+/** "Add all" option: each followed channel into its best-matching topic. */
+const MATCH = "__match__";
 const fmt = (n: number) => n.toLocaleString("en-US");
 
 export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(function DiscoverPanel(p, ref) {
@@ -48,6 +62,8 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
   const [link, setLink] = useState(p.previewLink ?? "");
   const [topic, setTopic] = useState(p.defaultTopic ?? p.topics[0]?.name ?? NEW_TOPIC);
   const [newTopic, setNewTopic] = useState("");
+  /** "Add all new" target: "" = each one's suggested topic. */
+  const [followTarget, setFollowTarget] = useState("");
   useEffect(() => {
     if (p.previewLink !== undefined) setLink(p.previewLink);
   }, [p.previewLink]);
@@ -62,6 +78,7 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
   const allWords = useMemo(() => [...new Set(lists.flatMap((l) => l.words))].sort(), [lists]);
   const chosen = lists.find((l) => l.label === list);
   const app = p.mode === "app";
+  const newFollowed = (p.following?.result?.channels ?? []).filter((c) => c.in_topics.length === 0);
 
   const onSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -201,6 +218,105 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
               )}
               {p.related.result?.next_page != null && (
                 <button type="button" className="text-btn" disabled={p.busy} onClick={p.onMoreRelated}>
+                  Show more channels
+                </button>
+              )}
+            </section>
+          )}
+
+          {app && (
+            <section className="settings-section" aria-labelledby="sec-following">
+              <h3 id="sec-following">Channels you follow</h3>
+              {!p.canFollow ? (
+                <p className="list-label">Save your Are.na token in Settings to list the channels you follow.</p>
+              ) : !p.following ? (
+                <div className="form-row">
+                  <button type="button" className="text-btn" disabled={p.busy} onClick={p.onShowFollowing}>
+                    Show the channels I follow
+                  </button>
+                  <p className="list-label">One read of your Are.na account, only when you ask.</p>
+                </div>
+              ) : p.following.result ? (
+                p.following.result.channels.length ? (
+                  <>
+                    <ul className="channel-list related-list">
+                      {p.following.result.channels.map((c) => (
+                        <li key={c.slug}>
+                          <span className="channel-slug">
+                            <span className="related-title">{c.title}</span>
+                            <span className="related-meta">
+                              {c.owner ?? "Are.na"}
+                              {c.contents != null ? ` · ${fmt(c.contents)} items` : ""}
+                              {c.in_topics.length ? ` · in ${c.in_topics.join(", ")}` : ` · new: becomes its own topic “${c.own_topic}”`}
+                            </span>
+                          </span>
+                          <span className="row-actions">
+                            <button
+                              type="button"
+                              className="text-btn"
+                              disabled={p.busy}
+                              onClick={() => p.onPreview?.(c.slug)}
+                              aria-label={`Preview ${c.title}`}
+                            >
+                              Preview
+                            </button>
+                            {c.in_topics.length === 0 && (
+                              <button
+                                type="button"
+                                className="text-btn"
+                                disabled={p.busy}
+                                onClick={() => p.onAddFollowed?.([{ slug: c.slug, title: c.title, owner: c.owner, topic: null }])}
+                                aria-label={`Add ${c.title} as its own topic`}
+                              >
+                                Add
+                              </button>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {newFollowed.length > 0 && (
+                      <div className="form-row follow-all">
+                        <label htmlFor="follow-target">
+                          {newFollowed.length === 1 ? "1 isn't" : `${newFollowed.length} aren't`} in a topic yet. Add them:
+                        </label>
+                        <select id="follow-target" value={followTarget} onChange={(e) => setFollowTarget(e.target.value)}>
+                          <option value="">Each as its own topic, named after the channel</option>
+                          <option value={MATCH}>Each into the existing topic that fits it best</option>
+                          {p.topics.map((t) => (
+                            <option key={t.name} value={t.name}>
+                              All into {t.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="primary-btn"
+                          disabled={p.busy}
+                          onClick={() =>
+                            p.onAddFollowed?.(
+                              newFollowed.map((c) => ({
+                                slug: c.slug,
+                                title: c.title,
+                                owner: c.owner,
+                                topic: followTarget === MATCH ? c.suggested : followTarget || null,
+                              })),
+                            )
+                          }
+                        >
+                          Add {newFollowed.length === 1 ? "it" : `all ${newFollowed.length}`}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="list-label">You don't follow any channels on Are.na yet.</p>
+                )
+              ) : (
+                <p className="list-label">Asking Are.na</p>
+              )}
+              {p.following?.result?.next_page != null && (
+                <button type="button" className="text-btn" disabled={p.busy} onClick={p.onMoreFollowing}>
                   Show more channels
                 </button>
               )}

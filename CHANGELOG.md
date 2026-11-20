@@ -8,6 +8,63 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- Finishing 1.0 (work item 22, ADR-0029):
+  - LeMuse **remembers where you were** (view, page, image, study aids);
+  - sessions get a **large ring clock** (or small, or hidden) and a soft **flash** on each new pose;
+  - images **fade in** once loaded; pick the **grey behind the image** (Settings → Image); **Undo** after Hide
+    this image, Mark as nudity and removing a ♥;
+  - a first-run welcome: "What are you drawing today?";
+  - a **museum label**: creator, CC0 or © creator, date · medium · dimensions, credit line; **sharper museum
+    images** on big windows;
+  - **grid view** (W), **search** (/), a **Saved** view, and **rename / remove topics** in the app; CLI
+    `rename-topic`, `remove-topic --with-channels`; version 0.11.0.
+- Road to 1.0 (work item 21, ADR-0026, ADR-0027, ADR-0028):
+  - **values** in 2, 3, 4, 5, 7 or 9 tones, and **darks only / lights only / darks + lights** (I) to find the
+    absolute darks and their light counterparts; a value strip on the image;
+  - **drawing effects** (E), on screen only: lines, strokes ↕ (grass, hair, rain), strokes ↔ (water, wood grain),
+    cross-hatch. Marks follow the picture's values;
+  - **Channels you follow** shows where each channel is and adds the new ones (Add, Add all), each as **its own
+    topic named after the channel**, under a "Following on Are.na" heading (or into the best-matching topic);
+    `lemuse import-following`, `remove-channel`, `remove-topic`;
+  - a **nudity sensor**: likely nudity is hidden by default (app, dashboard, sheets); right-click Hide this image
+    or Mark as nudity; Settings → Content;
+  - a **practice log** in the session planner: this week and eight weekly bars, no streaks;
+  - an **update check** (Settings → About, daily at most, can be off) and `lemuse update-check`; a release workflow
+    with SHA256SUMS, an SBOM and build provenance;
+  - single-key shortcuts can be turned off; every control is at least 24 px and text meets contrast (checked in
+    every state); docs: privacy statement, user guide, release guide; version 0.10.0.
+- Practice tools (work item 20, ADR-0025):
+  - **timed sessions** (N): gesture warm-up, relaxed, class (30 min), long class (1 h), sketches, long study or
+    your own plan. The clock starts when the image has loaded and pauses when LeMuse is minimised. Soft ticks
+    in the last 3 s and a tone on each new pose (can be switched off). Space pause, → skip, ← back, Esc end;
+  - a **summary** of what you drew, with ♥ on each image, **Keep as a playlist**, and **Resume** after an early
+    end;
+  - **study aids**, on screen only: mirror (X), upside down (U), greyscale (G), values 2–5 and notan with a
+    darker/lighter balance (V), squint (B), grids: thirds, 4 × 4, squares, diagonals (O), all off (0). A badge
+    says when one is on;
+  - **♥ Favourites** (K), a playlist made on your first ♥; **?** lists every shortcut;
+  - Settings → About tells what LeMuse is for; alt text includes the creator; Studio's stage is neutral grey;
+  - Copy details hides your Windows user name and token-like text; Report a problem fills in only the version;
+    the bug form warns that issues are public. Code of conduct, privacy and takedown notes; version 0.9.0.
+- Polish (work item 19, ADR-0024):
+  - error codes everywhere: `--json` has `code`, the CLI exits 3–10 by kind, the app shows what to do;
+  - error pages: the dashboard answers with real HTML pages and the right headers, the app has a crash page
+    instead of a blank window, plus offline, "can't load" and Refresh details states;
+  - the window stays responsive: nothing runs on the UI thread, and Find channels and Add channel wait their
+    turn during a refresh instead of refusing;
+  - **Channels you follow** in Find channels; `lemuse arena-token check` and `following`;
+  - one running copy (a second launch focuses it); Settings → About; version 0.8.0.
+- Are.na token (work item 18, ADR-0023): paste a personal access token (free accounts too) in Settings →
+  Are.na account, or run `lemuse arena-token set`. It's checked with Are.na, then kept in Windows Credential
+  Manager, never in a file. Refreshes go about 4× faster (120 reads a minute), your private channels open,
+  and a refused token falls back to guest with a note.
+- Save (work item 17, ADR-0022): the Save button and `lemuse save` put an image's full-size original into
+  `views/<topic or playlist>/`; downloads come only from each source's own image server and must be real
+  images; network and 5xx failures are retried. Right-click on the image opens Save original, Copy link and
+  Open source page. The same picture saved twice on Are.na shows once, and a page's end moves on to the
+  next page.
+- Compact windows (work item 16): on tablets and windows under 1,024 px wide or 560 px tall, the image fills
+  the window, topics open from ☰, and the bar shows when you tap the image.
 - Dashboard, reference sheets, mini player v2 (work item 14, ADR-0019, ADR-0021):
   - `lemuse serve`: a read-only dashboard on `127.0.0.1` with a token, a JSON API and the LeMuse page for OBS,
     Home Assistant or a wall screen (`npm run build:dashboard`);

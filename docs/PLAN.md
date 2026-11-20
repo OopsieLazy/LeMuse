@@ -4,8 +4,8 @@
 drawing, design and CAD practice. Topics are fed by Are.na channels you choose and free museum collections.
 Images stream from the source; only Save writes files.
 
-**Where we are:** **v0.6.0** is released (2026-11-17): PRs #1–#9 are on `main`. The next PR is the roadmap's
-**v0.7**.
+**Where we are:** **v0.7.0** is released (2026-11-18). PRs #16–#21 (compact windows, Save, Are.na token,
+polish, practice tools, road to 1.0; v0.10.0) await review. Next: the path to 1.0 below.
 
 **How work reaches `main` (from session 8):**
 - Claude works on a branch, commits small, and pushes the branch to GitHub. That is the off-machine backup, and
@@ -14,20 +14,104 @@ Images stream from the source; only Save writes files.
   test installer) and clicks **Squash and merge**.
 - `main` is locked, so changes reach it only through a reviewed PR.
 
-## Now (session 11, owner's request of 2026-11-18)
+## Now (sessions 13–14, owner's requests of 2026-11-18)
 
-Merge order on GitHub (session 12): **CI fix (`ci/0011`, new PR) → #1 roadmap → #2** (`feat/0014`, which holds work
-items 12–15). Press "Update branch" before each merge; PR titles must start with a type (`ci:`, `docs:`, `feat:`).
+v0.7.0 is on `main`. Merge order: **#16 `feat/0016-compact-layout`** (with the CI fix) → **#17
+`feat/0017-save-originals`** → **#18 `feat/0018-arena-token`** (each stacked on the one before).
 
-| # | Work | Branch | Status |
-|---|---|---|---|
-| 1 | Earlier work: CI fix, roadmap, mini player + links, whole channels + auto refresh + JSON | #11, #10, #12, #13 | ✅ pushed, awaiting review |
-| 2 | **Mini player v2:** smaller; image fills the window; tap the image for the bottom bar; ☰ menu on the left to switch All / topics / playlists | `feat/0014-dashboard-sheets-mini` | ✅ pushed |
-| 3 | **Dashboard, first build** (ADR-0019): `lemuse serve`, read-only, 127.0.0.1 + token, JSON API + the LeMuse page for OBS, Home Assistant, a wall screen | same | ✅ |
-| 4 | **Reference sheet:** `lemuse sheet`, a printable page of N images with attribution (Print → PDF); a daily pick by date | same | ✅ |
-| 5 | **Whole channel now:** `lemuse sync --full`; a just-added channel reads up to 10,000 items | same | ✅ |
-| 6 | Plans: hosted web app on a domain (ADR-0020), daily mailer and pin automation (ADR-0021); Q19 = no, Q20 = no recorded | same + this branch | ✅ |
-| 7 | Owner: Dependency graph; lock `main`; Q18 and the new Q21–Q23 | — | ⏳ owner |
+| # | Work | Status |
+|---|---|---|
+| 1 | Compact windows like the mini player; **smooth** bar slide and rail ease (#16) | ✅ pushed |
+| 2 | CI fix carried in #16 | ✅ pushed |
+| 3 | **Save originals** (v0.8 starts): host allow-list (A-37), magic bytes, retries (D-2), `lemuse save`; right-click menu; re-saves shown once; next page at a page's end (#17) | ✅ pushed |
+| 4 | **Are.na token** in Credential Manager: Settings and `lemuse arena-token`; checked each refresh; private channels; 120 reads a minute (#18, ADR-0023) | ✅ pushed |
+| 5 | Owner: Dependency graph; lock `main`; Q21–Q23 | ⏳ owner |
+| 6 | First-refresh fill: images appear as they arrive (#18, D-103) | ✅ pushed |
+
+### Session 15: polish for a complete app (work item 19, `feat/0019-polish`, stacked on #18)
+
+Owner: "close to complete, will keep open source; error handling and error pages with proper codes,
+responsiveness, polish; test the token".
+
+| # | Work | Status |
+|---|---|---|
+| 1 | Token tested live (free tier; 21 followed channels); `lemuse arena-token check` and `following`; D-101 closed | ✅ pushed |
+| 2 | **Responsiveness:** every command off the UI thread; UI reads wait their turn during a refresh (D-74), spaced by tier | ✅ pushed |
+| 3 | **Error codes:** `Error::code()`; CLI `--json` `code` and exit codes 3–10; app `{ code, message }` (ADR-0024) | ✅ pushed |
+| 4 | **Error pages:** dashboard HTML pages with `Allow`/`WWW-Authenticate`/`Retry-After`; crash page; offline and "can't load" states; Refresh details | ✅ pushed |
+| 5 | **Channels you follow** in Find channels (one page per click) | ✅ pushed |
+| 6 | Single instance (`tauri-plugin-single-instance` 2.5.5, cooldown passed) | ✅ pushed |
+| 7 | **v0.8.0** everywhere; Settings → About | ✅ pushed |
+
+### Session 16: practice tools (work item 20, `feat/0020-practice-tools`, stacked on #19)
+
+Owner: "practice tools seems fun, goal is 1.0; hands-on from here with guardrails, maps, plans and instructions;
+after the usual passes, a final Design Analyst and Art Specialist pass with full research." Also: what would a
+major company worry about (e.g. the app opening its own GitHub)?
+
+| # | Work | Status |
+|---|---|---|
+| 1 | **Study aids** on screen only (CSS/SVG, no pixels read or saved): mirror, upside down, greyscale, values (2–5 tones + balance), squint, grid (thirds, 4 × 4, squares, diagonals); a badge while on | ✅ pushed |
+| 2 | **Timed sessions:** 6 plans + your own; clock waits for the image and pauses when hidden; ticks and tones; pause/skip/back/end; summary with ♥, Keep as a playlist, Resume | ✅ pushed |
+| 3 | **♥ Favourites** (a playlist made on the first ♥) and a **?** shortcuts sheet | ✅ pushed |
+| 4 | **Enterprise concerns:** answered (report); redacted Copy details, version-only report link, public-issue warning, AIC host removed, CODE_OF_CONDUCT, takedown + privacy in README | ✅ pushed |
+| 5 | **Hands-on map:** `docs/guide/hands-on.md` (where things live, guardrails, first exercises) | ✅ pushed |
+| 6 | Research (5 tracks) → report → **Design Analyst / Art Specialist pass**; quick wins fixed, the rest planned | ✅ pushed |
+| 7 | ADR-0025, review 0020 (admin, developer, design/art), v0.9.0, PR #20; first UI unit tests (CI) | ✅ pushed |
+
+### Session 17: road to 1.0 (work item 21, `feat/0021-road-to-1-0`, stacked on #20)
+
+Owner: settle the fixes before 1.0; more value options (darks and their light counterparts); a drawing effect
+("the effect of grass over the grass of the picture"); Q25 how hard are auto updates; Q26 yes; Q27 yes, a
+nudity sensor; Q28 yes; Q29 good; check the newly followed channels import; testing first, hands-off.
+
+| # | Work | Status |
+|---|---|---|
+| 1 | **Followed channels:** live check (27 followed, 7 in topics, refresh OK); show which topic each is in; **Add all new** with a suggested topic; `lemuse import-following`. Live: 20 added, 3,968 images, 0 errors | ✅ pushed |
+| 2 | **Values:** 2–9 tones (Munsell-like 9), **darks only / lights only / darks + lights**, a value strip | ✅ pushed |
+| 3 | **Drawing effects** (SVG filters, on screen only): lines, strokes ↕ ↔, cross-hatch; checked visually | ✅ pushed |
+| 4 | **Content safety (Q27):** a nudity sensor from titles, descriptions, museum types and channel names (18 of 15,602 flagged); hidden by default; Hide this image; Mark as nudity; Settings → Content | ✅ pushed |
+| 5 | **Practice log (Q28):** sessions kept locally; this week and 8 weeks, no streaks; can be hidden or cleared | ✅ pushed |
+| 6 | **Updates (Q25):** check GitHub Releases on launch (setting), "update available" with a link; release workflow with `SHA256SUMS`, provenance and SBOM; full auto-update path documented | ✅ pushed |
+| 7 | **Accessibility:** single-key shortcuts switch (WCAG 2.1.4); layout test checks 24 px targets and text contrast (84 fixed) | ✅ pushed |
+| 8 | **Name check (Q26):** desk search for "LeMuse": no conflict found (docs/product/name-check.md) | ✅ pushed |
+| 9 | Docs: ADR-0026/0027/0028, review 0021, privacy statement, user guide, release guide; v0.10.0; PR #21 | ✅ pushed |
+| 10 | Owner: "one big Following folder defeats the purpose": **each followed channel is its own topic**, named after it, under a "Following on Are.na" heading; library restructured (36 topics, 20 under the heading, 0 errors); `remove-channel`, `remove-topic` | ✅ pushed |
+| 11 | Owner: SignPath researched (332 projects; solo roles not addressed), then **declined** (Q24): ship unsigned with checksums and attestation | ✅ pushed |
+
+### Session 18: finish 1.0 items 3, 4, 5 (work item 22, `feat/0022-finish-1-0`, stacked on #21)
+
+Owner: "build 3, 4, 5. Then give full commands for merge." One PR, a commit series per item.
+
+| # | Work | Status |
+|---|---|---|
+| 3a | **Remember where you were:** topic, page, image, study aids (restored at launch) | ✅ pushed |
+| 3b | **Session clock:** large ring (or small, or hidden); a flash on each new pose for quiet rooms | ✅ pushed |
+| 3c | **View comfort:** image fades in once loaded (no blank flash); **surround** picker (5 neutral greys); **Undo** on hide, mark and un-♥ | ✅ pushed |
+| 3d | **First run:** "What are you drawing today?" with topic choices | ✅ pushed |
+| 4a | **Museum label:** creator, date, medium, dimensions, credit line; **CC0** or "© creator" badge (schema 9; 1,986 of 1,992 labelled live) | ✅ pushed |
+| 4b | **Sharper museum images:** Cleveland's 3,400 px print on large windows (900 px web otherwise) | ✅ pushed |
+| 5a | **Grid view** of any view (click to play from there) | ✅ pushed |
+| 5b | **Search** over titles, descriptions and creators; a **Saved** view | ✅ pushed |
+| 5c | **Rename and remove topics** in the app | ✅ pushed |
+| 6 | ADR-0029, review 0022, docs, v0.11.0, PR #22; full merge commands for #16–#22 | ✅ pushed |
+
+### Path to 1.0 (owner, session 15: "close to complete; let's complete it")
+
+Claude's recommended order, one PR each. Updated after the art review (session 16): craft before breadth.
+1. ~~**Practice tools**~~ ✅ #20.
+2. ~~Road to 1.0 essentials~~ ✅ #21 (values, effects, content, log, updates, release pipeline, a11y gates).
+3. ~~**Session craft and view comfort:**~~ ✅ #22. large timer ring (hideable), visual flash cue, crossfade after
+   `decode()`; surround picker (5 neutral steps); remember topic, position, plan and aids; Undo toasts; first run
+   "What are you drawing today?" (DA-13, DA-6, DA-14). (The single-key switch shipped in #21.)
+4. ~~**Museum label and sharpness:**~~ ✅ #22. tombstone label (creator, *title*, date, medium, dimensions, credit line),
+   CC0 / "rights belong to the creator" badges; Cleveland print (3,400 px) on large windows (DA-11, DA-12).
+5. ~~**Browse:**~~ ✅ #22 (still open: drag to reorder playlists, search across channel names). Grid view, a search box over the existing index, a Saved view, rename and remove topics.
+6. **Local folders** as a source; hide a whole channel (DA-15).
+7. **Desktop finish:** tray icon, start with Windows, `lemuse backup`; Save provenance sidecar (source, creator,
+   licence).
+8. **1.0 release:** third-party notices, the Tauri auto-updater (ADR-0028 §2), tag v1.0.0 and publish the draft
+   the release workflow makes (docs/release.md). Unsigned by decision (Q24).
 
 ## Roadmap
 
@@ -52,14 +136,14 @@ Claude's recommendation; the owner can reorder.
 
 ### v0.8: Save and sign in (finishes M1)
 
-- [ ] **Save** the original of the current image: download → content store → `views/<topic>/`, with a "saved"
-      mark. Includes streaming download with hash-on-write (D-1) and a download host allow-list per source
-      (A-37)
+- [x] **Save** the original of the current image into `views/<topic>/`, with a "saved" mark; download host
+      allow-list (A-37); retries (D-2) (#17, ADR-0022). Streaming download with hash-on-write (D-1) still open
 - [ ] **Are.na token** in Windows Credential Manager (Settings field + `lemuse auth set|clear`):
       private channels, and 120 reads/min instead of 30
-- [ ] **Import the channels you follow** (needs the token)
+- [x] **Channels you follow** in Find channels (#19, ADR-0024)
 - [ ] **Load more:** fetch a channel's next pages when a slideshow runs low (ADR-0007 #3, D-23)
-- [ ] Retries on 5xx and network errors (D-2); single-instance app (a second launch focuses the first window)
+- [x] Single-instance app (a second launch focuses the first window) (#19)
+- [x] Error codes, error pages, a responsive window, About (#19, ADR-0024)
 
 ### v0.9: Browse and organize (M2)
 
@@ -72,12 +156,12 @@ Claude's recommendation; the owner can reorder.
 
 ### v0.10: Practice tools (drawing-focused)
 
-- [ ] **Timed sessions:** for example 10 × 30 s, then 5 × 2 min, then 1 × 10 min, with a session summary.
-      Pauses, skips and a final count
-- [ ] **Study aids on the image:** mirror, greyscale, value view (posterize to 3–5 tones), grid overlay
-      (thirds, 4×4, custom), zoom and pan to a detail
+- [x] **Timed sessions** with a summary; pauses, skips, back, Resume (#20, ADR-0025)
+- [x] **Study aids on the image:** mirror, upside down, greyscale, values 2–5 + balance, squint, grids (#20).
+      Still open: zoom and pan to a detail; exact L* / auto-threshold (needs a CORS check on image hosts)
 - [ ] **Compare:** two to four images side by side
-- [ ] **Seen and favorite:** remember what you've seen to avoid repeats; a ♥ that feeds a Favorites playlist
+- [x] **♥ Favourites** playlist (#20) · [ ] remember what you've seen to avoid repeats
+- [ ] **Practice log** (only if Q28 = yes): a forgiving weekly log, hideable, never a streak chain
 - [ ] **Daily set:** a fresh 20 from your topics each day
 
 ### v0.11: iPhone and automation (ADR-0016)
@@ -155,6 +239,12 @@ Claude's recommendation; the owner can reorder.
 | Q21 | Host LeMuse Web (stage 1, static, no user data) on the friend's domain? Which name, and who runs the server? | **Open** (ADR-0020); supersedes Q18 if yes |
 | Q22 | Which email account sends the daily mailer (app password in Credential Manager)? | **Open** (ADR-0021) |
 | Q23 | Contact Are.na before a public stage 2 or any paid tier? | **Open**, recommended yes (ADR-0020) |
+| Q24 | Signing identity for the installer: SignPath Foundation (free, SignPath named as publisher) or an OV certificate (~$150–300/yr, your name)? | ✅ **No SignPath** (2026-11-19). Ship unsigned: SHA256SUMS + build attestation, and the SmartScreen note in the release. An OV certificate can be added later in the workflow's Sign slot |
+| Q25 | Auto-update (Tauri updater needs a permanent private key) or manual updates via GitHub Releases / winget? | ✅ (2026-11-19) "How hard? At least detect new versions." Update check built (#21); the updater is one PR after the first published release (ADR-0028 §2) |
+| Q26 | Run the "LeMuse" trademark search (USPTO, EUIPO, UKIPO; classes 9 and 42) before 1.0 branding? | ✅ "Sure; likely will use regardless." Desk search clean (docs/product/name-check.md); formal search only before paid distribution |
+| Q27 | Nudity default: hide by default with a per-topic opt-in, or show all with a hide action? | ✅ "Yes, needs a nudity sensor": hidden by default, text sensor + your marks (#21, ADR-0027) |
+| Q28 | Keep any practice history (a local log) at all? | ✅ Yes: local log, weeks not streaks (#21) |
+| Q29 | Conduct reports: GitHub's private reporting form (current), or another contact? | ✅ Good as is |
 | Q13 | How should handoff commands look? | ✅ Comment on its own line **above** each command, never trailing, so a whole line copies cleanly. PRs describe What / Why / How + checklist |
 
 ## Deferred findings register
@@ -162,7 +252,6 @@ Claude's recommendation; the owner can reorder.
 | ID | From | Finding | Planned in |
 |---|---|---|---|
 | D-1 | Review 0001 r1 | Downloads buffered fully in memory; large CAD files need streaming | M1 |
-| D-2 | Review 0001 r1 | Retry covers 429 only; add 5xx and network errors | M1 |
 | D-3 | Review 0001 r1 | A partially failed block leaves orphan objects | M3 |
 | D-5 | Review 0001 r1 | Renamed titles leave stale view files | M2 |
 | D-12 | Review 0001 r2 | The CSP pins one CloudFront hostname for originals | M1 (load errors now skip the slide, PR #3; surface them in the UI) |
@@ -177,13 +266,19 @@ Claude's recommendation; the owner can reorder.
 | D-30 | Review 0005 | The review snapshot refreshes asynchronously after edits, so it can lag by one tool call | Mitigated: run `review-snapshot.mjs` before commits; the agent blocks on a stale snapshot |
 | D-33 | Review 0006 | Auto-hide in docked layouts re-fits the image when the bar hides (the bar never overlays, by owner rule) | Accepted |
 | A-11 | Review 0002 | Starter Are.na channels are third-party curated and may change | Owner review; M2 topic editor |
-| A-37 | Review 0008 | Download mode (and Save) fetch image URLs from any https host the API names | Save PR: allow-list download hosts per connector, matching the CSP |
 | D-42 | Review 0008 | npm audit exception for picomatch GHSA-fc5q-39xc-vjpf (dev-only, no fixed release) | Re-check by 2026-12-15; the gate fails on expiry |
 | D-53 | Review 0009 | Shuffle mixes the current page only | M2: shuffle across pages (random order in SQL) |
 | D-54 | Review 0009 | Word-based categories mislabel some images; untitled images rely on channel names | M2: manual corrections; later maybe a local image model (ADR-0015 option B) |
-| D-74 | Review 0013 | Add channel and Find channels are refused during a long refresh | v0.8: queue them |
 | D-75 | Review 0013 | The installer doesn't ship `lemuse.exe` (needed for Task Scheduler) | v0.8: bundle the CLI as a sidecar |
 | D-78 | Review 0014 | The dashboard page loads the newest 300 per topic | Page through `/api/v1/slides` |
 | D-80 | Review 0014 | The app doesn't start the dashboard; the token isn't kept between runs | Settings switch; token in Credential Manager (v0.8) |
+| D-94 | Review 0017 | Save Are.na attachments (STEP, DXF, PDF) | With a file-type allow-list |
 | A-50 | Review 0010 | CI actions pinned to Node 20 releases (deprecated); ubuntu-latest moving to Ubuntu 26 | Next CI touch: bump pinned SHAs (14-day cooldown) |
 | A-39 | Review 0009 | In-app Are.na search needs Premium | Only if the owner buys Premium (Q10 = no) |
+| A-108 | Review 0020 | Favourites is found by its name | Browse PR: a `role` column if renames bite |
+| DA-6, DA-13, DA-14, DA-17 | Review 0020 | Surround picker; timer ring, flash cue, crossfade; first run, remember position; shortcut switch | Path to 1.0 #2 |
+| DA-11, DA-12 | Review 0020 | Cleveland 900 px images; museum label | Path to 1.0 #3 |
+| DA-15 | Review 0020 | Hide a whole channel | Path to 1.0 #6 (hide image and nudity done in #21) |
+| A-121 | Review 0021 | Image-model nudity sensor | Only if it fits the installer budget and needs no stored images (ADR-0027) |
+| ADR-0028 §2 | Review 0021 | Tauri auto-updater | After the first published release; key in Actions secrets |
+| ADR-0026 | Review 0021 | Diagonal strokes, stroke size, exact L* / auto-threshold (CORS check) | Session craft PR |

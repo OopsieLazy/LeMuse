@@ -1,0 +1,15 @@
+feat: LeMuse 0.11, everything from compact windows to finishing 1.0
+
+✅ #16 Compact layout for tablets and small windows; CI fix
+✅ #17 Save originals into your LeMuse folder (host allow-list, real image check)
+✅ #18 Are.na token in Windows Credential Manager (free accounts, 120 reads/min)
+✅ #19 Error codes and pages, nothing on the UI thread, channels you follow, single instance
+✅ #20 Timed sessions with a summary; study aids; favourites; ? shortcuts
+✅ #21 Values 2–9 and drawing effects; followed channels as own topics; nudity sensor; practice log;
+       update check; release workflow (SHA256SUMS, SBOM, provenance); 24 px and contrast gates
+✅ #22 Remember your place; ring clock and pose flash; surround; undo; museum label and sharper
+       museum images; grid view, search, Saved; rename and remove topics
+✅ 122 Rust, 18 UI unit, W3C 102, layout 13,856 checks (both themes); secret scan clean; version 0.11.0
+
+Reviewed-by: admin and developer passes (docs/reviews/0016 to 0022), design/art pass (0020)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

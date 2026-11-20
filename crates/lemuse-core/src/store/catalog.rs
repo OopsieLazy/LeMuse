@@ -19,6 +19,9 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0004_playlist_block_index.sql"),
     include_str!("../../migrations/0005_categories.sql"),
     include_str!("../../migrations/0006_resume_cursor.sql"),
+    include_str!("../../migrations/0007_block_dupes.sql"),
+    include_str!("../../migrations/0008_flags_practice.sql"),
+    include_str!("../../migrations/0009_museum_label.sql"),
 ];
 
 /// Caps that keep a scripted or runaway UI from growing local state without
@@ -27,6 +30,45 @@ pub const MAX_PLAYLISTS: i64 = 500;
 pub const MAX_PLAYLIST_ITEMS: i64 = 20_000;
 /// Across all playlists (review 0008 A-33).
 pub const MAX_TOTAL_PLAYLIST_ITEMS: i64 = 200_000;
+
+/// The marks a user can put on an image (ADR-0027); each is also a category id.
+pub const BLOCK_FLAGS: &[&str] = &["hidden", "nudity"];
+/// Practice log bounds: the newest sessions are kept.
+pub const MAX_PRACTICE_SESSIONS: i64 = 5_000;
+pub const MAX_PRACTICE_DRAWN: usize = 500;
+
+/// A session to keep (from the app).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub struct PracticeRecord {
+    /// Unix seconds (UTC).
+    pub started_at: i64,
+    pub seconds: i64,
+    #[serde(default)]
+    pub skipped: i64,
+    pub plan: String,
+    pub source: String,
+    pub finished: bool,
+    pub drawn: Vec<PracticeDrawn>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub struct PracticeDrawn {
+    pub block_id: i64,
+    pub seconds: i64,
+}
+
+/// A kept session, as the log shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PracticeSession {
+    pub id: i64,
+    pub started_at: i64,
+    pub seconds: i64,
+    pub drawings: i64,
+    pub skipped: i64,
+    pub plan: String,
+    pub source: String,
+    pub finished: bool,
+}
 
 /// One slideshow frame (ADR-0007). `display_url` is streamed from the source
 /// CDN; `saved` says whether an original is already in the local store.
@@ -51,6 +93,26 @@ pub struct Slide {
     /// The block's other stored image sizes, best first: tried in turn when
     /// `display_url` fails before the slide is skipped (ADR-0016).
     pub fallback_urls: Vec<String>,
+    /// Museum label fields (ADR-0029); None when the source has none.
+    pub date: Option<String>,
+    pub medium: Option<String>,
+    pub dimensions: Option<String>,
+    pub credit: Option<String>,
+    /// `CC0-1.0` for open-access museum works; None when rights are unknown.
+    pub license_id: Option<String>,
+    /// A small size for the grid view (Are.na's `small`, else `medium`, else
+    /// the display image).
+    pub thumb_url: String,
+}
+
+/// What Save needs to know about one block (ADR-0022).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveTarget {
+    pub connector: String,
+    pub title: Option<String>,
+    pub original_url: Option<String>,
+    /// `(sha256, ext)` of an original already in the store.
+    pub stored: Option<(String, String)>,
 }
 
 /// Every stored link of one image, for `lemuse export-links` (ADR-0016).
@@ -74,6 +136,11 @@ pub struct LinkRow {
 pub enum Scope<'a> {
     Collections(Vec<(&'a str, &'a str)>),
     Playlist(i64),
+    /// Full-text search over titles, descriptions, contents and creators
+    /// (ADR-0029). The words are made safe by [`fts_query`]; best match first.
+    Search(String),
+    /// Everything you saved (an original in the store), newest save first.
+    Saved,
 }
 
 impl<'a> Scope<'a> {
@@ -82,9 +149,16 @@ impl<'a> Scope<'a> {
     }
 
     fn is_empty_collections(&self) -> bool {
-        matches!(self, Scope::Collections(k) if k.is_empty())
+        match self {
+            Scope::Collections(k) => k.is_empty(),
+            Scope::Search(q) => fts_query(q).is_empty(),
+            _ => false,
+        }
     }
 }
+
+/// Bumped when the re-upload rule changes, so groups are rebuilt.
+const DUPES_VERSION: &str = "2";
 
 /// Most categories one filter may name on each side.
 pub const MAX_FILTER_CATEGORIES: usize = 24;
@@ -127,6 +201,20 @@ impl CategoryFilter {
     pub fn is_empty(&self) -> bool {
         self.include.is_empty() && self.exclude.is_empty()
     }
+
+    /// The content defaults every view starts from (ADR-0027): images you hid
+    /// are never shown, and likely nudity only when asked for. A filter that
+    /// names a category itself (include or exclude) is left as it is.
+    pub fn with_content_defaults(mut self, show_nudity: bool) -> Self {
+        let named = |f: &Self, id: &str| f.include.iter().chain(&f.exclude).any(|c| c == id);
+        if !named(&self, "hidden") {
+            self.exclude.push("hidden".into());
+        }
+        if !show_nudity && !named(&self, "nudity") {
+            self.exclude.push("nudity".into());
+        }
+        self
+    }
 }
 
 /// How many images of a scope (after the filter) are in one category.
@@ -160,7 +248,7 @@ const SLIDES_SQL: &str = "WITH topic_blocks AS ({blocks}),
          FROM block_media WHERE role IN ('large', 'medium', 'original')
      )
      SELECT b.id, b.title, d.url, d.width, d.height, b.page_url, b.creator,
-            b.attribution_text,
+            b.attribution_text, b.date_text, b.medium, b.dimensions, b.credit_line, b.license_id,
             EXISTS (SELECT 1 FROM block_files f WHERE f.block_id = b.id) AS saved,
             (SELECT group_concat(bc.category, ',') FROM block_categories bc
              WHERE bc.block_id = b.id) AS cats,
@@ -171,7 +259,10 @@ const SLIDES_SQL: &str = "WITH topic_blocks AS ({blocks}),
                  WHERE m.block_id = b.id AND m.url <> d.url
                    AND m.role IN ('large', 'medium', 'original', 'small')
                  ORDER BY CASE m.role WHEN 'large' THEN 0 WHEN 'medium' THEN 1
-                                      WHEN 'original' THEN 2 ELSE 3 END) f) AS fallbacks
+                                      WHEN 'original' THEN 2 ELSE 3 END) f) AS fallbacks,
+            COALESCE((SELECT t.url FROM block_media t WHERE t.block_id = b.id
+                      AND t.role IN ('small', 'medium')
+                      ORDER BY CASE t.role WHEN 'small' THEN 0 ELSE 1 END LIMIT 1), d.url) AS thumb
      FROM topic_blocks tb
      JOIN blocks b ON b.id = tb.block_id
      JOIN display d ON d.block_id = b.id AND d.pick = 1
@@ -190,6 +281,12 @@ const BY_UPDATED: &str = "b.remote_updated_at DESC, b.id DESC";
 const BY_ADDED: &str = "tb.ord DESC";
 const PLAYLIST_BLOCKS: &str =
     "SELECT block_id, seq AS ord FROM playlist_items WHERE playlist_id = ?3";
+/// FTS5 `rank` is lower for better matches: negate it so "ord DESC" is best first.
+const SEARCH_BLOCKS: &str =
+    "SELECT rowid AS block_id, -rank AS ord FROM blocks_fts WHERE blocks_fts MATCH ?3";
+/// Saved originals: the newest save (highest file row) first.
+const SAVED_BLOCKS: &str =
+    "SELECT bf.block_id, MAX(bf.rowid) AS ord FROM block_files bf GROUP BY bf.block_id";
 
 /// CTE body for blocks in `n` collections; parameters start at `?first`.
 fn collection_blocks(n: usize, first: usize) -> String {
@@ -221,6 +318,12 @@ fn scope_sql(scope: &Scope<'_>, filter: &CategoryFilter) -> (String, Vec<Value>)
             values.push(Value::Integer(*id));
             PLAYLIST_BLOCKS.to_string()
         }
+        Scope::Search(q) => {
+            values.push(Value::Text(fts_query(q)));
+            SEARCH_BLOCKS.to_string()
+        }
+        // No parameters of its own: the filter's values start at `?3`.
+        Scope::Saved => SAVED_BLOCKS.to_string(),
     };
     let mut conds = Vec::new();
     for (ids, negate) in [(&filter.include, ""), (&filter.exclude, "NOT ")] {
@@ -238,14 +341,26 @@ fn scope_sql(scope: &Scope<'_>, filter: &CategoryFilter) -> (String, Vec<Value>)
     } else {
         conds.join(" AND ")
     };
-    (
-        format!("SELECT s.block_id, s.ord FROM ({base}) s WHERE {cond}"),
-        values,
-    )
+    let sql = match scope {
+        // One block per re-upload group (the oldest in view); see block_dupes.
+        Scope::Collections(_) => format!(
+            "SELECT block_id, ord FROM (
+                 SELECT s.block_id, s.ord, ROW_NUMBER() OVER (
+                     PARTITION BY COALESCE(g.grp, s.block_id) ORDER BY s.block_id) AS keep
+                 FROM ({base}) s LEFT JOIN block_dupes g ON g.block_id = s.block_id
+                 WHERE {cond})
+             WHERE keep = 1"
+        ),
+        // Playlists, search and Saved show exactly what matched.
+        Scope::Playlist(_) | Scope::Search(_) | Scope::Saved => {
+            format!("SELECT s.block_id, s.ord FROM ({base}) s WHERE {cond}")
+        }
+    };
+    (sql, values)
 }
 
 fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
-    let cats: Option<String> = r.get(9)?;
+    let cats: Option<String> = r.get(14)?;
     let mut categories: Vec<String> = cats
         .as_deref()
         .unwrap_or("")
@@ -263,17 +378,23 @@ fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
         page_url: r.get(5)?,
         creator: r.get(6)?,
         attribution: r.get(7)?,
-        saved: r.get(8)?,
+        date: r.get(8)?,
+        medium: r.get(9)?,
+        dimensions: r.get(10)?,
+        credit: r.get(11)?,
+        license_id: r.get(12)?,
+        saved: r.get(13)?,
         categories,
-        connector: r.get(10)?,
-        original_url: r.get(11)?,
+        connector: r.get(15)?,
+        original_url: r.get(16)?,
         fallback_urls: r
-            .get::<_, Option<String>>(12)?
+            .get::<_, Option<String>>(17)?
             .unwrap_or_default()
             .lines()
             .filter(|u| !u.is_empty())
             .map(str::to_string)
             .collect(),
+        thumb_url: r.get(18)?,
     })
 }
 
@@ -461,8 +582,10 @@ impl Catalog {
         tx.execute(
             "INSERT INTO blocks (connector, remote_id, kind, title, description, content,
                  page_url, origin_url, license_id, creator, attribution_text,
-                 non_commercial, no_ai, remote_updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                 non_commercial, no_ai, remote_updated_at,
+                 date_text, medium, dimensions, credit_line)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+                     ?15, ?16, ?17, ?18)
              ON CONFLICT (connector, remote_id) DO UPDATE SET
                  kind = excluded.kind,
                  -- Archive policy (ADR-0013, review 0007 A-29): an update
@@ -477,6 +600,10 @@ impl Catalog {
                  attribution_text = COALESCE(excluded.attribution_text, blocks.attribution_text),
                  non_commercial = excluded.non_commercial, no_ai = excluded.no_ai,
                  remote_updated_at = excluded.remote_updated_at,
+                 date_text = COALESCE(excluded.date_text, blocks.date_text),
+                 medium = COALESCE(excluded.medium, blocks.medium),
+                 dimensions = COALESCE(excluded.dimensions, blocks.dimensions),
+                 credit_line = COALESCE(excluded.credit_line, blocks.credit_line),
                  fetched_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')",
             params![
                 b.source.connector,
@@ -493,6 +620,10 @@ impl Catalog {
                 b.license.non_commercial,
                 b.license.no_ai,
                 b.remote_updated_at,
+                b.label.date,
+                b.label.medium,
+                b.label.dimensions,
+                b.label.credit,
             ],
         )?;
         let id: i64 = tx.query_row(
@@ -604,7 +735,7 @@ impl Catalog {
         let (blocks, values) = scope_sql(scope, filter);
         let order = match scope {
             Scope::Collections(_) => BY_UPDATED,
-            Scope::Playlist(_) => BY_ADDED,
+            Scope::Playlist(_) | Scope::Search(_) | Scope::Saved => BY_ADDED,
         };
         let sql = SLIDES_SQL
             .replace("{blocks}", &blocks)
@@ -770,6 +901,13 @@ impl Catalog {
                     rows += 1;
                 }
             }
+            // The user's own marks (ADR-0027) join the derived categories, so
+            // the normal filter hides them. OR IGNORE: the sensor may agree.
+            rows += tx.execute(
+                "INSERT OR IGNORE INTO block_categories (block_id, category)
+                 SELECT block_id, flag FROM block_flags",
+                [],
+            )?;
         }
         tx.execute(
             "INSERT INTO derived_state (key, value) VALUES ('categories', ?1)
@@ -778,6 +916,57 @@ impl Catalog {
         )?;
         tx.commit()?;
         Ok(rows)
+    }
+
+    /// Group Are.na re-saves: image blocks saved from the **same source image
+    /// address** with the **same pixel size** are one picture uploaded twice.
+    /// (Titles alone aren't enough: product shots and site screenshots share
+    /// titles, and Are.na's file names are unique per upload.) Bare-domain
+    /// sources such as `https://www.instagram.com/` don't count. Museum blocks
+    /// are left alone. Returns the number of blocks in a group.
+    pub fn rebuild_dupes(&mut self) -> Result<usize> {
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM block_dupes", [])?;
+        let n = tx.execute(
+            "WITH img AS (
+                 SELECT b.id, b.origin_url AS o, m.width AS w, m.height AS h,
+                        length(b.origin_url) - length(replace(b.origin_url, '/', '')) AS slashes
+                 FROM blocks b JOIN block_media m ON m.block_id = b.id AND m.role = 'original'
+                 WHERE b.connector = 'arena' AND b.kind = 'image'
+                   AND m.width > 0 AND m.height > 0 AND b.origin_url IS NOT NULL),
+             grouped AS (
+                 SELECT id, MIN(id) OVER (PARTITION BY o, w, h) AS g,
+                        COUNT(*) OVER (PARTITION BY o, w, h) AS n
+                 FROM img
+                 WHERE slashes >= 3 AND NOT (slashes = 3 AND o LIKE '%/'))
+             INSERT INTO block_dupes (block_id, grp)
+             SELECT id, g FROM grouped WHERE n > 1",
+            [],
+        )?;
+        tx.execute(
+            "INSERT INTO derived_state (key, value) VALUES ('dupes', ?1)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            params![DUPES_VERSION],
+        )?;
+        tx.commit()?;
+        Ok(n)
+    }
+
+    /// Build the re-upload groups once after an update that introduced them.
+    pub fn ensure_dupes(&mut self) -> Result<bool> {
+        let built: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT value FROM derived_state WHERE key = 'dupes'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if built.as_deref() == Some(DUPES_VERSION) {
+            return Ok(false);
+        }
+        self.rebuild_dupes()?;
+        Ok(true)
     }
 
     /// Rebuild categories only if this vocabulary hasn't built them yet
@@ -904,6 +1093,164 @@ impl Catalog {
         Ok(())
     }
 
+    // ── Flags: hide an image, mark nudity the sensor missed (ADR-0027) ──
+
+    /// Set or clear one of the user's marks on an image. It takes effect at
+    /// once (block_categories is updated too) and survives every rebuild.
+    pub fn set_block_flag(&mut self, block_id: i64, flag: &str, on: bool) -> Result<()> {
+        if !BLOCK_FLAGS.contains(&flag) {
+            return Err(Error::Config(format!("unknown mark `{flag}`")));
+        }
+        let tx = self.conn.transaction()?;
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS (SELECT 1 FROM blocks WHERE id = ?1)",
+            [block_id],
+            |r| r.get(0),
+        )?;
+        if !exists {
+            return Err(Error::Config(
+                "that image is no longer in the catalog".into(),
+            ));
+        }
+        if on {
+            tx.execute(
+                "INSERT OR IGNORE INTO block_flags (block_id, flag) VALUES (?1, ?2)",
+                params![block_id, flag],
+            )?;
+            tx.execute(
+                "INSERT OR IGNORE INTO block_categories (block_id, category) VALUES (?1, ?2)",
+                params![block_id, flag],
+            )?;
+        } else {
+            tx.execute(
+                "DELETE FROM block_flags WHERE block_id = ?1 AND flag = ?2",
+                params![block_id, flag],
+            )?;
+            if flag == "hidden" {
+                tx.execute(
+                    "DELETE FROM block_categories WHERE block_id = ?1 AND category = 'hidden'",
+                    [block_id],
+                )?;
+            }
+        }
+        tx.commit()?;
+        // Un-marking nudity: re-sort, so only what the sensor itself found stays.
+        if !on && flag == "nudity" {
+            self.rebuild_categories(categories::vocabulary())?;
+        }
+        Ok(())
+    }
+
+    /// How many images carry each mark.
+    pub fn flag_counts(&self) -> Result<Vec<(String, i64)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT flag, COUNT(*) FROM block_flags GROUP BY flag ORDER BY flag")?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<std::result::Result<Vec<(String, i64)>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Remove every mark of one kind ("Show hidden images again"). Returns how many.
+    pub fn clear_block_flags(&mut self, flag: &str) -> Result<usize> {
+        if !BLOCK_FLAGS.contains(&flag) {
+            return Err(Error::Config(format!("unknown mark `{flag}`")));
+        }
+        let tx = self.conn.transaction()?;
+        let n = tx.execute("DELETE FROM block_flags WHERE flag = ?1", [flag])?;
+        if flag == "hidden" {
+            tx.execute("DELETE FROM block_categories WHERE category = 'hidden'", [])?;
+        }
+        tx.commit()?;
+        if flag == "nudity" && n > 0 {
+            self.rebuild_categories(categories::vocabulary())?;
+        }
+        Ok(n)
+    }
+
+    // ── Practice log (ADR-0027, owner Q28) ──
+
+    /// Keep one finished or stopped session. Sessions with no drawings aren't kept.
+    pub fn record_practice(&mut self, s: &PracticeRecord) -> Result<Option<i64>> {
+        if s.drawn.is_empty() {
+            return Ok(None);
+        }
+        if s.drawn.len() > MAX_PRACTICE_DRAWN
+            || s.plan.chars().count() > 80
+            || s.source.chars().count() > 120
+            || !(0..=24 * 3600).contains(&s.seconds)
+            || s.skipped < 0
+            || s.drawn
+                .iter()
+                .any(|d| !(0..=24 * 3600).contains(&d.seconds))
+        {
+            return Err(Error::Config(
+                "that practice session doesn't look right".into(),
+            ));
+        }
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "INSERT INTO practice_sessions (started_at, seconds, drawings, skipped, plan, source, finished)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                s.started_at,
+                s.seconds,
+                s.drawn.len() as i64,
+                s.skipped,
+                s.plan,
+                s.source,
+                s.finished
+            ],
+        )?;
+        let id = tx.last_insert_rowid();
+        {
+            let mut ins = tx.prepare(
+                "INSERT INTO practice_drawn (session_id, position, block_id, seconds)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for (i, d) in s.drawn.iter().enumerate() {
+                ins.execute(params![id, i as i64, d.block_id, d.seconds])?;
+            }
+        }
+        // Keep the log bounded: the oldest sessions go first.
+        tx.execute(
+            "DELETE FROM practice_sessions WHERE id NOT IN
+             (SELECT id FROM practice_sessions ORDER BY started_at DESC LIMIT ?1)",
+            [MAX_PRACTICE_SESSIONS],
+        )?;
+        tx.commit()?;
+        Ok(Some(id))
+    }
+
+    /// Sessions that started at or after `since` (Unix seconds), newest first.
+    pub fn practice_sessions(&self, since: i64) -> Result<Vec<PracticeSession>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, started_at, seconds, drawings, skipped, plan, source, finished
+             FROM practice_sessions WHERE started_at >= ?1 ORDER BY started_at DESC LIMIT 2000",
+        )?;
+        let rows = stmt
+            .query_map([since], |r| {
+                Ok(PracticeSession {
+                    id: r.get(0)?,
+                    started_at: r.get(1)?,
+                    seconds: r.get(2)?,
+                    drawings: r.get(3)?,
+                    skipped: r.get(4)?,
+                    plan: r.get(5)?,
+                    source: r.get(6)?,
+                    finished: r.get::<_, i64>(7)? == 1,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Forget the whole practice log. Returns how many sessions went.
+    pub fn clear_practice(&mut self) -> Result<usize> {
+        Ok(self.conn.execute("DELETE FROM practice_sessions", [])?)
+    }
+
     /// Ids of the playlists that contain `block_id`.
     pub fn playlists_with(&self, block_id: i64) -> Result<Vec<i64>> {
         let mut stmt = self.conn.prepare(
@@ -923,6 +1270,46 @@ impl Catalog {
             limit,
             offset,
         )
+    }
+
+    /// What Save needs for one block: connector, title, the full-size image
+    /// link, and an original already in the store (if any).
+    pub fn save_target(&self, block_id: i64) -> Result<Option<SaveTarget>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT b.connector, b.title,
+                        (SELECT url FROM block_media m WHERE m.block_id = b.id AND m.role = 'original'),
+                        (SELECT f.sha256 || '.' || f.ext FROM block_files bf JOIN files f ON f.sha256 = bf.sha256
+                         WHERE bf.block_id = b.id AND bf.role = 'original' LIMIT 1)
+                 FROM blocks b WHERE b.id = ?1",
+                params![block_id],
+                |r| {
+                    let stored: Option<String> = r.get(3)?;
+                    Ok(SaveTarget {
+                        connector: r.get(0)?,
+                        title: r.get(1)?,
+                        original_url: r.get(2)?,
+                        stored: stored.and_then(|s| {
+                            s.split_once('.').map(|(h, e)| (h.to_string(), e.to_string()))
+                        }),
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    /// Record a saved file for a block (local state; refreshes never remove it).
+    pub fn add_block_file(&self, block_id: i64, f: &crate::model::StoredFile) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO files (sha256, ext, size_bytes) VALUES (?1, ?2, ?3)",
+            params![f.sha256, f.ext, f.size_bytes as i64],
+        )?;
+        self.conn.execute(
+            "INSERT OR IGNORE INTO block_files (block_id, sha256, role) VALUES (?1, ?2, ?3)",
+            params![block_id, f.sha256, f.role],
+        )?;
+        Ok(())
     }
 
     /// The Are.na block id behind a local block, if it came from Are.na.
@@ -1021,6 +1408,7 @@ mod tests {
                 role: "original".into(),
             }],
             remote_updated_at: Some("2026-11-01T00:00:00Z".into()),
+            label: Default::default(),
         }
     }
 
@@ -1279,6 +1667,226 @@ mod tests {
     }
 
     #[test]
+    fn nudity_sensor_and_hidden_marks_filter_out_and_survive_rebuilds() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        // Distinct images (the shared sample file would group them as re-uploads).
+        let add = |c: &mut Catalog, id: &str, title: &str| {
+            let mut b = sample(id, title);
+            b.media = vec![media("large", &format!("https://images.are.na/{id}.jpg"))];
+            b.files.clear();
+            let bid = c.upsert_block(&b).unwrap();
+            c.link_block(refs, bid, None).unwrap();
+            bid
+        };
+        let nude = add(&mut c, "1", "Seated Nude, study");
+        let chair = add(&mut c, "2", "Oak chair");
+        let planet = add(&mut c, "3", "Venus over the hills");
+        let v = crate::categories::vocabulary();
+        c.rebuild_categories(v).unwrap();
+        let keys = [("arena", "refs")];
+        let scope = Scope::collections(&keys);
+        // The app's default: hide likely nudity and the user's hidden images.
+        let safe = CategoryFilter {
+            include: vec![],
+            exclude: vec!["nudity".into(), "hidden".into()],
+        };
+        let ids = |c: &Catalog| {
+            let mut v: Vec<i64> = c
+                .slides_in(&scope, &safe, 10, 0)
+                .unwrap()
+                .iter()
+                .map(|s| s.block_id)
+                .collect();
+            v.sort();
+            v
+        };
+        // The sensor caught "Nude"; the planet Venus is left alone.
+        assert_eq!(ids(&c), vec![chair, planet]);
+        // Hide the chair; mark the planet as nudity the sensor missed.
+        c.set_block_flag(chair, "hidden", true).unwrap();
+        c.set_block_flag(planet, "nudity", true).unwrap();
+        assert!(ids(&c).is_empty());
+        // Marks survive a full rebuild (a refresh re-sorts every block).
+        c.rebuild_categories(v).unwrap();
+        assert!(ids(&c).is_empty());
+        assert_eq!(
+            c.flag_counts().unwrap(),
+            vec![("hidden".to_string(), 1), ("nudity".to_string(), 1)]
+        );
+        // Unhide one; clearing a nudity mark never un-hides what the sensor found.
+        c.set_block_flag(chair, "hidden", false).unwrap();
+        c.set_block_flag(nude, "nudity", false).unwrap();
+        assert_eq!(ids(&c), vec![chair]);
+        assert_eq!(c.clear_block_flags("nudity").unwrap(), 1);
+        assert_eq!(ids(&c), vec![chair, planet]);
+        // Unknown marks and missing images are refused.
+        assert!(c.set_block_flag(chair, "secret", true).is_err());
+        assert!(c.set_block_flag(999_999, "hidden", true).is_err());
+        assert!(c.clear_block_flags("everything").is_err());
+        let _ = nude;
+    }
+
+    #[test]
+    fn museum_label_round_trips_and_is_never_blanked() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let mut b = sample("1", "Seated figure");
+        b.license.license_id = Some("CC0-1.0".into());
+        b.label = crate::model::BlockLabel {
+            date: Some("c. 1650".into()),
+            medium: Some("Oil on canvas".into()),
+            dimensions: Some("Overall: 50 x 40 cm".into()),
+            credit: Some("Gift of someone".into()),
+        };
+        let id = c.upsert_block(&b).unwrap();
+        c.link_block(refs, id, None).unwrap();
+        // A later update without label fields keeps them (archive policy).
+        b.label = Default::default();
+        c.upsert_block(&b).unwrap();
+        let keys = [("arena", "refs")];
+        let s = &c
+            .slides_in(
+                &Scope::collections(&keys),
+                &CategoryFilter::default(),
+                10,
+                0,
+            )
+            .unwrap()[0];
+        assert_eq!(s.date.as_deref(), Some("c. 1650"));
+        assert_eq!(s.medium.as_deref(), Some("Oil on canvas"));
+        assert_eq!(s.dimensions.as_deref(), Some("Overall: 50 x 40 cm"));
+        assert_eq!(s.credit.as_deref(), Some("Gift of someone"));
+        assert_eq!(s.license_id.as_deref(), Some("CC0-1.0"));
+        // No small size stored: the grid uses the display image.
+        assert_eq!(s.thumb_url, s.display_url);
+    }
+
+    #[test]
+    fn search_and_saved_views_with_filters_counts_and_pages() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let add = |c: &mut Catalog, id: &str, title: &str, saved: bool| {
+            let mut b = sample(id, title);
+            b.media = vec![media("large", &format!("https://images.are.na/{id}.jpg"))];
+            if saved {
+                b.files[0].sha256 = format!("{id:0>64}");
+            } else {
+                b.files.clear();
+            }
+            let bid = c.upsert_block(&b).unwrap();
+            c.link_block(refs, bid, None).unwrap();
+            bid
+        };
+        let oak = add(&mut c, "1", "Oak chair", true);
+        let steel = add(&mut c, "2", "Steel chair", false);
+        let _vase = add(&mut c, "3", "Rubber vase", true);
+        c.rebuild_categories(crate::categories::vocabulary())
+            .unwrap();
+        let none = CategoryFilter::default();
+        let ids = |c: &Catalog, s: &Scope<'_>, f: &CategoryFilter| {
+            let mut v: Vec<i64> = c
+                .slides_in(s, f, 10, 0)
+                .unwrap()
+                .iter()
+                .map(|x| x.block_id)
+                .collect();
+            v.sort();
+            v
+        };
+        // Search: words, prefixes, never FTS syntax.
+        let chairs = Scope::Search("chair".into());
+        assert_eq!(ids(&c, &chairs, &none), vec![oak, steel]);
+        assert_eq!(c.count_in(&chairs, &none).unwrap(), 2);
+        assert_eq!(ids(&c, &Scope::Search("ste".into()), &none), vec![steel]);
+        let wood_out = CategoryFilter {
+            include: vec![],
+            exclude: vec!["wood".into()],
+        };
+        assert_eq!(
+            ids(&c, &chairs, &wood_out),
+            vec![steel],
+            "filters apply to search"
+        );
+        assert!(ids(&c, &Scope::Search("\"(-NOT".into()), &none).is_empty());
+        assert!(ids(&c, &Scope::Search("   ".into()), &none).is_empty());
+        assert_eq!(c.count_in(&Scope::Search("".into()), &none).unwrap(), 0);
+        // Saved: only blocks with an original in the store.
+        let mut saved = ids(&c, &Scope::Saved, &none);
+        saved.sort();
+        assert_eq!(saved.len(), 2);
+        assert!(saved.contains(&oak) && !saved.contains(&steel));
+        assert_eq!(c.count_in(&Scope::Saved, &none).unwrap(), 2);
+        assert!(!c.category_counts(&Scope::Saved, &none).unwrap().is_empty());
+        // Paging works on both.
+        assert_eq!(c.slides_in(&chairs, &none, 1, 1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn content_defaults_hide_marks_and_nudity_unless_asked() {
+        let d = CategoryFilter::default().with_content_defaults(false);
+        assert_eq!(d.exclude, ["hidden", "nudity"]);
+        assert!(d.check().is_ok(), "both are known categories");
+        let shown = CategoryFilter::default().with_content_defaults(true);
+        assert_eq!(shown.exclude, ["hidden"]);
+        // A filter that names nudity itself is respected (no include+exclude clash).
+        let want = CategoryFilter {
+            include: vec!["nudity".into()],
+            exclude: vec![],
+        }
+        .with_content_defaults(false);
+        assert_eq!(want.exclude, ["hidden"]);
+        assert!(want.check().is_ok());
+    }
+
+    #[test]
+    fn practice_log_keeps_sessions_with_drawings_only() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let a = categorized(&mut c, "1", "Oak chair", refs);
+        let rec = |started_at: i64, drawn: Vec<PracticeDrawn>| PracticeRecord {
+            started_at,
+            seconds: drawn.iter().map(|d| d.seconds).sum(),
+            skipped: 1,
+            plan: "Gesture warm-up".into(),
+            source: "Chairs".into(),
+            finished: true,
+            drawn,
+        };
+        let one = |s| PracticeDrawn {
+            block_id: a,
+            seconds: s,
+        };
+        assert_eq!(
+            c.record_practice(&rec(100, vec![])).unwrap(),
+            None,
+            "nothing drawn, nothing kept"
+        );
+        let id = c
+            .record_practice(&rec(1_000, vec![one(30), one(30)]))
+            .unwrap();
+        assert!(id.is_some());
+        c.record_practice(&rec(2_000, vec![one(60)])).unwrap();
+        let all = c.practice_sessions(0).unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].started_at, 2_000, "newest first");
+        assert_eq!(all[1].drawings, 2);
+        assert_eq!(all[1].seconds, 60);
+        assert_eq!(c.practice_sessions(1_500).unwrap().len(), 1);
+        // Nonsense is refused: a day-long pose, negative skips, a huge source name.
+        let mut bad = rec(3_000, vec![one(90_000)]);
+        assert!(c.record_practice(&bad).is_err());
+        bad = rec(3_000, vec![one(30)]);
+        bad.skipped = -1;
+        assert!(c.record_practice(&bad).is_err());
+        bad = rec(3_000, vec![one(30)]);
+        bad.source = "x".repeat(500);
+        assert!(c.record_practice(&bad).is_err());
+        assert_eq!(c.clear_practice().unwrap(), 2);
+        assert!(c.practice_sessions(0).unwrap().is_empty());
+    }
+
+    #[test]
     fn categories_filter_pages_and_counts() {
         let mut c = Catalog::open_in_memory().unwrap();
         let refs = collection(&c, "refs");
@@ -1420,5 +2028,55 @@ mod tests {
         c.set_in_playlist(p.id, id, true).unwrap();
         assert_eq!(c.playlist_id("gates").unwrap(), Some(p.id));
         assert_eq!(c.links(&Scope::Playlist(p.id)).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn resaves_show_once_in_topics_but_not_in_playlists() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let make = |c: &mut Catalog, id: &str, origin: &str, w: u32| {
+            let mut b = sample(id, "Teenage Engineering computer");
+            b.source.origin_url = Some(origin.into());
+            b.media = vec![
+                MediaRef {
+                    role: "original".into(),
+                    url: format!("https://cdn.invalid/{id}.jpg"),
+                    width: Some(w),
+                    height: Some(800),
+                },
+                media("large", &format!("https://images.invalid/{id}.jpg")),
+            ];
+            let bid = c.upsert_block(&b).unwrap();
+            c.link_block(refs, bid, None).unwrap();
+            bid
+        };
+        let shot = "https://images.example/te/76037.png";
+        let a = make(&mut c, "1", shot, 1000);
+        let resave = make(&mut c, "2", shot, 1000);
+        let other_photo = make(&mut c, "3", "https://images.example/te/5f5a1.png", 1000);
+        let other_size = make(&mut c, "4", shot, 1200);
+        let insta1 = make(&mut c, "5", "https://www.instagram.com/", 1000);
+        let insta2 = make(&mut c, "6", "https://www.instagram.com/", 1000);
+        assert!(c.ensure_dupes().unwrap());
+        assert!(!c.ensure_dupes().unwrap());
+        let keys = [("arena", "refs")];
+        let scope = Scope::collections(&keys);
+        let mut ids: Vec<i64> = c
+            .slides_in(&scope, &CategoryFilter::default(), 50, 0)
+            .unwrap()
+            .iter()
+            .map(|s| s.block_id)
+            .collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            vec![a, other_photo, other_size, insta1, insta2],
+            "only the re-save is folded"
+        );
+        assert_eq!(c.count_in(&scope, &CategoryFilter::default()).unwrap(), 5);
+        let p = c.create_playlist("Both").unwrap();
+        c.set_in_playlist(p.id, a, true).unwrap();
+        c.set_in_playlist(p.id, resave, true).unwrap();
+        assert_eq!(c.playlist_slides(p.id, 10, 0).unwrap().len(), 2);
     }
 }

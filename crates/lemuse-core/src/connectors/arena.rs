@@ -27,8 +27,9 @@ pub const ID: &str = "arena";
 pub const API_BASE: &str = "https://api.are.na/v3";
 pub const PAGE_SIZE: u32 = 100;
 
-/// Account tier, from the `X-RateLimit-Tier` header or the user's setting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Account tier, from `GET /v3/me` (ADR-0023); guest without a token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Tier {
     Guest,
     Free,
@@ -44,6 +45,27 @@ impl Tier {
             Tier::Free => 120,
             Tier::Premium => 300,
             Tier::Supporter => 600,
+        }
+    }
+
+    /// Are.na's own name for the tier (`UserTier` in the API).
+    pub fn name(self) -> &'static str {
+        match self {
+            Tier::Guest => "guest",
+            Tier::Free => "free",
+            Tier::Premium => "premium",
+            Tier::Supporter => "supporter",
+        }
+    }
+
+    /// The tier from Are.na's name for it.
+    pub fn parse(s: &str) -> Option<Tier> {
+        match s {
+            "guest" => Some(Tier::Guest),
+            "free" => Some(Tier::Free),
+            "premium" => Some(Tier::Premium),
+            "supporter" => Some(Tier::Supporter),
+            _ => None,
         }
     }
 
@@ -279,11 +301,53 @@ fn get_json(http: &dyn HttpClient, url: &str, missing: &str) -> Result<Value> {
     };
     match resp.status {
         401 | 403 => Err(fail(
-            "That channel is private. Private channels need your Are.na token (coming next).",
+            "That channel is private. Save your Are.na token in Settings to open your own private channels.",
         )),
         404 => Err(fail(missing)),
         _ => super::json_or_error(ID, url, resp),
     }
+}
+
+/// The Are.na account a token belongs to (ADR-0023).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Account {
+    pub slug: String,
+    pub name: String,
+    pub tier: Tier,
+}
+
+/// Who the client's token belongs to: one read of `GET /v3/me`. `Ok(None)`
+/// when Are.na refuses the token (401/403). Only the slug, name and tier
+/// are read; the answer also holds the account's email, which LeMuse never
+/// reads or keeps.
+pub fn account(http: &dyn HttpClient) -> Result<Option<Account>> {
+    let url = format!("{API_BASE}/me");
+    let resp = http.get(&url, &[("Accept", "application/json")])?;
+    if matches!(resp.status, 401 | 403) {
+        return Ok(None);
+    }
+    let v = super::json_or_error(ID, &url, resp)?;
+    parse_account(&v).map(Some)
+}
+
+fn parse_account(v: &Value) -> Result<Account> {
+    let slug = plain_text(v["slug"].as_str().unwrap_or_default());
+    if slug.is_empty() {
+        return Err(Error::Connector {
+            connector: ID.into(),
+            message: "Are.na answered without an account name.".into(),
+        });
+    }
+    Ok(Account {
+        name: plain_text(v["name"].as_str().unwrap_or(&slug)),
+        // A token always means at least a free account.
+        tier: v["tier"]
+            .as_str()
+            .and_then(Tier::parse)
+            .filter(|t| *t != Tier::Guest)
+            .unwrap_or(Tier::Free),
+        slug,
+    })
 }
 
 /// Remote text cut down for display: no control characters, at most
@@ -400,9 +464,31 @@ pub fn related_channels(
     let url =
         format!("{API_BASE}/blocks/{block_id}/connections?per={RELATED_PER_PAGE}&page={page}");
     let v = get_json(http, &url, "Are.na no longer has that image.")?;
+    channel_page(&v)
+}
+
+/// The channels an Are.na user follows (ADR-0024): one page of
+/// `GET /v3/users/<slug>/following?type=Channel`, newest first. Needs the
+/// token for the owner's own private follows; read only on a click.
+pub fn followed_channels(http: &dyn HttpClient, user: &str, page: u32) -> Result<RelatedChannels> {
+    if !is_valid_slug(user) || page == 0 || page > MAX_RELATED_PAGE {
+        return Err(Error::Config(
+            "Save your Are.na token in Settings first.".into(),
+        ));
+    }
+    let url = format!(
+        "{API_BASE}/users/{user}/following?type=Channel&per={RELATED_PER_PAGE}&page={page}&sort=created_at_desc"
+    );
+    let v = get_json(http, &url, "Are.na doesn't have that account.")?;
+    channel_page(&v)
+}
+
+/// One page of channel objects (`data` + `meta`), as [`RelatedChannels`].
+/// Slugs that fail [`is_valid_slug`] are dropped; text is plain.
+fn channel_page(v: &Value) -> Result<RelatedChannels> {
     let data = v["data"].as_array().ok_or_else(|| Error::Connector {
         connector: ID.into(),
-        message: "connections response missing `data` array".into(),
+        message: "Are.na answered without a channel list.".into(),
     })?;
     let channels = data
         .iter()
@@ -537,6 +623,7 @@ pub fn map_block(v: &Value) -> Option<RemoteItem> {
         media: map_media(v),
         files: Vec::new(),
         remote_updated_at: v["updated_at"].as_str().map(str::to_string),
+        label: Default::default(),
     };
 
     Some(RemoteItem {
@@ -597,6 +684,49 @@ mod tests {
     use crate::connectors::http::FixtureClient;
 
     const FIXTURE: &str = include_str!("../../tests/fixtures/arena_contents_page1.json");
+
+    /// Shaped from the `Me` schema in api.are.na/v3/openapi.json (no real
+    /// account data; `email` left out on purpose).
+    const ME: &str = include_str!("../../tests/fixtures/arena_me.json");
+
+    #[test]
+    fn account_check_reads_slug_name_and_tier_only() {
+        let http = FixtureClient::default();
+        http.push(&format!("{API_BASE}/me"), 200, ME);
+        let a = account(&http).unwrap().unwrap();
+        assert_eq!(
+            a,
+            Account {
+                slug: "example-person".into(),
+                name: "Example Person".into(),
+                tier: Tier::Free
+            }
+        );
+        assert_eq!(a.tier.budget_per_min(), 96);
+        let json = serde_json::to_string(&a).unwrap();
+        assert_eq!(
+            json,
+            r#"{"slug":"example-person","name":"Example Person","tier":"free"}"#
+        );
+    }
+
+    #[test]
+    fn account_check_refused_and_odd_answers() {
+        let http = FixtureClient::default();
+        let me = format!("{API_BASE}/me");
+        http.push(&me, 401, r#"{"error":"Unauthorized","code":401}"#);
+        assert_eq!(account(&http).unwrap(), None);
+        // A token is never "guest"; an unknown tier counts as free.
+        http.push(&me, 200, r#"{"slug":"a-b","name":"A","tier":"guest"}"#);
+        assert_eq!(account(&http).unwrap().unwrap().tier, Tier::Free);
+        http.push(&me, 200, r#"{"slug":"a-b","tier":"premium"}"#);
+        let a = account(&http).unwrap().unwrap();
+        assert_eq!((a.tier, a.name.as_str()), (Tier::Premium, "a-b"));
+        http.push(&me, 200, r#"{"name":"no slug"}"#);
+        assert!(account(&http).is_err());
+        http.push(&me, 500, "oops");
+        assert!(account(&http).is_err());
+    }
 
     #[test]
     fn maps_fixture_page() {
@@ -787,6 +917,30 @@ mod tests {
         );
         assert_eq!(r.channels[1].owner.as_deref(), Some("Another Owner"));
         assert_eq!((r.total, r.next_page), (Some(107), Some(2)));
+    }
+
+    /// The following list uses the same channel objects as connections
+    /// (OpenAPI `FollowableListResponse`), so the same fixture serves.
+    #[test]
+    fn followed_channels_is_one_request_per_page() {
+        let http = FixtureClient::default();
+        let url = format!(
+            "{API_BASE}/users/example-person/following?type=Channel&per=24&page=1&sort=created_at_desc"
+        );
+        http.push(&url, 200, CONNECTIONS);
+        let r = followed_channels(&http, "example-person", 1).unwrap();
+        assert_eq!(*http.requests.lock().unwrap(), vec![url]);
+        assert_eq!(r.channels.len(), 2);
+        assert_eq!(r.next_page, Some(2));
+        // Bad account names and pages never reach the network.
+        let none = FixtureClient::default();
+        for (user, page) in [("", 1), ("../me", 1), ("a b", 1), ("ok", 0), ("ok", 21)] {
+            assert!(
+                followed_channels(&none, user, page).is_err(),
+                "{user} {page}"
+            );
+        }
+        assert!(none.requests.lock().unwrap().is_empty());
     }
 
     #[test]

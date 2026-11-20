@@ -1,0 +1,97 @@
+# Release pipeline (ADR-0028). Runs when the owner pushes a version tag
+# (v1.2.3) after merging to main, or by hand. It builds the installers on
+# GitHub's Windows runner, writes SHA256SUMS and a CycloneDX SBOM, attests
+# where the files came from (GitHub build provenance), and opens a DRAFT
+# release: the owner reads it and clicks Publish. Nothing is published, and
+# no update reaches anyone, without that click.
+#
+# Signing: the owner chose to ship unsigned (PLAN Q24). Downloads are
+# checked with SHA256SUMS and the build attestation instead. If a
+# certificate is ever bought, the "Sign" step below is the only place to add it.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build (e.g. v0.10.0)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write # create the draft release
+      id-token: write # build provenance (Sigstore)
+      attestations: write
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+      - name: Check the tag matches the version
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$v" -ne $env:TAG) { throw "Tag $env:TAG doesn't match Cargo.toml version $v" }
+      # Install scripts off (review 0008): nothing here needs them.
+      - name: Install UI dependencies
+        working-directory: app
+        run: npm ci --ignore-scripts
+      - name: Tests before building
+        run: cargo test --locked
+      - name: Build the installers
+        working-directory: app
+        run: npm run tauri build
+      # - name: Sign
+      #   Unsigned by decision (Q24). If an OV certificate in a cloud HSM is
+      #   ever added, sign target/release/bundle/**/LeMuse_*.exe/.msi here.
+      - name: Collect files, SHA256SUMS and the SBOM
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item target/release/bundle/nsis/LeMuse_*_x64-setup.exe release/
+          Copy-Item target/release/bundle/msi/LeMuse_*_x64_en-US.msi release/
+          node scripts/sbom.mjs --out release/lemuse-sbom.cdx.json
+          Get-ChildItem release -File | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content -Encoding ascii release/SHA256SUMS
+          Get-Content release/SHA256SUMS
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: "release/*"
+      - name: Draft the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @"
+          LeMuse $env:TAG. The installer isn't code-signed, so Windows may show "Windows protected
+          your PC": choose More info → Run anyway.
+
+          Check a download: compare its SHA-256 with SHA256SUMS, or run
+          gh attestation verify <file> --repo $env:GITHUB_REPOSITORY
+
+          What changed: see CHANGELOG.md.
+          "@
+          gh release create $env:TAG --draft --verify-tag --title "LeMuse $env:TAG" --notes $notes (Get-ChildItem release -File).FullName

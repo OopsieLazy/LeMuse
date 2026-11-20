@@ -22,3 +22,6 @@ serde_json.workspace = true
 tauri = { version = "2", features = ["protocol-asset"] }
 # Opens source links in the system browser (https only, see capabilities).
 tauri-plugin-opener = "=2.7.2"
+# A second launch focuses the running window instead of opening another
+# (ADR-0024). 2.5.5 is 21 days old (cooldown); pinned.
+tauri-plugin-single-instance = "=2.5.5"

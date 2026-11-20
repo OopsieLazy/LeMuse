@@ -15,6 +15,9 @@ pub struct HttpResponse {
     /// Lower-cased header names.
     pub headers: BTreeMap<String, String>,
     pub body: Vec<u8>,
+    /// Where the body actually came from after redirects (production client
+    /// only), so callers can re-check the host (review 0017).
+    pub final_url: Option<String>,
 }
 
 impl HttpResponse {
@@ -52,6 +55,7 @@ impl FixtureClient {
                 status,
                 headers: BTreeMap::new(),
                 body: body.into(),
+                final_url: None,
             });
     }
 }
@@ -139,13 +143,14 @@ impl HttpClient for UreqClient {
             Ok(r) => r,
             Err(ureq::Error::Status(_, r)) => r,
             Err(ureq::Error::Transport(t)) => {
-                return Err(crate::Error::Connector {
+                return Err(crate::Error::Transient {
                     connector: "http".into(),
                     message: format!("{url}: {t}"),
                 })
             }
         };
         let status = resp.status();
+        let final_url = Some(resp.get_url().to_string());
         let mut out_headers = BTreeMap::new();
         for name in resp.headers_names() {
             if let Some(v) = resp.header(&name) {
@@ -172,6 +177,7 @@ impl HttpClient for UreqClient {
             status,
             headers: out_headers,
             body,
+            final_url,
         })
     }
 }

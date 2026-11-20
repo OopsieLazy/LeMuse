@@ -1,0 +1,13 @@
+feat: error codes and pages, a responsive window, channels you follow (#19)
+
+✅ Stable error codes: --json "code", CLI exit codes 3–10, app { code, message }
+✅ Dashboard HTML error pages with Allow / WWW-Authenticate / Retry-After
+✅ App crash page, offline and "can't load" states, Refresh details
+✅ Every command off the UI thread; reads wait their turn during a refresh (D-74)
+✅ Channels you follow in Find channels; lemuse arena-token check | following
+✅ Single instance; Settings → About; version 0.8.0
+✅ 109 tests, W3C 64, layout 372, cargo audit and npm audit gate pass
+⬜ Practice tools, grid view, local folders, tray (path to 1.0 in PLAN)
+
+Reviewed-by: admin pass, developer pass (docs/reviews/0019-polish.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

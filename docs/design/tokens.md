@@ -12,10 +12,12 @@ at the bottom.
 | Colour (semantic) | `--bg --panel --panel-fill --stage --fg --muted --line --accent --accent-ink --ok --error --backdrop --shadow-rgb` | Theme preset; light/dark mode; accent picker (ink computed for contrast) |
 | Typography | `--font-ui --font-display --font-data`, `--text-2xs…xl`, weights, leading, tracking | Typeface set; **Interface size** scales every size |
 | Space | `--space-1…8` (4 px rhythm × scale) | Interface size |
-| Layout | `--rail-width --stage-pad --stage-pad-narrow --control-size --icon-size --icon-stroke --timer-height --dialog-width --dialog-max-height --measure --menu-width --menu-max-height --field-min --status-min --filter-menu-width --chip-radius --thumb-size --pager-width --sheet-max-height` | Topic list width slider; Space around the image slider; Cinema sets stage padding to 0 |
+| Layout | `--rail-width --stage-pad --stage-pad-narrow --control-size --icon-size --icon-stroke --timer-height --dialog-width --dialog-max-height --measure --menu-width --menu-max-height --field-min --status-min --filter-menu-width --chip-radius --thumb-size --pager-width --sheet-max-height --compact-bar-max --context-menu-width --context-menu-height` | Topic list width slider; Space around the image slider; Cinema sets stage padding to 0 |
 | Shape | `--radius-base` → `--radius-sm/md/lg`, `--border`, `--focus-ring --focus-offset` | Corner rounding slider |
 | Elevation | `--image-shadow-strength` → `--image-shadow`, `--dialog-shadow` | Image shadow slider |
 | Motion | `--dur-fast --dur-med --ease` | Also turned off by `prefers-reduced-motion` |
+| Accessibility (ADR-0028) | `--target-min` (24 px, WCAG 2.5.8) | Fixed; the layout test checks every control and text contrast |
+| Practice (ADR-0025, ADR-0026, ADR-0027) | `--squint-blur --grid-line --grid-shade --grid-line-width --study-menu-width --session-clock-size --drawn-thumb --value-swatch --tone-0…--tone-8 --log-bar-height` | Fixed; the grid's two strokes read on any image. Studio's `--stage` is zero-chroma (art review) |
 | Layers | `--z-reveal --z-menu --z-drawer` | none (fixed) |
 
 **Layout presets** (Studio, Topics on the right, Controls on top, Cinema, Minimal) and **toggles** (timer, specs,
