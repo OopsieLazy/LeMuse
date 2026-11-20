@@ -117,6 +117,12 @@ enum SlideSource {
     Playlist {
         id: i64,
     },
+    /// Everything you saved (ADR-0029).
+    Saved,
+    /// Full-text search over the catalog (ADR-0029).
+    Search {
+        query: String,
+    },
 }
 
 #[derive(Clone, Serialize)]
@@ -310,6 +316,12 @@ fn with_scope<T>(
     let catalog = catalog()?;
     let keys = match source {
         SlideSource::Playlist { id } => return Ok(f(&catalog, &Scope::Playlist(*id))?),
+        SlideSource::Saved => return Ok(f(&catalog, &Scope::Saved)?),
+        SlideSource::Search { query } => {
+            // A bounded, plain query; the core turns words into safe FTS terms.
+            let q: String = query.chars().take(200).collect();
+            return Ok(f(&catalog, &Scope::Search(q))?);
+        }
         SlideSource::All => all_keys(&load_config(&library_paths())?),
         SlideSource::Topic { name } => load_config(&library_paths())?
             .topic(name)
@@ -403,7 +415,10 @@ async fn save_image(
         let cfg = load_config(&paths)?;
         let catalog = catalog()?;
         let folder = match &source {
-            SlideSource::All => lemuse_core::save::DEFAULT_FOLDER.to_string(),
+            // From All, Saved or a search: the default Saved folder.
+            SlideSource::All | SlideSource::Saved | SlideSource::Search { .. } => {
+                lemuse_core::save::DEFAULT_FOLDER.to_string()
+            }
             SlideSource::Topic { name } => cfg
                 .topic(name)
                 .map(|t| t.name.clone())
@@ -581,6 +596,34 @@ async fn add_channel(
     let flag = app.state::<Refreshing>().0.clone();
     spawn_channel_refresh(app, flag, added.topic.clone(), added.channel.slug.clone());
     Ok(added)
+}
+
+/// Rename a topic (ADR-0029). Returns the stored name.
+#[tauri::command]
+async fn rename_topic(app: AppHandle, from: String, to: String) -> Cmd<String> {
+    blocking(move || {
+        let edits = app.state::<ConfigEdits>();
+        let _guard = edits.edit.lock().map_err(poisoned)?;
+        lemuse_core::config_edit::rename_topic(&library_paths().config(), &from, &to)?.ok_or_else(
+            || AppError::new(code::NOT_FOUND, format!("There's no topic named {from}.")),
+        )
+    })
+    .await
+}
+
+/// Remove a topic with its channels (asked for in the app). Images stay in
+/// the catalog and in playlists; saved files are untouched.
+#[tauri::command]
+async fn remove_topic(app: AppHandle, name: String) -> Cmd<bool> {
+    blocking(move || {
+        let edits = app.state::<ConfigEdits>();
+        let _guard = edits.edit.lock().map_err(poisoned)?;
+        Ok(lemuse_core::config_edit::remove_topic(
+            &library_paths().config(),
+            &name,
+        )?)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -849,6 +892,8 @@ pub fn run() {
             followed_channels,
             add_followed,
             check_update,
+            rename_topic,
+            remove_topic,
             set_block_flag,
             flag_counts,
             clear_block_flags,
