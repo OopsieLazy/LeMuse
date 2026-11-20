@@ -529,6 +529,32 @@ keywords = ["chair", "joinery"]
     }
 
     #[test]
+    fn topics_can_be_renamed_and_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lemuse.toml");
+        std::fs::write(&path, LIB).unwrap();
+        assert_eq!(
+            config_edit::rename_topic(&path, "Tech", "Gadgets")
+                .unwrap()
+                .as_deref(),
+            Some("Gadgets")
+        );
+        assert!(Config::load(&path).unwrap().topic("Gadgets").is_some());
+        // Taken names, bad names and missing topics.
+        assert!(config_edit::rename_topic(&path, "Gadgets", "vintage TECH").is_err());
+        assert!(config_edit::rename_topic(&path, "Gadgets", " padded").is_err());
+        assert_eq!(config_edit::rename_topic(&path, "Nope", "X").unwrap(), None);
+        // Changing only the case of its own name is fine.
+        assert!(config_edit::rename_topic(&path, "Gadgets", "GADGETS")
+            .unwrap()
+            .is_some());
+        // Remove a topic with its channel.
+        assert!(config_edit::remove_topic(&path, "Vintage tech").unwrap());
+        assert!(Config::load(&path).unwrap().topic("Vintage tech").is_none());
+        assert!(!config_edit::remove_topic(&path, "Vintage tech").unwrap());
+    }
+
+    #[test]
     fn empty_topics_can_be_removed_others_cannot() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("lemuse.toml");

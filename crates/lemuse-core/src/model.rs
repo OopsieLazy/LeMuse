@@ -86,6 +86,21 @@ pub struct MediaRef {
     pub height: Option<u32>,
 }
 
+/// A museum-style label (ADR-0029): what a gallery wall label shows after
+/// the creator and title. Plain text from the source; empty for most Are.na
+/// blocks.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockLabel {
+    /// "1900s", "c. 1650".
+    pub date: Option<String>,
+    /// Technique or material ("Oil on canvas", "Wood").
+    pub medium: Option<String>,
+    /// "Overall: 49.9 x 2.6 cm (19 5/8 x 1 in.)".
+    pub dimensions: Option<String>,
+    /// "Gift of …, 1929.323".
+    pub credit: Option<String>,
+}
+
 /// One local reference block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Block {
@@ -105,6 +120,9 @@ pub struct Block {
     pub files: Vec<StoredFile>,
     /// Remote `updated_at` (RFC 3339) — drives incremental sync.
     pub remote_updated_at: Option<String>,
+    /// Museum label fields (ADR-0029).
+    #[serde(default)]
+    pub label: BlockLabel,
 }
 
 /// A remote grouping the user chose to gather (an Are.na channel, a museum

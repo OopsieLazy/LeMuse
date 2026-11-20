@@ -285,6 +285,12 @@ mod tests {
             connector: "arena".into(),
             original_url: None,
             fallback_urls: vec![],
+            date: None,
+            medium: None,
+            dimensions: None,
+            credit: None,
+            license_id: None,
+            thumb_url: String::new(),
         }
     }
 

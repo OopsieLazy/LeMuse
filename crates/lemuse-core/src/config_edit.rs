@@ -230,6 +230,49 @@ pub fn upgrade_page_default(path: &Path) -> Result<bool> {
     Ok(true)
 }
 
+/// Rename a topic (ADR-0029). The new name follows the usual rules and must
+/// not belong to another topic (case doesn't make a name different). Returns
+/// the stored name, or false-y None if there is no such topic.
+pub fn rename_topic(path: &Path, from: &str, to: &str) -> Result<Option<String>> {
+    check_topic_name(to)?;
+    let _guard = lock(path)?;
+    let (original, mut doc) = read_doc(path)?;
+    let topics = topics_mut(&mut doc)?;
+    let Some(i) = topics.iter().position(|t| is_named(t, from)) else {
+        return Ok(None);
+    };
+    if topics
+        .iter()
+        .enumerate()
+        .any(|(j, t)| j != i && is_named(t, to))
+    {
+        return Err(Error::Config(format!(
+            "there's already a topic named `{to}`"
+        )));
+    }
+    let t = topics
+        .get_mut(i)
+        .ok_or_else(|| Error::Config("topic vanished while editing".into()))?;
+    t.insert("name", value(to));
+    validate_and_write(path, &original, &doc)?;
+    Ok(Some(to.to_string()))
+}
+
+/// Remove a topic with everything in it (the user asked, in the app or with
+/// `lemuse remove-topic --with-channels`). Images stay in the catalog and in
+/// playlists; saved files are untouched. Returns false if there's no such topic.
+pub fn remove_topic(path: &Path, topic: &str) -> Result<bool> {
+    let _guard = lock(path)?;
+    let (original, mut doc) = read_doc(path)?;
+    let topics = topics_mut(&mut doc)?;
+    let Some(i) = topics.iter().position(|t| is_named(t, topic)) else {
+        return Ok(false);
+    };
+    topics.remove(i);
+    validate_and_write(path, &original, &doc)?;
+    Ok(true)
+}
+
 /// Remove a topic, but only an empty one (no sources, no keywords): a topic
 /// with channels or searches is the user's work and stays. Returns false if
 /// there is no such topic.

@@ -623,6 +623,7 @@ pub fn map_block(v: &Value) -> Option<RemoteItem> {
         media: map_media(v),
         files: Vec::new(),
         remote_updated_at: v["updated_at"].as_str().map(str::to_string),
+        label: Default::default(),
     };
 
     Some(RemoteItem {

@@ -193,6 +193,7 @@ mod tests {
             }],
             files: vec![],
             remote_updated_at: None,
+            label: Default::default(),
         })
         .unwrap()
     }

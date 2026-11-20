@@ -21,6 +21,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0006_resume_cursor.sql"),
     include_str!("../../migrations/0007_block_dupes.sql"),
     include_str!("../../migrations/0008_flags_practice.sql"),
+    include_str!("../../migrations/0009_museum_label.sql"),
 ];
 
 /// Caps that keep a scripted or runaway UI from growing local state without
@@ -92,6 +93,16 @@ pub struct Slide {
     /// The block's other stored image sizes, best first: tried in turn when
     /// `display_url` fails before the slide is skipped (ADR-0016).
     pub fallback_urls: Vec<String>,
+    /// Museum label fields (ADR-0029); None when the source has none.
+    pub date: Option<String>,
+    pub medium: Option<String>,
+    pub dimensions: Option<String>,
+    pub credit: Option<String>,
+    /// `CC0-1.0` for open-access museum works; None when rights are unknown.
+    pub license_id: Option<String>,
+    /// A small size for the grid view (Are.na's `small`, else `medium`, else
+    /// the display image).
+    pub thumb_url: String,
 }
 
 /// What Save needs to know about one block (ADR-0022).
@@ -125,6 +136,11 @@ pub struct LinkRow {
 pub enum Scope<'a> {
     Collections(Vec<(&'a str, &'a str)>),
     Playlist(i64),
+    /// Full-text search over titles, descriptions, contents and creators
+    /// (ADR-0029). The words are made safe by [`fts_query`]; best match first.
+    Search(String),
+    /// Everything you saved (an original in the store), newest save first.
+    Saved,
 }
 
 impl<'a> Scope<'a> {
@@ -133,7 +149,11 @@ impl<'a> Scope<'a> {
     }
 
     fn is_empty_collections(&self) -> bool {
-        matches!(self, Scope::Collections(k) if k.is_empty())
+        match self {
+            Scope::Collections(k) => k.is_empty(),
+            Scope::Search(q) => fts_query(q).is_empty(),
+            _ => false,
+        }
     }
 }
 
@@ -228,7 +248,7 @@ const SLIDES_SQL: &str = "WITH topic_blocks AS ({blocks}),
          FROM block_media WHERE role IN ('large', 'medium', 'original')
      )
      SELECT b.id, b.title, d.url, d.width, d.height, b.page_url, b.creator,
-            b.attribution_text,
+            b.attribution_text, b.date_text, b.medium, b.dimensions, b.credit_line, b.license_id,
             EXISTS (SELECT 1 FROM block_files f WHERE f.block_id = b.id) AS saved,
             (SELECT group_concat(bc.category, ',') FROM block_categories bc
              WHERE bc.block_id = b.id) AS cats,
@@ -239,7 +259,10 @@ const SLIDES_SQL: &str = "WITH topic_blocks AS ({blocks}),
                  WHERE m.block_id = b.id AND m.url <> d.url
                    AND m.role IN ('large', 'medium', 'original', 'small')
                  ORDER BY CASE m.role WHEN 'large' THEN 0 WHEN 'medium' THEN 1
-                                      WHEN 'original' THEN 2 ELSE 3 END) f) AS fallbacks
+                                      WHEN 'original' THEN 2 ELSE 3 END) f) AS fallbacks,
+            COALESCE((SELECT t.url FROM block_media t WHERE t.block_id = b.id
+                      AND t.role IN ('small', 'medium')
+                      ORDER BY CASE t.role WHEN 'small' THEN 0 ELSE 1 END LIMIT 1), d.url) AS thumb
      FROM topic_blocks tb
      JOIN blocks b ON b.id = tb.block_id
      JOIN display d ON d.block_id = b.id AND d.pick = 1
@@ -258,6 +281,12 @@ const BY_UPDATED: &str = "b.remote_updated_at DESC, b.id DESC";
 const BY_ADDED: &str = "tb.ord DESC";
 const PLAYLIST_BLOCKS: &str =
     "SELECT block_id, seq AS ord FROM playlist_items WHERE playlist_id = ?3";
+/// FTS5 `rank` is lower for better matches: negate it so "ord DESC" is best first.
+const SEARCH_BLOCKS: &str =
+    "SELECT rowid AS block_id, -rank AS ord FROM blocks_fts WHERE blocks_fts MATCH ?3";
+/// Saved originals: the newest save (highest file row) first.
+const SAVED_BLOCKS: &str =
+    "SELECT bf.block_id, MAX(bf.rowid) AS ord FROM block_files bf GROUP BY bf.block_id";
 
 /// CTE body for blocks in `n` collections; parameters start at `?first`.
 fn collection_blocks(n: usize, first: usize) -> String {
@@ -289,6 +318,12 @@ fn scope_sql(scope: &Scope<'_>, filter: &CategoryFilter) -> (String, Vec<Value>)
             values.push(Value::Integer(*id));
             PLAYLIST_BLOCKS.to_string()
         }
+        Scope::Search(q) => {
+            values.push(Value::Text(fts_query(q)));
+            SEARCH_BLOCKS.to_string()
+        }
+        // No parameters of its own: the filter's values start at `?3`.
+        Scope::Saved => SAVED_BLOCKS.to_string(),
     };
     let mut conds = Vec::new();
     for (ids, negate) in [(&filter.include, ""), (&filter.exclude, "NOT ")] {
@@ -316,14 +351,16 @@ fn scope_sql(scope: &Scope<'_>, filter: &CategoryFilter) -> (String, Vec<Value>)
                  WHERE {cond})
              WHERE keep = 1"
         ),
-        // Playlists show exactly what the user added.
-        Scope::Playlist(_) => format!("SELECT s.block_id, s.ord FROM ({base}) s WHERE {cond}"),
+        // Playlists, search and Saved show exactly what matched.
+        Scope::Playlist(_) | Scope::Search(_) | Scope::Saved => {
+            format!("SELECT s.block_id, s.ord FROM ({base}) s WHERE {cond}")
+        }
     };
     (sql, values)
 }
 
 fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
-    let cats: Option<String> = r.get(9)?;
+    let cats: Option<String> = r.get(14)?;
     let mut categories: Vec<String> = cats
         .as_deref()
         .unwrap_or("")
@@ -341,17 +378,23 @@ fn map_slide(r: &rusqlite::Row<'_>) -> rusqlite::Result<Slide> {
         page_url: r.get(5)?,
         creator: r.get(6)?,
         attribution: r.get(7)?,
-        saved: r.get(8)?,
+        date: r.get(8)?,
+        medium: r.get(9)?,
+        dimensions: r.get(10)?,
+        credit: r.get(11)?,
+        license_id: r.get(12)?,
+        saved: r.get(13)?,
         categories,
-        connector: r.get(10)?,
-        original_url: r.get(11)?,
+        connector: r.get(15)?,
+        original_url: r.get(16)?,
         fallback_urls: r
-            .get::<_, Option<String>>(12)?
+            .get::<_, Option<String>>(17)?
             .unwrap_or_default()
             .lines()
             .filter(|u| !u.is_empty())
             .map(str::to_string)
             .collect(),
+        thumb_url: r.get(18)?,
     })
 }
 
@@ -539,8 +582,10 @@ impl Catalog {
         tx.execute(
             "INSERT INTO blocks (connector, remote_id, kind, title, description, content,
                  page_url, origin_url, license_id, creator, attribution_text,
-                 non_commercial, no_ai, remote_updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                 non_commercial, no_ai, remote_updated_at,
+                 date_text, medium, dimensions, credit_line)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+                     ?15, ?16, ?17, ?18)
              ON CONFLICT (connector, remote_id) DO UPDATE SET
                  kind = excluded.kind,
                  -- Archive policy (ADR-0013, review 0007 A-29): an update
@@ -555,6 +600,10 @@ impl Catalog {
                  attribution_text = COALESCE(excluded.attribution_text, blocks.attribution_text),
                  non_commercial = excluded.non_commercial, no_ai = excluded.no_ai,
                  remote_updated_at = excluded.remote_updated_at,
+                 date_text = COALESCE(excluded.date_text, blocks.date_text),
+                 medium = COALESCE(excluded.medium, blocks.medium),
+                 dimensions = COALESCE(excluded.dimensions, blocks.dimensions),
+                 credit_line = COALESCE(excluded.credit_line, blocks.credit_line),
                  fetched_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')",
             params![
                 b.source.connector,
@@ -571,6 +620,10 @@ impl Catalog {
                 b.license.non_commercial,
                 b.license.no_ai,
                 b.remote_updated_at,
+                b.label.date,
+                b.label.medium,
+                b.label.dimensions,
+                b.label.credit,
             ],
         )?;
         let id: i64 = tx.query_row(
@@ -682,7 +735,7 @@ impl Catalog {
         let (blocks, values) = scope_sql(scope, filter);
         let order = match scope {
             Scope::Collections(_) => BY_UPDATED,
-            Scope::Playlist(_) => BY_ADDED,
+            Scope::Playlist(_) | Scope::Search(_) | Scope::Saved => BY_ADDED,
         };
         let sql = SLIDES_SQL
             .replace("{blocks}", &blocks)
@@ -1355,6 +1408,7 @@ mod tests {
                 role: "original".into(),
             }],
             remote_updated_at: Some("2026-11-01T00:00:00Z".into()),
+            label: Default::default(),
         }
     }
 
@@ -1671,6 +1725,101 @@ mod tests {
         assert!(c.set_block_flag(999_999, "hidden", true).is_err());
         assert!(c.clear_block_flags("everything").is_err());
         let _ = nude;
+    }
+
+    #[test]
+    fn museum_label_round_trips_and_is_never_blanked() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let mut b = sample("1", "Seated figure");
+        b.license.license_id = Some("CC0-1.0".into());
+        b.label = crate::model::BlockLabel {
+            date: Some("c. 1650".into()),
+            medium: Some("Oil on canvas".into()),
+            dimensions: Some("Overall: 50 x 40 cm".into()),
+            credit: Some("Gift of someone".into()),
+        };
+        let id = c.upsert_block(&b).unwrap();
+        c.link_block(refs, id, None).unwrap();
+        // A later update without label fields keeps them (archive policy).
+        b.label = Default::default();
+        c.upsert_block(&b).unwrap();
+        let keys = [("arena", "refs")];
+        let s = &c
+            .slides_in(
+                &Scope::collections(&keys),
+                &CategoryFilter::default(),
+                10,
+                0,
+            )
+            .unwrap()[0];
+        assert_eq!(s.date.as_deref(), Some("c. 1650"));
+        assert_eq!(s.medium.as_deref(), Some("Oil on canvas"));
+        assert_eq!(s.dimensions.as_deref(), Some("Overall: 50 x 40 cm"));
+        assert_eq!(s.credit.as_deref(), Some("Gift of someone"));
+        assert_eq!(s.license_id.as_deref(), Some("CC0-1.0"));
+        // No small size stored: the grid uses the display image.
+        assert_eq!(s.thumb_url, s.display_url);
+    }
+
+    #[test]
+    fn search_and_saved_views_with_filters_counts_and_pages() {
+        let mut c = Catalog::open_in_memory().unwrap();
+        let refs = collection(&c, "refs");
+        let add = |c: &mut Catalog, id: &str, title: &str, saved: bool| {
+            let mut b = sample(id, title);
+            b.media = vec![media("large", &format!("https://images.are.na/{id}.jpg"))];
+            if saved {
+                b.files[0].sha256 = format!("{id:0>64}");
+            } else {
+                b.files.clear();
+            }
+            let bid = c.upsert_block(&b).unwrap();
+            c.link_block(refs, bid, None).unwrap();
+            bid
+        };
+        let oak = add(&mut c, "1", "Oak chair", true);
+        let steel = add(&mut c, "2", "Steel chair", false);
+        let _vase = add(&mut c, "3", "Rubber vase", true);
+        c.rebuild_categories(crate::categories::vocabulary())
+            .unwrap();
+        let none = CategoryFilter::default();
+        let ids = |c: &Catalog, s: &Scope<'_>, f: &CategoryFilter| {
+            let mut v: Vec<i64> = c
+                .slides_in(s, f, 10, 0)
+                .unwrap()
+                .iter()
+                .map(|x| x.block_id)
+                .collect();
+            v.sort();
+            v
+        };
+        // Search: words, prefixes, never FTS syntax.
+        let chairs = Scope::Search("chair".into());
+        assert_eq!(ids(&c, &chairs, &none), vec![oak, steel]);
+        assert_eq!(c.count_in(&chairs, &none).unwrap(), 2);
+        assert_eq!(ids(&c, &Scope::Search("ste".into()), &none), vec![steel]);
+        let wood_out = CategoryFilter {
+            include: vec![],
+            exclude: vec!["wood".into()],
+        };
+        assert_eq!(
+            ids(&c, &chairs, &wood_out),
+            vec![steel],
+            "filters apply to search"
+        );
+        assert!(ids(&c, &Scope::Search("\"(-NOT".into()), &none).is_empty());
+        assert!(ids(&c, &Scope::Search("   ".into()), &none).is_empty());
+        assert_eq!(c.count_in(&Scope::Search("".into()), &none).unwrap(), 0);
+        // Saved: only blocks with an original in the store.
+        let mut saved = ids(&c, &Scope::Saved, &none);
+        saved.sort();
+        assert_eq!(saved.len(), 2);
+        assert!(saved.contains(&oak) && !saved.contains(&steel));
+        assert_eq!(c.count_in(&Scope::Saved, &none).unwrap(), 2);
+        assert!(!c.category_counts(&Scope::Saved, &none).unwrap().is_empty());
+        // Paging works on both.
+        assert_eq!(c.slides_in(&chairs, &none, 1, 1).unwrap().len(), 1);
     }
 
     #[test]

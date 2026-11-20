@@ -172,6 +172,7 @@ fn map_artwork(a: &Value, iiif: &str) -> Option<RemoteItem> {
         media,
         files: Vec::new(),
         remote_updated_at: a["updated_at"].as_str().map(str::to_string),
+        label: Default::default(),
     };
     Some(RemoteItem {
         block,
