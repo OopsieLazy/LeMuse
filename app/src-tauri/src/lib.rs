@@ -28,6 +28,7 @@ use lemuse_core::store::LibraryPaths;
 use lemuse_core::sync::{refresh_channel, refresh_library, Trigger};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_dialog::DialogExt;
 
 /// Most slides one `slides` call returns: one page of the page menu.
 const PAGE_LIMIT: u32 = 500;
@@ -387,18 +388,93 @@ fn about() -> About {
     }
 }
 
-// ── Save (ADR-0022) ─────────────────────────────────────────────────────
+// ── Save (ADR-0022) and Save as (ADR-0031) ──────────────────────────────
 
-/// Save the current image's original into `views/<topic or playlist>/`
-/// (`views/Saved/` from All). The folder comes from the source the core
-/// resolves, never from a path the page sends.
+/// The library folder a save from `source` goes in: the topic or playlist,
+/// or `Saved` from All, Saved or a search. Resolved here, never a path the
+/// page sends.
+fn save_folder(
+    cfg: &lemuse_core::config::Config,
+    catalog: &Catalog,
+    source: &SlideSource,
+) -> Result<String, AppError> {
+    Ok(match source {
+        SlideSource::All | SlideSource::Saved | SlideSource::Search { .. } => {
+            lemuse_core::save::DEFAULT_FOLDER.to_string()
+        }
+        SlideSource::Topic { name } => cfg
+            .topic(name)
+            .map(|t| t.name.clone())
+            .ok_or_else(|| no_topic(name))?,
+        SlideSource::Playlist { id } => catalog
+            .playlists()?
+            .into_iter()
+            .find(|p| p.id == *id)
+            .map(|p| p.name)
+            .ok_or_else(|| AppError::new(code::NOT_FOUND, "That playlist no longer exists."))?,
+    })
+}
+
+/// Where Save as saved the image.
+#[derive(Serialize)]
+struct SavedAs {
+    saved: lemuse_core::save::Saved,
+    /// The file the user chose (extension corrected to the real type).
+    path: String,
+    /// Its folder, for "Saved to <folder>" and the next dialog.
+    folder: String,
+}
+
+/// Save as: the native Save dialog (opened here, in Rust; the page has no
+/// dialog permission and sends no path), then the original into the
+/// library as before, then a copy to the chosen file. `None` if cancelled:
+/// nothing is downloaded or written. `start_dir` (the last save's folder)
+/// only picks where the dialog opens, and only if it is an existing folder.
 #[tauri::command]
-async fn save_image(
+async fn save_image_as(
     app: AppHandle,
     block_id: i64,
     source: SlideSource,
-) -> Cmd<lemuse_core::save::Saved> {
+    start_dir: Option<String>,
+) -> Cmd<Option<SavedAs>> {
     blocking(move || {
+        let paths = library_paths();
+        let cfg = load_config(&paths)?;
+        let catalog = catalog()?;
+        let folder = save_folder(&cfg, &catalog, &source)?;
+        let name = lemuse_core::save::suggested_name(&catalog, block_id)?;
+        let start = start_dir
+            .filter(|d| d.len() <= 1024)
+            .map(PathBuf::from)
+            .filter(|d| d.is_absolute() && d.is_dir())
+            .unwrap_or_else(|| {
+                let d = paths
+                    .views()
+                    .join(lemuse_core::store::views::sanitize_name(&folder));
+                let _ = std::fs::create_dir_all(&d);
+                d
+            });
+        let mut dialog = app
+            .dialog()
+            .file()
+            .set_title("Save the original")
+            .set_directory(&start)
+            .set_file_name(&name)
+            .add_filter(
+                "Images",
+                &[
+                    "jpg", "jpeg", "png", "gif", "webp", "avif", "tif", "tiff", "bmp",
+                ],
+            );
+        if let Some(w) = app.get_webview_window("main") {
+            dialog = dialog.set_parent(&w);
+        }
+        let Some(picked) = dialog.blocking_save_file() else {
+            return Ok(None);
+        };
+        let dest = picked
+            .into_path()
+            .map_err(|_| AppError::new(code::INVALID, "Choose a file on this PC."))?;
         {
             let gate = app.state::<SaveGate>();
             let mut next = gate.0.lock().map_err(poisoned)?;
@@ -411,34 +487,25 @@ async fn save_image(
             }
             *next = Some(now + SAVE_SPACING);
         }
-        let paths = library_paths();
-        let cfg = load_config(&paths)?;
-        let catalog = catalog()?;
-        let folder = match &source {
-            // From All, Saved or a search: the default Saved folder.
-            SlideSource::All | SlideSource::Saved | SlideSource::Search { .. } => {
-                lemuse_core::save::DEFAULT_FOLDER.to_string()
-            }
-            SlideSource::Topic { name } => cfg
-                .topic(name)
-                .map(|t| t.name.clone())
-                .ok_or_else(|| no_topic(name))?,
-            SlideSource::Playlist { id } => catalog
-                .playlists()?
-                .into_iter()
-                .find(|p| p.id == *id)
-                .map(|p| p.name)
-                .ok_or_else(|| AppError::new(code::NOT_FOUND, "That playlist no longer exists."))?,
-        };
         let http = lemuse_core::sync::production_client(&cfg);
-        Ok(lemuse_core::save::save_original(
+        let saved = lemuse_core::save::save_original(
             &paths,
             &catalog,
             http.as_ref(),
             block_id,
             &folder,
             true,
-        )?)
+        )?;
+        let path = lemuse_core::save::copy_to(&paths, &saved, &dest)?;
+        let folder = path
+            .parent()
+            .map(|d| d.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        Ok(Some(SavedAs {
+            saved,
+            path: path.to_string_lossy().into_owned(),
+            folder,
+        }))
     })
     .await
 }
@@ -873,6 +940,9 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        // Save as (ADR-0031): used from Rust only; no `dialog:` permission
+        // in the capabilities, so the page can't open dialogs itself.
+        .plugin(tauri_plugin_dialog::init())
         .manage(Refreshing::default())
         .manage(ConfigEdits::default())
         .manage(SaveGate::default())
@@ -912,7 +982,7 @@ pub fn run() {
             about,
             preview_channel,
             related_channels,
-            save_image,
+            save_image_as,
             arena_token_status,
             set_arena_token,
             clear_arena_token,

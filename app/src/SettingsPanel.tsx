@@ -48,6 +48,8 @@ export interface SettingsPanelProps {
   onCheckUpdate?: () => void;
   /** Open the third-party licences (ADR-0030). */
   onShowNotices?: () => void;
+  /** Open the ? sheet, where shortcuts are changed (ADR-0031). */
+  onShowShortcuts?: () => void;
   arena?: ArenaTokenView;
   about?: About | null;
   onSaveArenaToken?: (token: string) => void;
@@ -366,6 +368,11 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
             <p className="settings-note">
               Turn these off if you use speech input or press keys by accident. Arrows, Space and Esc always work.
             </p>
+            <div className="form-row">
+              <button type="button" className="text-btn" onClick={p.onShowShortcuts}>
+                Change keyboard shortcuts…
+              </button>
+            </div>
             {p.contentNote && (
               <p className="settings-note" role="status">
                 {p.contentNote}

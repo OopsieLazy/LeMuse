@@ -7,6 +7,8 @@ import { test } from "node:test";
 import { labelLine, parseSourceKey, redact, reportUrl, sharpSlide, sourceKey, withContentDefaults, type Slide } from "../src/api";
 import { altText } from "../src/SlideshowView";
 import { welcomeTopics } from "../src/WelcomePanel";
+import { stableOrder } from "../src/order";
+import { actionFor, bind, DEFAULT_KEYS, isCharacterKey, keyLabel, keyOf, sanitizeKeys } from "../src/keys";
 import {
   balanceExponent,
   clock,
@@ -313,4 +315,68 @@ test("the welcome offers the fullest topics first, at most 12", () => {
   assert.equal(offer.length, 12);
   assert.equal(offer[0].name, "T19");
   assert.ok(offer.every((x) => x.slides > 0), "empty topics aren't offered");
+});
+
+test("saving or hiding an image never reshuffles the slides", () => {
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  const ids = [1, 2, 3, 4, 5, 6, 7, 8];
+  const first = stableOrder(null, ids, true, true, rnd);
+  assert.deepEqual([...first].sort((a, b) => a - b), ids);
+  // Save: same images → the same order (the image on screen stays).
+  assert.deepEqual(stableOrder(first, ids, true, false, rnd), first);
+  // Hide one: the rest keep their places.
+  assert.deepEqual(
+    stableOrder(first, ids.filter((i) => i !== first[2]), true, false, rnd),
+    first.filter((i) => i !== first[2]),
+  );
+  // A new page or view: a fresh order of the new images.
+  const next = stableOrder(first, [9, 10, 11], true, false, rnd);
+  assert.deepEqual([...next].sort((a, b) => a - b), [9, 10, 11]);
+  // Unshuffled views keep the source's order, whatever came before.
+  assert.deepEqual(stableOrder(first, [3, 1, 2], false, false), [3, 1, 2]);
+});
+
+test("shortcuts: changeable, clash-free, untrusted saves cleaned", () => {
+  // Defaults: one key per action, the bar on H, Save on Q.
+  const used = Object.values(DEFAULT_KEYS).filter(Boolean);
+  assert.equal(new Set(used).size, used.length);
+  assert.equal(actionFor(DEFAULT_KEYS, "h"), "bar");
+  assert.equal(actionFor(DEFAULT_KEYS, "q"), "save");
+  // Keys as events name them.
+  assert.equal(keyOf(" "), "Space");
+  assert.equal(keyOf("Q"), "q");
+  assert.equal(keyOf("ArrowLeft"), "ArrowLeft");
+  for (const k of ["Escape", "Tab", "Enter", "F5", "F12", "Shift", "Dead", "Unidentified"]) assert.equal(keyOf(k), null, k);
+  assert.equal(keyLabel("ArrowRight"), "→");
+  assert.equal(keyLabel(""), "None");
+  assert.ok(isCharacterKey("q") && !isCharacterKey("Space") && !isCharacterKey("F2"));
+  // Taking a key in use frees it from the other action.
+  const r = bind(DEFAULT_KEYS, "save", "h");
+  assert.equal(r.moved, "bar");
+  assert.equal(r.map.bar, "");
+  assert.equal(actionFor(r.map, "h"), "save");
+  // Saved maps: unknown ids, bad keys and clashes are dropped.
+  const k = sanitizeKeys({ save: "h", bar: "h", nope: "z", mini: "Escape", grid: "", play: 7, help: "x".repeat(40) });
+  assert.equal(k.save, "h");
+  assert.equal(k.bar, "", "its default H is taken: no key");
+  assert.equal(k.mini, "m", "Escape can't be bound: default kept");
+  assert.equal(k.grid, "", "unbound on purpose");
+  assert.equal(k.play, "Space");
+  assert.equal(k.help, "?");
+  assert.ok(!("nope" in k));
+  const all = Object.values(k).filter(Boolean);
+  assert.equal(new Set(all).size, all.length, "never two actions on one key");
+  assert.deepEqual(sanitizeKeys("junk"), DEFAULT_KEYS);
+  assert.deepEqual(sanitize({ keys: { save: "F2" } }).keys.save, "F2");
+});
+
+test("the last Save-as folder is kept only when it is a plain path", () => {
+  const dir = String.raw`D:\Drawing\References`;
+  assert.equal(sanitize({ lastSaveDir: dir }).lastSaveDir, dir);
+  assert.equal(sanitize({ lastSaveDir: `${dir}\u0001` }).lastSaveDir, null, "control characters");
+  assert.equal(sanitize({ lastSaveDir: `${dir}\nC:` }).lastSaveDir, null, "a second line");
+  assert.equal(sanitize({ lastSaveDir: "" }).lastSaveDir, null);
+  assert.equal(sanitize({ lastSaveDir: "x".repeat(1025) }).lastSaveDir, null);
+  assert.equal(sanitize({ lastSaveDir: 7 }).lastSaveDir, null);
 });

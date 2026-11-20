@@ -18,6 +18,7 @@ import { PracticePanel, type PracticePanelProps } from "../src/PracticePanel";
 import { WelcomePanel } from "../src/WelcomePanel";
 import { NoticesPanel } from "../src/NoticesPanel";
 import { ShortcutsPanel } from "../src/ShortcutsPanel";
+import { DEFAULT_KEYS } from "../src/keys";
 import { NO_STUDY, weeklyLog, type SessionResult } from "../src/practice";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
 import { SlideshowView, type SlideshowViewProps } from "../src/SlideshowView";
@@ -153,7 +154,7 @@ interface State {
   practice?: Partial<PracticePanelProps>;
   /** Extra Settings props (Content, Updates; ADR-0027, ADR-0028). */
   settingsExtra?: Partial<SettingsPanelProps>;
-  shortcuts?: boolean;
+  shortcuts?: boolean | "edit";
   /** The first-run welcome (ADR-0029). */
   welcome?: boolean;
   /** Third-party licences (ADR-0030). */
@@ -218,6 +219,7 @@ export const STATES: Record<string, State> = {
     practice: { view: "summary", result: { ...sessionResult, drawn: [], seconds: 0, finished: false }, onResume: () => undefined },
   },
   shortcuts: { props: base, shortcuts: true },
+  "shortcuts-edit": { props: base, shortcuts: "edit", settings: { singleKeys: false, keys: { ...DEFAULT_KEYS, save: "", bar: "F2" } } },
   // Finishing 1.0 (ADR-0029).
   "museum-label": { props: { ...base, index: 0 } },
   "museum-label-compact": { props: { ...base, index: 0, compactBarOpen: true }, compactBar: true },
@@ -428,8 +430,34 @@ export const STATES: Record<string, State> = {
   "link-copied": { props: { ...base, toast: "Link copied" } },
   "context-menu": { props: { ...base, contextMenu: { x: 300, y: 200 } } },
   "context-menu-preview": { props: { ...base, mode: "preview", contextMenu: { x: 300, y: 200 } } },
+  // Save as (ADR-0031): the note stays until its × (placeholder path, never a real one).
   saved: {
-    props: { ...base, slides: base.slides.map((s) => ({ ...s, saved: true })), toast: "Saved to LeMuse › views › Wood objects" },
+    props: {
+      ...base,
+      slides: base.slides.map((s) => ({ ...s, saved: true })),
+      savedNote: { folder: "C:\\Users\\you\\Pictures\\References", file: "Oak_ chair_ [7].jpg" },
+      onDismissSavedNote: () => undefined,
+    },
+  },
+  "saved-long-path-mini": {
+    props: {
+      ...base,
+      mini: true,
+      savedNote: {
+        folder: "D:\\Drawing\\References\\Furniture and objects\\Chairs, stools and benches\\2026",
+        file: "A rather long image title that goes on for a while [12345].jpg",
+      },
+      onDismissSavedNote: () => undefined,
+    },
+    mini: true,
+  },
+  "saved-with-toast": {
+    props: {
+      ...base,
+      savedNote: { folder: "C:\\Users\\you\\Pictures\\References", file: "Oak_ chair_ [7].jpg" },
+      onDismissSavedNote: () => undefined,
+      toast: "Link copied",
+    },
   },
   // ---- ADR-0015: pages, categories, Find channels ----
   pages: { props: { ...base, active: { kind: "all" }, activeLabel: "All", total: 4489, page: 1 } },
@@ -459,6 +487,22 @@ export const STATES: Record<string, State> = {
       preview: channelPreview,
       previewLink: "https://www.are.na/someone/woodworking",
       status: { tone: "ok", text: "Previewing Woodworking. Add it to a topic below if you like it." },
+    },
+  },
+  "discover-nested": {
+    props: base,
+    discover: {
+      preview: {
+        channel: { slug: "see-through-things", title: "See-through things", contents: 3 },
+        items: [],
+        channels: [
+          { slug: "clear-plastic-cases", title: "Clear plastic cases", owner: "Example Person", contents: 120 },
+          { slug: "see-through-gadgets", title: "See-through gadgets", owner: "Another Person", contents: 48 },
+          { slug: "glass-objects", title: "Glass objects with a rather long channel title", owner: null, contents: null },
+        ],
+      },
+      previewLink: "https://www.are.na/someone/see-through-things",
+      status: { tone: "ok", text: "Previewing See-through things. Add it to a topic below if you like it." },
     },
   },
   "discover-related": {
@@ -516,7 +560,12 @@ function documentFor(name: string, st: State, extraHead = "") {
       : "") +
     (st.refreshDetails ? renderToStaticMarkup(<RefreshDetails {...st.refreshDetails} staticOpen />) : "") +
     (st.practice ? renderToStaticMarkup(<PracticePanel {...practiceBase} {...st.practice} staticOpen />) : "") +
-    (st.shortcuts ? renderToStaticMarkup(<ShortcutsPanel staticOpen />) : "") +
+    (st.shortcuts === true ? renderToStaticMarkup(<ShortcutsPanel staticOpen />) : "") +
+    (st.shortcuts === "edit"
+      ? renderToStaticMarkup(
+          <ShortcutsPanel staticOpen staticCapturing="favourite" keys={settings.keys} lettersOff={!settings.singleKeys} />,
+        )
+      : "") +
     (st.welcome ? renderToStaticMarkup(<WelcomePanel topics={st.props.topics} staticOpen />) : "") +
     (st.notices !== undefined ? renderToStaticMarkup(<NoticesPanel text={st.notices} staticOpen />) : "") +
     (st.library

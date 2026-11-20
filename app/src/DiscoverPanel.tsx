@@ -79,6 +79,7 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
   const chosen = lists.find((l) => l.label === list);
   const app = p.mode === "app";
   const newFollowed = (p.following?.result?.channels ?? []).filter((c) => c.in_topics.length === 0);
+  const nested = p.preview?.channels ?? [];
 
   const onSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -353,9 +354,69 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
                   <span className="related-title">{p.preview.channel.title}</span>
                   <span className="related-meta">
                     {p.preview.channel.contents != null ? `${fmt(p.preview.channel.contents)} items` : "Are.na channel"}
-                    {` · first ${p.preview.items.length} shown`}
+                    {p.preview.items.length
+                      ? ` · first ${p.preview.items.length} shown`
+                      : nested.length
+                        ? ` · ${nested.length === 1 ? "1 channel" : `${nested.length} channels`} inside`
+                        : ""}
                   </span>
                 </p>
+                {nested.length > 0 && (
+                  <div className="nested">
+                    <p className="list-label" id="nested-label">
+                      {p.preview.items.length
+                        ? `It also holds ${nested.length === 1 ? "1 other channel" : `${nested.length} other channels`}. LeMuse doesn't open them by itself; add the ones you want:`
+                        : `It holds ${nested.length === 1 ? "1 channel" : `${nested.length} channels`} rather than images. Add the ones you want; each becomes its own topic:`}
+                    </p>
+                    <ul className="channel-list related-list" aria-labelledby="nested-label">
+                      {nested.map((c) => (
+                        <li key={c.slug}>
+                          <span className="channel-slug">
+                            <span className="related-title">{c.title}</span>
+                            <span className="related-meta">
+                              {c.owner ?? "Are.na"}
+                              {c.contents != null ? ` · ${fmt(c.contents)} items` : ""}
+                            </span>
+                          </span>
+                          <span className="row-actions">
+                            <button
+                              type="button"
+                              className="text-btn"
+                              disabled={p.busy || !app}
+                              onClick={() => p.onPreview?.(c.slug)}
+                              aria-label={`Preview ${c.title}`}
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              className="text-btn"
+                              disabled={p.busy || !app}
+                              onClick={() => p.onAddFollowed?.([{ slug: c.slug, title: c.title, owner: c.owner, topic: null }])}
+                              aria-label={`Add ${c.title} as its own topic`}
+                            >
+                              Add
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {nested.length > 1 && (
+                      <div className="form-row">
+                        <button
+                          type="button"
+                          className="primary-btn"
+                          disabled={p.busy || !app}
+                          onClick={() =>
+                            p.onAddFollowed?.(nested.map((c) => ({ slug: c.slug, title: c.title, owner: c.owner, topic: null })))
+                          }
+                        >
+                          Add all {nested.length}, each as its own topic
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {p.preview.items.length ? (
                   <ul className="preview-grid">
                     {p.preview.items.map((it, i) => (
@@ -370,7 +431,7 @@ export const DiscoverPanel = forwardRef<HTMLDialogElement, DiscoverPanelProps>(f
                       </li>
                     ))}
                   </ul>
-                ) : (
+                ) : nested.length ? null : (
                   <p className="list-label">This channel has no images on its first page.</p>
                 )}
                 <form className="stack-form" onSubmit={onAdd}>

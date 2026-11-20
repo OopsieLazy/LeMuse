@@ -63,6 +63,11 @@ import {
   type StudyAids,
 } from "./practice";
 import * as cue from "./sound";
+import { stableOrder } from "./order";
+import { actionFor, isCharacterKey, keyOf } from "./keys";
+
+/** Matches styles.css: compact windows hide the bar until a tap. */
+const COMPACT_QUERY = "(max-width: 1024px), (max-height: 560px)";
 
 /** How often the pose clock steps (ms). */
 const SESSION_TICK_MS = 200;
@@ -75,15 +80,6 @@ const FIRST_FILL_POLL_MS = 10_000;
 
 /** How many upcoming images to warm in memory (CLAUDE.md: at most 2). */
 const PRELOAD_AHEAD = 2;
-
-function shuffled<T>(items: T[]): T[] {
-  const out = items.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 /** Errors from the core arrive as strings; keep the readable part. */
 function message(e: unknown): string {
@@ -145,6 +141,7 @@ export function App() {
   const [miniBarOpen, setMiniBarOpen] = useState(false);
   const [compactBarOpen, setCompactBarOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedNote, setSavedNote] = useState<{ folder: string; file: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [arenaToken, setArenaToken] = useState<TokenStatus | null>(null);
   const [arenaBusy, setArenaBusy] = useState(false);
@@ -417,8 +414,19 @@ export function App() {
     else setShuffle(active?.kind === "all");
   }, [activeKey, topic?.shuffle]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Shuffle once per load/toggle; a failed image must not reshuffle the order.
-  const slides = useMemo(() => (shuffle ? shuffled(source) : source), [source, shuffle]);
+  // Shuffle once per view, page or toggle. Saving, marking or a failed image
+  // changes slides, not the set of images, so the order (and the image on
+  // screen) stays put (owner, session 20: "should still stay in the slide").
+  const orderRef = useRef<{ key: string; ids: number[] } | null>(null);
+  const slides = useMemo(() => {
+    const key = `${activeKey}|${page}|${shuffle}`;
+    const prev = orderRef.current;
+    const ids = source.map((s) => s.block_id);
+    const order = stableOrder(prev?.key === key ? prev.ids : null, ids, shuffle, prev?.key !== key);
+    orderRef.current = { key, ids: order };
+    const byId = new Map(source.map((s) => [s.block_id, s]));
+    return order.map((id) => byId.get(id)).filter((s): s is Slide => s !== undefined);
+  }, [source, shuffle, activeKey, page]);
   // A failed image first tries the block's other stored sizes (ADR-0016).
   const visible = useMemo(
     () =>
@@ -643,22 +651,26 @@ export function App() {
   }, [slide, say]);
 
   // ---- Save the original (ADR-0022) ----
+  // Save as (ADR-0031): the native dialog picks the file; the note says
+  // where it went and stays until its × is pressed. The image stays on
+  // screen (the slide order is stable, see order.ts).
   const saveCurrent = useCallback(async () => {
-    if (!slide || !active) return;
+    if (!slide || !active || saving) return;
     const id = slide.block_id;
     setSaving(true);
     try {
-      const r = await api.saveImage(id, active);
+      const r = await api.saveImageAs(id, active, settings.lastSaveDir);
+      if (!r) return;
       setSource((list) => list.map((s) => (s.block_id === id ? { ...s, saved: true } : s)));
-      if (!r.already_stored) setSavedCount((n) => n + 1);
-      const folder = r.view.split("/").slice(0, -1).join(" › ");
-      say(`Saved to LeMuse › ${folder}`);
+      if (!r.saved.already_stored) setSavedCount((n) => n + 1);
+      patch({ lastSaveDir: r.folder });
+      setSavedNote({ folder: r.folder, file: r.path.split(/[\\/]/).pop() ?? r.path });
     } catch (e) {
       say(message(e));
     } finally {
       setSaving(false);
     }
-  }, [slide, active, say]);
+  }, [slide, active, saving, settings.lastSaveDir, patch, say]);
 
   // ---- Timed sessions (ADR-0025) ----
   // The session lives in state for the view and in a ref for the clock, so
@@ -868,8 +880,23 @@ export function App() {
       .catch((e) => say(message(e)));
   }, [slide, favourite, setFavourite, say]);
 
-  // Keyboard: ← → Space S F H T P C R D M L A , Esc, and the practice keys
-  // N K X U G V I E B O 0 ? (ShortcutsPanel lists them all). Ignored while typing or in a dialog.
+  // The control bar, in every window: the mini player's and compact
+  // windows' bars open on a tap, so the bar key opens them too (owner,
+  // session 20: "if no hotkey for bringing back the bar add one").
+  const toggleBar = useCallback(() => {
+    if (mini) {
+      setMiniMenuOpen(false);
+      setMiniBarOpen((o) => !o);
+      return;
+    }
+    const compact = window.matchMedia(COMPACT_QUERY).matches;
+    const shown = !settings.controlsHidden && (!compact || compactBarOpen);
+    if (compact) setCompactBarOpen(!shown);
+    patch({ controlsHidden: shown && !compact });
+  }, [mini, settings.controlsHidden, compactBarOpen, patch]);
+
+  // Keyboard: the keys in keys.ts (changeable in the ? sheet), plus Esc.
+  // Ignored while typing or in a dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -882,53 +909,89 @@ export function App() {
         return;
       }
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, dialog")) return;
-      // Single-letter shortcuts can be turned off (WCAG 2.1.4); Space stays.
-      if (!settings.singleKeys && e.key.length === 1 && e.key !== " ") return;
-      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const s = sessionRef.current;
-      if (k === "ArrowRight") (s ? advancePose("skip") : go(1));
-      else if (k === "ArrowLeft") (s ? backPose() : go(-1));
-      else if (k === " ") {
-        e.preventDefault();
-        if (s) togglePause();
-        else setPlaying((p) => !p);
-      } else if (k === "Escape" && s) endSession(s);
-      else if (k === "n" && !s) openPractice();
-      else if (k === "k") toggleFavourite();
-      else if (k === "x") changeStudy({ mirror: !study.mirror });
-      else if (k === "u") changeStudy({ upside: !study.upside });
-      else if (k === "g") changeStudy({ grey: !study.grey, tones: 0 });
-      else if (k === "v") changeStudy({ tones: nextOf(TONES, study.tones) });
-      else if (k === "b") changeStudy({ squint: !study.squint });
-      else if (k === "e") changeStudy({ effect: nextOf(EFFECTS, study.effect) });
-      // Isolating darks or lights needs at least 3 values; start from 5.
-      else if (k === "i") changeStudy({ focus: nextOf(FOCI, study.focus), tones: study.tones > 2 ? study.tones : 5 });
-      else if (k === "o") changeStudy({ grid: nextOf(GRIDS, study.grid) });
-      else if (k === "w" && !s) setGrid((g) => !g);
-      else if (k === "/") {
-        e.preventDefault();
-        setRailOpen(true);
-        document.getElementById("rail-search")?.focus();
+      if (e.key === "Escape") {
+        if (s) endSession(s);
+        else if (fullscreen && api.kind === "app") toggleFullscreen();
+        return;
       }
-      else if (k === "0") setStudy(NO_STUDY);
-      else if (k === "?") openDialog(shortcutsRef.current);
-      else if (k === "s") setShuffle((s) => !s);
-      else if (k === "f") toggleFullscreen();
-      else if (k === "h") patch({ controlsHidden: !settings.controlsHidden });
-      else if (k === "t") setRailOpen((o) => !o);
-      else if (k === "p" && slide) toggleMenu();
-      else if (k === "c") toggleFilter();
-      else if (k === "r") openRelated();
-      else if (k === "m") toggleMini();
-      else if (k === "l") copyLink();
-      else if (k === "d") openDiscover();
-      else if (k === "a") openLibrary();
-      else if (k === ",") openSettings();
-      else if (k === "Escape" && fullscreen && api.kind === "app") toggleFullscreen();
+      const key = keyOf(e.key);
+      if (!key) return;
+      // Single-character shortcuts can be turned off (WCAG 2.1.4); named keys stay.
+      if (!settings.singleKeys && isCharacterKey(key)) return;
+      const action = actionFor(settings.keys, key);
+      if (!action) return;
+      // Space and / would also scroll or type; the arrows would move focus.
+      e.preventDefault();
+      switch (action) {
+        case "next":
+          return s ? advancePose("skip") : go(1);
+        case "prev":
+          return s ? backPose() : go(-1);
+        case "play":
+          return s ? togglePause() : setPlaying((p) => !p);
+        case "session":
+          return s ? undefined : openPractice();
+        case "favourite":
+          return toggleFavourite();
+        case "save":
+          return s ? undefined : void saveCurrent();
+        case "mirror":
+          return changeStudy({ mirror: !study.mirror });
+        case "upside":
+          return changeStudy({ upside: !study.upside });
+        case "grey":
+          return changeStudy({ grey: !study.grey, tones: 0 });
+        case "values":
+          return changeStudy({ tones: nextOf(TONES, study.tones) });
+        case "squint":
+          return changeStudy({ squint: !study.squint });
+        case "effect":
+          return changeStudy({ effect: nextOf(EFFECTS, study.effect) });
+        case "focus":
+          // Isolating darks or lights needs at least 3 values; start from 5.
+          return changeStudy({ focus: nextOf(FOCI, study.focus), tones: study.tones > 2 ? study.tones : 5 });
+        case "studyGrid":
+          return changeStudy({ grid: nextOf(GRIDS, study.grid) });
+        case "studyOff":
+          return setStudy(NO_STUDY);
+        case "grid":
+          return s ? undefined : setGrid((g) => !g);
+        case "search":
+          setRailOpen(true);
+          document.getElementById("rail-search")?.focus();
+          return;
+        case "help":
+          return openDialog(shortcutsRef.current);
+        case "shuffle":
+          return setShuffle((v) => !v);
+        case "fullscreen":
+          return toggleFullscreen();
+        case "bar":
+          return toggleBar();
+        case "topics":
+          return setRailOpen((o) => !o);
+        case "playlist":
+          return slide ? toggleMenu() : undefined;
+        case "filter":
+          return toggleFilter();
+        case "related":
+          return openRelated();
+        case "mini":
+          return toggleMini();
+        case "copyLink":
+          return copyLink();
+        case "discover":
+          return openDiscover();
+        case "library":
+          return openLibrary();
+        case "settings":
+          return openSettings();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, patch, settings.controlsHidden, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, grid, slide, fullscreen, settings.singleKeys, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
+  }, [go, toggleFullscreen, toggleBar, saveCurrent, settings.keys, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, grid, slide, fullscreen, settings.singleKeys, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
@@ -1413,6 +1476,8 @@ export function App() {
         onMarkNudity={() => markCurrent("nudity")}
         update={update.state === "available" && update.release ? update.release : null}
         toast={toast}
+        savedNote={savedNote}
+        onDismissSavedNote={() => setSavedNote(null)}
         onSelect={chooseSource}
         onOpenLibrary={openLibrary}
         onTogglePlaylistMenu={toggleMenu}
@@ -1490,6 +1555,7 @@ export function App() {
         contentNote={contentNote}
         update={update}
         onCheckUpdate={checkUpdate}
+        onShowShortcuts={() => openDialog(shortcutsRef.current)}
         onShowNotices={() => {
           openDialog(noticesRef.current);
           if (notices === null)
@@ -1538,7 +1604,12 @@ export function App() {
             : undefined
         }
       />
-      <ShortcutsPanel ref={shortcutsRef} />
+      <ShortcutsPanel
+        ref={shortcutsRef}
+        keys={settings.keys}
+        lettersOff={!settings.singleKeys}
+        onChangeKeys={(keys) => patch({ keys })}
+      />
       <NoticesPanel ref={noticesRef} text={notices} />
       <WelcomePanel
         ref={welcomeRef}
