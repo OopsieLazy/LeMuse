@@ -5,8 +5,9 @@
 # release: the owner reads it and clicks Publish. Nothing is published, and
 # no update reaches anyone, without that click.
 #
-# Signing: the installers are unsigned until the owner picks a signing
-# identity (PLAN Q24). The "Sign" step below is the only place to add it.
+# Signing: the owner chose to ship unsigned (PLAN Q24). Downloads are
+# checked with SHA256SUMS and the build attestation instead. If a
+# certificate is ever bought, the "Sign" step below is the only place to add it.
 name: release
 
 on:
@@ -62,8 +63,8 @@ jobs:
         working-directory: app
         run: npm run tauri build
       # - name: Sign
-      #   Q24: add the chosen signing step here (SignPath or an OV certificate
-      #   in a cloud HSM), signing target/release/bundle/**/LeMuse_*.exe/.msi.
+      #   Unsigned by decision (Q24). If an OV certificate in a cloud HSM is
+      #   ever added, sign target/release/bundle/**/LeMuse_*.exe/.msi here.
       - name: Collect files, SHA256SUMS and the SBOM
         shell: pwsh
         run: |
@@ -85,8 +86,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $notes = @"
-          LeMuse $env:TAG. Unsigned installer: Windows may show "Windows protected your PC"
-          (More info → Run anyway) until a signing identity is set up.
+          LeMuse $env:TAG. The installer isn't code-signed, so Windows may show "Windows protected
+          your PC": choose More info → Run anyway.
 
           Check a download: compare its SHA-256 with SHA256SUMS, or run
           gh attestation verify <file> --repo $env:GITHUB_REPOSITORY

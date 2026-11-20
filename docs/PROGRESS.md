@@ -24,7 +24,7 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 - **Checks:** 117 Rust; 14 UI unit; W3C 86; layout 8,702; secret scan clean.
 - **Then (owner):** followed channels became **their own topics** under "Following on Are.na" (no catch-all);
   the library was restructured, 0 errors. SignPath researched (332 projects; solo roles not addressed in its
-  terms); the signing policy is drafted.
+  terms), then declined: releases ship unsigned with checksums and attestation (Q24).
 
 ---
 

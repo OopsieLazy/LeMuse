@@ -32,10 +32,12 @@ certutil -hashfile LeMuse_0.10.0_x64-setup.exe SHA256
 gh attestation verify LeMuse_0.10.0_x64-setup.exe --repo OopsieLazy/LeMuse
 ```
 
-## Signing (Q24, open)
+## Signing (Q24: unsigned)
 
-The installers are unsigned, so Windows SmartScreen may warn until a signing identity exists. The workflow's
-commented **Sign** step is where it goes. Pick one identity and keep it for every release (ADR-0028 §4).
+LeMuse ships **unsigned** by the owner's decision, so Windows SmartScreen may say "Windows protected your PC"
+(More info → Run anyway). Downloads can still be checked: `SHA256SUMS` and GitHub's build attestation (above).
+If a certificate is ever bought, the workflow's commented **Sign** step is where it goes; keep one identity for
+every release from then on (ADR-0028 §4).
 
 ## Automatic updates (later)
 

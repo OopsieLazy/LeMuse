@@ -5,8 +5,9 @@ helps you practise drawing from them. Press **?** in the app for every shortcut.
 
 ## First steps
 
-1. **Install** with `LeMuse_<version>_x64-setup.exe`. The installer isn't signed yet: if Windows says "Windows
-   protected your PC", choose More info → Run anyway.
+1. **Install** with `LeMuse_<version>_x64-setup.exe`. The installer isn't code-signed: if Windows says "Windows
+   protected your PC", choose More info → Run anyway. To check the download, compare it with the release's
+   `SHA256SUMS` (docs/release.md).
 2. **Open LeMuse.** The starter topics fill on the first refresh; images appear as they arrive.
 3. **Pick a topic** in the list on the left (or ☰ in a small window).
 

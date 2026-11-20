@@ -8,7 +8,7 @@ feat: values and drawing effects, followed import, content, practice log, update
 ✅ Update check (GitHub, daily, optional); release workflow: draft, SHA256SUMS, SBOM, provenance
 ✅ Single-key shortcuts switch; layout test enforces 24 px targets and text contrast
 ✅ Privacy statement, user guide, release guide, name check; version 0.10.0
-⬜ Signing identity (Q24), Tauri auto-updater, image-model sensor (PLAN)
+⬜ Tauri auto-updater, image-model sensor, path to 1.0 items (PLAN); installers unsigned by decision (Q24)
 
 Reviewed-by: admin, developer passes (docs/reviews/0021-road-to-1-0.md)
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

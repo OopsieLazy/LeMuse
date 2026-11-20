@@ -69,6 +69,9 @@ research:
 
 EV no longer skips SmartScreen. Whichever is picked, keep one identity forever.
 
+**Owner's decision (2026-11-19): no SignPath; ship unsigned.** Each release carries `SHA256SUMS` and a build
+attestation, and its notes explain the SmartScreen prompt. The Sign slot stays for a certificate later.
+
 **5. Accessibility gates (layout test).**
 - **WCAG 2.5.8:** every visible control is at least 24 × 24 px. Inline text buttons and the full-image tap areas
   are exempt.

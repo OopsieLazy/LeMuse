@@ -77,7 +77,7 @@ nudity sensor; Q28 yes; Q29 good; check the newly followed channels import; test
 | 8 | **Name check (Q26):** desk search for "LeMuse": no conflict found (docs/product/name-check.md) | ✅ pushed |
 | 9 | Docs: ADR-0026/0027/0028, review 0021, privacy statement, user guide, release guide; v0.10.0; PR #21 | ✅ pushed |
 | 10 | Owner: "one big Following folder defeats the purpose": **each followed channel is its own topic**, named after it, under a "Following on Are.na" heading; library restructured (36 topics, 20 under the heading, 0 errors); `remove-channel`, `remove-topic` | ✅ pushed |
-| 11 | Owner: "likely SignPath" (Q24): how many use it, solo rules; draft `docs/code-signing-policy.md` | ✅ pushed |
+| 11 | Owner: SignPath researched (332 projects; solo roles not addressed), then **declined** (Q24): ship unsigned with checksums and attestation | ✅ pushed |
 
 ### Path to 1.0 (owner, session 15: "close to complete; let's complete it")
 
@@ -85,16 +85,16 @@ Claude's recommended order, one PR each. Updated after the art review (session 1
 1. ~~**Practice tools**~~ ✅ #20.
 2. ~~Road to 1.0 essentials~~ ✅ #21 (values, effects, content, log, updates, release pipeline, a11y gates).
 3. **Session craft and view comfort:** large timer ring (hideable), visual flash cue, crossfade after
-   `decode()`; surround picker (5 neutral steps); remember topic, position, plan and aids; Undo toasts; a switch
-   for single-key shortcuts (WCAG 2.1.4); first run "What are you drawing today?" (DA-13, DA-6, DA-14, DA-17).
+   `decode()`; surround picker (5 neutral steps); remember topic, position, plan and aids; Undo toasts; first run
+   "What are you drawing today?" (DA-13, DA-6, DA-14). (The single-key switch shipped in #21.)
 4. **Museum label and sharpness:** tombstone label (creator, *title*, date, medium, dimensions, credit line),
    CC0 / "rights belong to the creator" badges; Cleveland print (3,400 px) on large windows (DA-11, DA-12).
 5. **Browse:** grid view, a search box over the existing index, a Saved view, rename and remove topics.
 6. **Local folders** as a source; hide a whole channel (DA-15).
 7. **Desktop finish:** tray icon, start with Windows, `lemuse backup`; Save provenance sidecar (source, creator,
    licence).
-8. **1.0 release:** signing (Q24), third-party notices, the Tauri auto-updater (ADR-0028 §2), tag v1.0.0 and
-   publish the draft the release workflow makes (docs/release.md).
+8. **1.0 release:** third-party notices, the Tauri auto-updater (ADR-0028 §2), tag v1.0.0 and publish the draft
+   the release workflow makes (docs/release.md). Unsigned by decision (Q24).
 
 ## Roadmap
 
@@ -222,7 +222,7 @@ Claude's recommendation; the owner can reorder.
 | Q21 | Host LeMuse Web (stage 1, static, no user data) on the friend's domain? Which name, and who runs the server? | **Open** (ADR-0020); supersedes Q18 if yes |
 | Q22 | Which email account sends the daily mailer (app password in Credential Manager)? | **Open** (ADR-0021) |
 | Q23 | Contact Are.na before a public stage 2 or any paid tier? | **Open**, recommended yes (ADR-0020) |
-| Q24 | Signing identity for the installer: SignPath Foundation (free, SignPath named as publisher) or an OV certificate (~$150–300/yr, your name)? | **Leaning SignPath** (2026-11-19). Next (owner): publish a first release, then apply at signpath.org with docs/code-signing-policy.md; ask about solo maintainers (their terms assume a team). Then the workflow's Sign step |
+| Q24 | Signing identity for the installer: SignPath Foundation (free, SignPath named as publisher) or an OV certificate (~$150–300/yr, your name)? | ✅ **No SignPath** (2026-11-19). Ship unsigned: SHA256SUMS + build attestation, and the SmartScreen note in the release. An OV certificate can be added later in the workflow's Sign slot |
 | Q25 | Auto-update (Tauri updater needs a permanent private key) or manual updates via GitHub Releases / winget? | ✅ (2026-11-19) "How hard? At least detect new versions." Update check built (#21); the updater is one PR after the first published release (ADR-0028 §2) |
 | Q26 | Run the "LeMuse" trademark search (USPTO, EUIPO, UKIPO; classes 9 and 42) before 1.0 branding? | ✅ "Sure; likely will use regardless." Desk search clean (docs/product/name-check.md); formal search only before paid distribution |
 | Q27 | Nudity default: hide by default with a per-topic opt-in, or show all with a hide action? | ✅ "Yes, needs a nudity sensor": hidden by default, text sensor + your marks (#21, ADR-0027) |
