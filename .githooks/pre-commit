@@ -7,6 +7,16 @@
 #    rendered states.
 # Never bypass with --no-verify; fix the finding instead.
 
+# 0. Never on main (GitHub Flow): work goes on a branch and reaches main only
+#    through a squash-merged PR. (Review 0024 D-163: after a merge and pull,
+#    work was committed straight onto local main.)
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
+if [ "$branch" = "main" ]; then
+  echo "pre-commit: you're on main; commit on a branch instead:" >&2
+  echo "  git switch -c type/NNNN-short-slug" >&2
+  exit 1
+fi
+
 if ! node scripts/scan-secrets.mjs --staged; then
   echo "pre-commit: secret scan failed; commit stopped." >&2
   exit 1

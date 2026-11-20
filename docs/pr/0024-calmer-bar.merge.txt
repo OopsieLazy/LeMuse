@@ -1,0 +1,9 @@
+fix(ui): a calmer bar; the source always shows; the arrow off the grid
+
+✅ Practice ◐ holds the timed session, grid view and study aids; ⋯ opens the image menu (17 → 13 buttons)
+✅ The source is always visible (small windows, Minimal layout); the credit fits 400 px windows
+✅ The ⌃ arrow no longer covers the grid; in small windows a tap on a thumbnail opens it
+✅ Layout checks: covered controls, attribution, arrow vs grid, 1040 px; pre-commit refuses commits on main
+
+Reviewed-by: admin, developer passes (docs/reviews/0024-calmer-bar.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
