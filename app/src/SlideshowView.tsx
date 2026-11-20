@@ -120,8 +120,9 @@ export interface SlideshowViewProps {
   savedNote?: { folder: string; file: string } | null;
   onDismissSavedNote?: () => void;
   /** Right-click menu on the image, at window coordinates (ADR-0022). */
-  contextMenu?: { x: number; y: number } | null;
-  onContextMenu?: (x: number, y: number) => void;
+  /** The image menu: at the pointer (right-click) or above the bar's ⋯ button. */
+  contextMenu?: { x: number; y: number; above?: boolean } | null;
+  onContextMenu?: (x: number, y: number, above?: boolean) => void;
   onCloseContextMenu?: () => void;
   /** A short confirmation, e.g. "Link copied". */
   toast?: string;
@@ -251,6 +252,7 @@ const ICONS = {
   search: "M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13ZM15.5 15.5 20 20",
   related: "M8 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM22 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM22 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM7.6 10.6l8.8-3.2M7.6 13.4l8.8 3.2",
   link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+  more: "M6.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM13.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM20.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z",
   mini: "M3 5h18v14H3ZM12 12h7v5h-7Z",
   expand: "M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7",
   heart: "M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20Z",
@@ -687,6 +689,7 @@ export function SlideshowView(p: SlideshowViewProps) {
                 ☰ for topics, and a small credit while the bar is hidden. */}
             {!p.mini && (
               <>
+                {!p.grid && (
                 <button
                   type="button"
                   className="compact-tap"
@@ -694,6 +697,7 @@ export function SlideshowView(p: SlideshowViewProps) {
                   aria-expanded={Boolean(p.compactBarOpen)}
                   aria-label={p.compactBarOpen ? "Hide controls" : "Show controls"}
                 />
+                )}
                 <button
                   type="button"
                   className="icon-btn compact-burger"
@@ -709,8 +713,11 @@ export function SlideshowView(p: SlideshowViewProps) {
             )}
             {slide && !(p.mini && p.miniBarOpen) && (
               <p className="compact-credit">
-                {slide.creator ? `${slide.creator} · ` : ""}
-                {sourceName(slide)}
+                {slide.creator && <span className="credit-creator">{slide.creator}</span>}
+                <span className="credit-source">
+                  {slide.creator ? " · " : ""}
+                  {sourceName(slide)}
+                </span>
               </p>
             )}
             {p.contextMenu && slide && (
@@ -720,8 +727,10 @@ export function SlideshowView(p: SlideshowViewProps) {
                 aria-label="Image"
                 // Opens at the pointer, kept inside the window by the clamps.
                 style={{
-                  left: `min(${p.contextMenu.x}px, calc(100vw - var(--context-menu-width) - var(--space-3)))`,
-                  top: `min(${p.contextMenu.y}px, calc(100vh - var(--context-menu-height)))`,
+                  left: `max(var(--space-3), min(${p.contextMenu.x}px, calc(100vw - var(--context-menu-width) - var(--space-3))))`,
+                  top: p.contextMenu.above
+                    ? `max(var(--space-3), min(calc(${p.contextMenu.y}px - var(--context-menu-height) - var(--space-2)), calc(100vh - var(--context-menu-height) - var(--space-3))))`
+                    : `min(${p.contextMenu.y}px, calc(100vh - var(--context-menu-height)))`,
                 }}
                 onKeyDown={(e) => e.key === "Escape" && p.onCloseContextMenu?.()}
               >
@@ -761,6 +770,18 @@ export function SlideshowView(p: SlideshowViewProps) {
                 >
                   Copy link
                 </button>
+                {canRelate && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      p.onCloseContextMenu?.();
+                      p.onRelated?.();
+                    }}
+                  >
+                    Related Are.na channels
+                  </button>
+                )}
                 <button
                   type="button"
                   role="menuitem"
@@ -1048,41 +1069,34 @@ export function SlideshowView(p: SlideshowViewProps) {
                 <button type="button" className="icon-btn" onClick={p.onToggleShuffle} aria-pressed={p.shuffle} aria-label="Shuffle" title="Shuffle (S)">
                   <Icon d={ICONS.shuffle} />
                 </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={p.onSession}
-                  disabled={!slide && !session}
-                  data-active={session ? "true" : "false"}
-                  aria-label={session ? "End the session" : "Timed session"}
-                  title={session ? "End the session and see what you drew (Esc)" : "Timed drawing session (N)"}
-                >
-                  <Icon d={ICONS.timer} />
-                </button>
+                {/* Practice (owner, session 20: "art parts together"): one menu for the
+                    timed session, the grid view and the study aids. While a session
+                    runs, its timer swaps into the bar to end it in one click. */}
                 <button
                   type="button"
                   className="icon-btn"
                   onClick={p.onToggleStudyMenu}
-                  disabled={!slide}
-                  aria-expanded={Boolean(p.studyMenuOpen && slide)}
+                  disabled={!slide && !p.slides.length}
+                  aria-expanded={Boolean(p.studyMenuOpen)}
                   aria-controls="study-menu"
-                  data-active={studying ? "true" : "false"}
-                  aria-label={studying ? `Study aids (${studying} on)` : "Study aids"}
-                  title="Mirror, values, grid (X U G V B O)"
+                  data-active={studying || p.grid ? "true" : "false"}
+                  aria-label={studying ? `Practice (${studying} study aid${studying === 1 ? "" : "s"} on)` : "Practice"}
+                  title="Practice: timed session (N), grid (W), study aids"
                 >
                   <Icon d={ICONS.study} />
                 </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={p.onToggleGrid}
-                  disabled={!p.slides.length}
-                  aria-pressed={Boolean(p.grid)}
-                  aria-label={p.grid ? "Back to the slideshow" : "Grid view"}
-                  title="Grid of this view (W)"
-                >
-                  <Icon d={ICONS.grid} />
-                </button>
+                {session && (
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={p.onSession}
+                    data-active="true"
+                    aria-label="End the session"
+                    title="End the session and see what you drew (Esc)"
+                  >
+                    <Icon d={ICONS.timer} />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="icon-btn"
@@ -1123,26 +1137,6 @@ export function SlideshowView(p: SlideshowViewProps) {
                 <button
                   type="button"
                   className="icon-btn"
-                  onClick={p.onRelated}
-                  disabled={!canRelate}
-                  aria-label="Related Are.na channels"
-                  title={canRelate ? "Channels this image is also in (R)" : "Related channels: Are.na images, desktop app"}
-                >
-                  <Icon d={ICONS.related} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={p.onCopyLink}
-                  disabled={!slide}
-                  aria-label="Copy image link"
-                  title="Copy the image and source links (L)"
-                >
-                  <Icon d={ICONS.link} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
                   onClick={p.onSave}
                   disabled={!slide || p.mode !== "app" || p.saving}
                   data-saved={slide?.saved ? "true" : "false"}
@@ -1154,6 +1148,23 @@ export function SlideshowView(p: SlideshowViewProps) {
                   }
                 >
                   <Icon d={ICONS.save} />
+                </button>
+                {/* Everything else for this image: the right-click menu, above the bar. */}
+                <button
+                  type="button"
+                  className="icon-btn more-btn"
+                  disabled={!slide}
+                  aria-haspopup="menu"
+                  aria-expanded={Boolean(p.contextMenu)}
+                  aria-label="More for this image"
+                  title="More: copy link (L), related channels (R), source page, hide"
+                  onClick={(e) => {
+                    if (p.contextMenu) return p.onCloseContextMenu?.();
+                    const r = e.currentTarget.getBoundingClientRect();
+                    p.onContextMenu?.(r.left, r.top, true);
+                  }}
+                >
+                  <Icon d={ICONS.more} />
                 </button>
                 <span className="controls-sep" aria-hidden="true" />
                 <button
@@ -1233,7 +1244,18 @@ export function SlideshowView(p: SlideshowViewProps) {
               </div>
             )}
             {p.studyMenuOpen && slide && (
-              <StudyMenu study={study} onChange={p.onStudy} onReset={p.onResetStudy} onClose={p.onToggleStudyMenu} />
+              <StudyMenu
+                study={study}
+                onChange={p.onStudy}
+                onReset={p.onResetStudy}
+                onClose={p.onToggleStudyMenu}
+                session={Boolean(session)}
+                canSession={Boolean(slide) || Boolean(session)}
+                onSession={p.onSession}
+                grid={Boolean(p.grid)}
+                canGrid={p.slides.length > 0}
+                onToggleGrid={p.onToggleGrid}
+              />
             )}
             {p.filterMenuOpen && (
               <div className="playlist-menu filter-menu" id="filter-menu" role="group" aria-labelledby="filter-menu-title">

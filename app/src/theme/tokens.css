@@ -107,7 +107,8 @@
   --compact-bar-max: min(45vh, calc(260px * var(--ui-scale)));
   /* Right-click menu on the image. */
   --context-menu-width: calc(220px * var(--ui-scale));
-  --context-menu-height: calc(260px * var(--ui-scale));
+  /* Six items since the bar's ⋯ opens it (ADR-0031). */
+  --context-menu-height: calc(310px * var(--ui-scale));
   /* Practice tools (ADR-0025). Grid lines are two strokes, light over dark,
      so they read on any image; squint is a soft blur. */
   --squint-blur: 6px;

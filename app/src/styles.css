@@ -100,7 +100,8 @@ input {
   --stage-pad: 0px;
 }
 
-:root[data-layout="minimal"] :is(.specs, .byline, .timer) {
+/* Minimal still shows the byline: attribution is never hidden (ADR-0004). */
+:root[data-layout="minimal"] :is(.specs, .timer) {
   display: none;
 }
 
@@ -1679,6 +1680,7 @@ ul.channel-list {
   left: var(--space-3);
   bottom: var(--space-3);
   z-index: 2;
+  box-sizing: border-box;
   max-width: calc(100% - 2 * var(--space-3));
   margin: 0;
   padding: var(--space-1) var(--space-3);
@@ -1693,7 +1695,34 @@ ul.channel-list {
 }
 
 :root[data-mini="true"] .compact-credit {
-  display: block;
+  display: flex;
+}
+
+/* The source is never cut off (ADR-0004): a long creator line shrinks with an
+   ellipsis instead (owner, session 20: "the source information disappears"). */
+.credit-creator {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.credit-source {
+  flex: none;
+  white-space: pre;
+}
+
+/* Grid view with the bar hidden: the ⌃ arrow gets its own strip under the
+   grid instead of covering the last thumbnails and the scrollbar. */
+:root[data-controls="hidden"] .frame > .grid-view {
+  margin-bottom: calc(var(--control-size) + 2 * var(--space-5));
+}
+
+.practice-row {
+  margin-bottom: var(--space-2);
+}
+
+.study-subtitle {
+  margin-top: var(--space-2);
 }
 
 @media (max-width: 1024px), (max-height: 560px) {
@@ -1755,7 +1784,12 @@ ul.channel-list {
   }
 
   :root[data-compact-bar="hidden"]:not([data-mini="true"]) .compact-credit {
-    display: block;
+    display: flex;
+  }
+
+  /* Compact windows hide the ⌃ arrow (a tap shows the bar), so no strip. */
+  :root[data-controls="hidden"] .frame > .grid-view {
+    margin-bottom: 0;
   }
 
   :root:not([data-mini="true"]) .frame {

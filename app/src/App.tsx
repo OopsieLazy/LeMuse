@@ -142,7 +142,7 @@ export function App() {
   const [compactBarOpen, setCompactBarOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState<{ folder: string; file: string } | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; above?: boolean } | null>(null);
   const [arenaToken, setArenaToken] = useState<TokenStatus | null>(null);
   const [arenaBusy, setArenaBusy] = useState(false);
   const [arenaMessage, setArenaMessage] = useState<ArenaTokenView["message"]>(undefined);
@@ -485,7 +485,8 @@ export function App() {
   useEffect(() => {
     if (!contextMenu) return;
     const close = (e: Event) => {
-      if (e.target instanceof Element && e.target.closest(".context-menu")) return;
+      // The bar's ⋯ button toggles the menu itself.
+      if (e.target instanceof Element && e.target.closest(".context-menu, .more-btn")) return;
       setContextMenu(null);
     };
     const key = (e: KeyboardEvent) => e.key === "Escape" && setContextMenu(null);
@@ -1457,7 +1458,7 @@ export function App() {
         onSave={saveCurrent}
         saving={saving}
         contextMenu={contextMenu}
-        onContextMenu={(x, y) => setContextMenu({ x, y })}
+        onContextMenu={(x, y, above) => setContextMenu({ x, y, above })}
         onCloseContextMenu={() => setContextMenu(null)}
         onHideImage={() => markCurrent("hidden")}
         savedCount={savedCount}
