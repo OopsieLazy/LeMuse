@@ -395,6 +395,11 @@ pub struct PreviewItem {
 pub struct ChannelPreview {
     pub channel: ChannelInfo,
     pub items: Vec<PreviewItem>,
+    /// Channels this channel holds (Are.na lets a channel contain channels).
+    /// LeMuse never opens them by itself (ADR-0004); the preview lists them so
+    /// the user can add the ones they want (ADR-0030 addendum).
+    #[serde(default)]
+    pub channels: Vec<ChannelSummary>,
 }
 
 /// The channel's first images, for "look before you add": the lookup plus
@@ -423,7 +428,13 @@ pub fn preview_channel(http: &dyn HttpClient, slug: &str) -> Result<ChannelPrevi
         })
         .take(PREVIEW_ITEMS as usize)
         .collect();
-    Ok(ChannelPreview { channel, items })
+    // The same page's nested channels (same shape as a channel list).
+    let channels = channel_page(&v).map(|p| p.channels).unwrap_or_default();
+    Ok(ChannelPreview {
+        channel,
+        items,
+        channels,
+    })
 }
 
 /// A channel another Are.na user made, as listed under "Related channels".
@@ -972,6 +983,37 @@ mod tests {
         assert_eq!(p.channel.title, "Woodworking");
         assert!(!p.items.is_empty() && p.items.len() <= 24);
         assert!(p.items.iter().all(|i| i.image_url.starts_with("https://")));
+    }
+
+    #[test]
+    fn preview_lists_channels_inside_a_channel() {
+        // A channel that holds only other channels (live case: no images).
+        let http = FixtureClient::default();
+        http.push(&format!("{API_BASE}/channels/woodworking"), 200, CHANNEL);
+        http.push(
+            &format!("{API_BASE}/channels/woodworking/contents?per=24&page=1"),
+            200,
+            include_str!("../../tests/fixtures/arena_contents_nested_channels.json"),
+        );
+        let p = preview_channel(&http, "woodworking").unwrap();
+        assert!(p.items.is_empty(), "no images of its own");
+        let slugs: Vec<&str> = p.channels.iter().map(|c| c.slug.as_str()).collect();
+        assert_eq!(slugs, ["clear-plastic-cases", "see-through-gadgets"]);
+        assert_eq!(p.channels[0].contents, Some(120));
+        assert_eq!(p.channels[1].owner.as_deref(), Some("Another Person"));
+        assert_eq!(http.requests.lock().unwrap().len(), 2, "still two reads");
+        // A mixed page: its images and the one channel among them.
+        let http = FixtureClient::default();
+        http.push(&format!("{API_BASE}/channels/woodworking"), 200, CHANNEL);
+        http.push(
+            &format!("{API_BASE}/channels/woodworking/contents?per=24&page=1"),
+            200,
+            FIXTURE,
+        );
+        let p = preview_channel(&http, "woodworking").unwrap();
+        assert!(!p.items.is_empty());
+        let slugs: Vec<&str> = p.channels.iter().map(|c| c.slug.as_str()).collect();
+        assert_eq!(slugs, ["nested-channel"]);
     }
 
     #[test]
