@@ -80,3 +80,8 @@ SHA256SUMS
 *.exe
 *.msi
 *.msix
+
+# Third-party notices (ADR-0030): generated before installer builds; quotes
+# third-party authors' copyright lines
+app/src-tauri/notices/
+THIRD-PARTY-NOTICES*.txt

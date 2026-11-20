@@ -80,6 +80,9 @@ export const FORBIDDEN_FILES = [
   /\.cdx\.json$/i,
   /(^|\/)SHA256SUMS$/,
   /\.(exe|msi|msix)$/i,
+  // Generated third-party notices (ADR-0030): third-party authors' emails.
+  /(^|\/)THIRD-PARTY-NOTICES[^/]*\.txt$/i,
+  /^app\/src-tauri\/notices\//,
 ];
 export const ALLOWED_FORBIDDEN = [
   /(^|\/)\.env\.example$/,

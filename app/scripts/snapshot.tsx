@@ -16,6 +16,7 @@ import { ErrorScreen } from "../src/ErrorScreen";
 import { RefreshDetails } from "../src/RefreshDetails";
 import { PracticePanel, type PracticePanelProps } from "../src/PracticePanel";
 import { WelcomePanel } from "../src/WelcomePanel";
+import { NoticesPanel } from "../src/NoticesPanel";
 import { ShortcutsPanel } from "../src/ShortcutsPanel";
 import { NO_STUDY, weeklyLog, type SessionResult } from "../src/practice";
 import { DEFAULTS, rootAttributes, sanitize, type UiSettings } from "../src/settings";
@@ -155,6 +156,8 @@ interface State {
   shortcuts?: boolean;
   /** The first-run welcome (ADR-0029). */
   welcome?: boolean;
+  /** Third-party licences (ADR-0030). */
+  notices?: string;
 }
 
 // A tall portrait image is the case that used to run under the control bar.
@@ -232,6 +235,16 @@ export const STATES: Record<string, State> = {
   "surround-mid": { props: base, settings: { surround: "mid" } },
   "surround-black-dark": { props: base, settings: { surround: "black", mode: "dark" } },
   welcome: { props: base, welcome: true },
+  notices: {
+    props: base,
+    notices: [
+      "LeMuse: third-party notices",
+      "",
+      "== Packages ==",
+      "",
+      ...Array.from({ length: 40 }, (_, i) => `example-crate-${i} 1.0.${i} (MIT OR Apache-2.0)  https://example.org/crate-${i}`),
+    ].join("\n"),
+  },
   "image-ready": { props: { ...base, imageReady: true } },
   // Followed channels as their own topics, under a heading (ADR-0026 addendum).
   "rail-following": {
@@ -505,6 +518,7 @@ function documentFor(name: string, st: State, extraHead = "") {
     (st.practice ? renderToStaticMarkup(<PracticePanel {...practiceBase} {...st.practice} staticOpen />) : "") +
     (st.shortcuts ? renderToStaticMarkup(<ShortcutsPanel staticOpen />) : "") +
     (st.welcome ? renderToStaticMarkup(<WelcomePanel topics={st.props.topics} staticOpen />) : "") +
+    (st.notices !== undefined ? renderToStaticMarkup(<NoticesPanel text={st.notices} staticOpen />) : "") +
     (st.library
       ? renderToStaticMarkup(
           <LibraryPanel

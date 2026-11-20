@@ -406,6 +406,8 @@ export interface Backend {
   clearPractice(): Promise<number>;
   /** The newest release on GitHub, or null when none is published. */
   checkUpdate(): Promise<Release | null>;
+  /** The licences of the open-source parts LeMuse is built from (plain text). */
+  thirdPartyNotices(): Promise<string>;
   about(): Promise<About>;
   libraryStatus(): Promise<LibraryStatus>;
   topics(): Promise<TopicInfo[]>;
@@ -615,6 +617,7 @@ function tauriBackend(): Backend {
     practiceSessions: (since) => invoke<PracticeSession[]>("practice_sessions", { since }),
     clearPractice: () => invoke<number>("clear_practice"),
     checkUpdate: () => invoke<Release | null>("check_update"),
+    thirdPartyNotices: () => invoke<string>("third_party_notices"),
     about: () => invoke<About>("about"),
     async openExternal(url) {
       if (!isOpenable(url)) throw new Error("LeMuse only opens Are.na and museum pages.");
@@ -850,6 +853,7 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     practiceSessions: async (since) => sessions.filter((x) => x.started_at >= since),
     clearPractice: async () => sessions.splice(0).length,
     checkUpdate: async () => null,
+    thirdPartyNotices: async () => "The full licence list ships with the desktop app (Settings → About).",
     about: async () => ({ version: "preview", licence: "MIT", repository: PROJECT_URL }),
     // The browser can't resize itself: the preview shows the mini layout only.
     setMini: async () => null,

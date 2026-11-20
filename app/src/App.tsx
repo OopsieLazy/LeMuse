@@ -36,6 +36,7 @@ import { SlideshowView, type RefreshState } from "./SlideshowView";
 import { PracticePanel } from "./PracticePanel";
 import { ShortcutsPanel } from "./ShortcutsPanel";
 import { WelcomePanel } from "./WelcomePanel";
+import { NoticesPanel } from "./NoticesPanel";
 import {
   FAVOURITES,
   finishPose,
@@ -205,6 +206,8 @@ export function App() {
   const [undoable, setUndoable] = useState(false);
   const undoRef = useRef<(() => void) | null>(null);
   const welcomeRef = useRef<HTMLDialogElement>(null);
+  const noticesRef = useRef<HTMLDialogElement>(null);
+  const [notices, setNotices] = useState<string | null>(null);
   const restored = useRef(false);
   /** The image to show again once its own view has loaded (remember where you were). */
   const pendingBlock = useRef<{ key: string; id: number } | null>(null);
@@ -1487,6 +1490,14 @@ export function App() {
         contentNote={contentNote}
         update={update}
         onCheckUpdate={checkUpdate}
+        onShowNotices={() => {
+          openDialog(noticesRef.current);
+          if (notices === null)
+            api
+              .thirdPartyNotices()
+              .then(setNotices)
+              .catch((e) => setNotices(message(e)));
+        }}
       />
       <PracticePanel
         ref={practiceRef}
@@ -1528,6 +1539,7 @@ export function App() {
         }
       />
       <ShortcutsPanel ref={shortcutsRef} />
+      <NoticesPanel ref={noticesRef} text={notices} />
       <WelcomePanel
         ref={welcomeRef}
         topics={topics}

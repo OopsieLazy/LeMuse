@@ -700,6 +700,33 @@ async fn playlists_with(block_id: i64) -> Cmd<Vec<i64>> {
     blocking(move || Ok(catalog()?.playlists_with(block_id)?)).await
 }
 
+/// The licences of the open-source parts LeMuse is built from (ADR-0030):
+/// the THIRD-PARTY-NOTICES.txt the installer carries. Plain text.
+#[tauri::command]
+async fn third_party_notices(app: AppHandle) -> Cmd<String> {
+    blocking(move || {
+        let path = app
+            .path()
+            .resolve(
+                "THIRD-PARTY-NOTICES.txt",
+                tauri::path::BaseDirectory::Resource,
+            )
+            .map_err(|e| {
+                AppError::new(
+                    code::NOT_FOUND,
+                    format!("The licence list isn't available: {e}"),
+                )
+            })?;
+        std::fs::read_to_string(&path).map_err(|_| {
+            AppError::new(
+                code::NOT_FOUND,
+                "The licence list isn't in this build (installer builds include it).",
+            )
+        })
+    })
+    .await
+}
+
 /// Is there a newer LeMuse? One GET to GitHub's Releases API, without the
 /// Are.na token; nothing is downloaded (ADR-0028).
 #[tauri::command]
@@ -892,6 +919,7 @@ pub fn run() {
             followed_channels,
             add_followed,
             check_update,
+            third_party_notices,
             rename_topic,
             remove_topic,
             set_block_flag,
