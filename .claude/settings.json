@@ -2,6 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "deny": [
+      "Bash(git push*)",
+      "Bash(git -C * push*)",
       "Bash(git push --force*)",
       "Bash(git push -f*)",
       "Bash(git push * --force*)",
@@ -27,6 +29,17 @@
   },
   "hooks": {
     "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/no-push.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Owner rule: Claude never pushes"
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [

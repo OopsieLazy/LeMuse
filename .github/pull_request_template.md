@@ -18,6 +18,19 @@
 
 -
 
+## Where to look
+
+<!-- For the owner, so a review takes minutes, not hours (ADR-0030). The riskiest changes first; each with
+     what breaks if it's wrong and the test or check that would catch it. -->
+
+| Risk | Change (file:line) | If it's wrong | Caught by |
+|---|---|---|---|
+| | | | |
+
+- Guardrail files touched (`node scripts/guardrail-check.mjs`): <!-- none, or the list; the owner reads them and
+  adds the `guardrails-reviewed` label -->
+- Acceptance examples this PR meets (agreed before building): <!-- link or list -->
+
 ## Checklist
 
 **Security (first, always: ADR-0011)**

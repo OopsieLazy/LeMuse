@@ -31,6 +31,20 @@ the owner. Use [docs/templates/review-loop.md](docs/templates/review-loop.md) an
 
 Fix findings between passes. Every finding is either fixed in the PR or deferred with a home in docs/PLAN.md.
 
+**Guarded engineering *with* an AI (owner, session 19; ADR-0030).** The AI writes and self-reviews, so these
+keep a human in the loop where it matters:
+- **Acceptance examples first:** before building a feature, write 3–6 concrete "done when" examples in PLAN
+  (inputs → expected result) for the owner to approve; they become tests.
+- **"Where to look"** in every PR: the riskiest changes (file:line), what breaks if wrong, which test catches it.
+- **Guardrail files** (`scripts/guardrail-check.mjs`: CI, hooks, scanner rules, `.gitleaksignore`, capabilities,
+  CSP, this file) never change quietly: list them in the PR; the owner reads them and adds the
+  `guardrails-reviewed` label, which the `guardrails` check requires. Never loosen a guardrail to make your own
+  change pass without saying so in "Where to look".
+- **One branch per PR, merged before the next starts** (stacked branches conflict on squash merge).
+- **CI is the source of truth**, not a local run: match its conditions locally (e.g. both colour schemes) and
+  say when something was checked only locally.
+- **Every miss becomes a check** (a test or gate that would have caught it), noted in the review.
+
 **Ask for clarification** (AskUserQuestion) when a decision is genuinely the owner's and can't be reversed
 cheaply: product scope, licensing, spending money, contacting third parties (e.g. emailing Are.na), publishing,
 anything touching the owner's accounts. Otherwise decide, document the reasoning in the ADR/review, and proceed.
@@ -99,9 +113,11 @@ assume.
   checklist) and save a copy to `docs/pr/NNNN-<slug>.md`. Remote: `origin` = github.com/OopsieLazy/LeMuse
   (**public**).
 - **Review flow (owner, Q17):**
-  - Claude **pushes the work branch** (`git push -u origin <branch>`) after each commit batch, once the secret
-    scan of `main...HEAD` is clean. Pushed branches are public.
-  - **Never push `main`.** `main` is locked by a ruleset: PR required, no force-push.
+  - **Claude never pushes (owner, session 19).** Claude commits on the work branch and, once the secret scan
+    of `main...HEAD` is clean, gives the owner the push command in the handoff. The owner pushes with their own
+    account; pushed branches are public. `git push` is denied in `.claude/settings.json` and blocked by the
+    `scripts/hooks/no-push.mjs` PreToolUse hook (any position in a command).
+  - **`main` is locked** by a ruleset: PR required, no force-push.
   - `gh` isn't installed. The owner opens the PR from the compare link
     `https://github.com/OopsieLazy/LeMuse/compare/main...<branch>?expand=1`, pastes `docs/pr/NNNN-<slug>.md`,
     reviews on GitHub (Files changed, CI, the test installer artifact) and clicks **Squash and merge**.
