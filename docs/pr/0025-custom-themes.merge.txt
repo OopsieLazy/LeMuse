@@ -1,0 +1,9 @@
+feat(ui): your own themes from hex codes; Pine & coral
+
+✅ Settings → Look → New theme from colours: name + background, panel, text, accent (picked or hex); up to 24
+✅ Readable by design: text under 4.5:1 waits; muted text and links derived; neutral grey behind the image
+✅ Pine & coral built in (pine, cream, coral)
+✅ Links readable in every theme (Millennium and accent overrides were 3.4–3.6:1); layout test checks links
+
+Reviewed-by: admin, developer passes (docs/reviews/0025-custom-themes.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
