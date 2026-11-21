@@ -16,7 +16,7 @@
 //
 //   --skip-build   reuse the last release build (target/release)
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -99,16 +99,26 @@ const readme = crlf([
   "Needs Microsoft Edge WebView2, which Windows 10 and 11 include.",
 ]);
 
+// Build the new folder beside the old one, then swap. The old folder is moved
+// aside whole (Windows refuses while LeMuse runs from it), so a running copy is
+// never left half-deleted (review 0025 D-168).
+const staging = `${out}.new`;
+const old = `${out}.old`;
+rmSync(staging, { recursive: true, force: true });
+mkdirSync(staging, { recursive: true });
+copyFileSync(exe, join(staging, "LeMuse.exe"));
+copyFileSync(notices, join(staging, "THIRD-PARTY-NOTICES.txt"));
+writeFileSync(join(staging, "Add shortcuts.cmd"), addShortcuts);
+writeFileSync(join(staging, "Remove shortcuts.cmd"), removeShortcuts);
+writeFileSync(join(staging, "README.txt"), readme);
 try {
-  rmSync(out, { recursive: true, force: true });
-  mkdirSync(out, { recursive: true });
-  copyFileSync(exe, join(out, "LeMuse.exe"));
+  rmSync(old, { recursive: true, force: true });
+  if (existsSync(out)) renameSync(out, old);
 } catch (e) {
-  console.error(`portable: couldn't replace ${out} (${e.code}). Close LeMuse if it runs from there, then try again.`);
+  rmSync(staging, { recursive: true, force: true });
+  console.error(`portable: LeMuse is running from ${out} (${e.code}); nothing was changed. Close it, then try again.`);
   process.exit(1);
 }
-copyFileSync(notices, join(out, "THIRD-PARTY-NOTICES.txt"));
-writeFileSync(join(out, "Add shortcuts.cmd"), addShortcuts);
-writeFileSync(join(out, "Remove shortcuts.cmd"), removeShortcuts);
-writeFileSync(join(out, "README.txt"), readme);
+renameSync(staging, out);
+rmSync(old, { recursive: true, force: true });
 console.log(`portable: ${out}`);

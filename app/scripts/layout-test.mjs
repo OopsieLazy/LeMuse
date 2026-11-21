@@ -179,7 +179,7 @@ const measure = String(async function run() {
         return out;
       };
       const textSel =
-        ".slide-title, .creator, .source, .refresh-label, .library-line, .rail-heading, .topic-name, .topic-count, .menu-empty, .settings-note, .list-label, .chip-label, .chip-count, .compact-credit, .study-badge, .session-pose, .session-time, .plan-rounds, .plan-total, .drawn-meta, .related-meta, .specs dt, .specs dd, .menu-title, .empty-body, .error-code, .save-note-title, .save-note-file";
+        ".slide-title, .creator, .source, .refresh-label, .library-line, .rail-heading, .topic-name, .topic-count, .menu-empty, .settings-note, .list-label, .chip-label, .chip-count, .compact-credit, .study-badge, .session-pose, .session-time, .plan-rounds, .plan-total, .drawn-meta, .related-meta, .specs dt, .specs dd, .menu-title, .empty-body, .error-code, .save-note-title, .save-note-file, .source-link, .text-link, .form-status";
       // Colour doesn't change with size: check at one desktop and one compact size.
       const contrastHere = (w === 1280 && h === 800) || (w === 800 && h === 600);
       // Both themes, whatever this PC's own setting is (a dark-mode PC once

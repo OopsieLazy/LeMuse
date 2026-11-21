@@ -110,6 +110,23 @@ Acceptance (rows 15–17), each a layout-test check or snapshot state:
 - No control is covered by another element at any tested size, 1040 px (just above compact) included.
 - The bar has 13 buttons instead of 17; N, W, L, R and right-click still work; ⋯ opens the image menu above it.
 
+### Work item 25: your own themes; Pine & coral (`feat/0025-custom-themes`)
+
+| # | Work | Status |
+|---|---|---|
+| 18 | Owner: "a method that takes hex codes to create own custom theme (as many as you want)" | ✅ |
+| 19 | Owner: "a theme with pine, cream and coral" (built in) | ✅ |
+
+Acceptance (rows 18–19):
+- Settings → Look → New theme: name "Night shift", background #101418, panel #182028, text #e8e8e8, accent
+  #ffb000 → Save: the app recolours at once and "Night shift" sits with the built-in themes; a second theme can
+  be added the same way.
+- Hex can be typed (`#ffb000` or `ffb000`) or picked; anything else isn't accepted.
+- Text that would be hard to read (under 4.5:1 on the background or panel) is named and Save waits; muted text
+  and links are adjusted for you, and the area behind the image stays a neutral grey.
+- Edit and Delete work; deleting the theme in use falls back to Studio. A hand-edited `ui.json` can't inject CSS.
+- Theme "Pine & coral": pine background, cream text, coral accent; passes the layout test's contrast check.
+
 ### Session 18: finish 1.0 items 3, 4, 5 (work item 22, `feat/0022-finish-1-0`, stacked on #21)
 
 Owner: "build 3, 4, 5. Then give full commands for merge." One PR, a commit series per item.

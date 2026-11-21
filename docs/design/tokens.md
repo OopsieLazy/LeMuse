@@ -9,7 +9,7 @@ at the bottom.
 
 | Group | Tokens | Changed by |
 |---|---|---|
-| Colour (semantic) | `--bg --panel --panel-fill --stage --fg --muted --line --accent --accent-ink --ok --error --backdrop --shadow-rgb` | Theme preset; light/dark mode; accent picker (ink computed for contrast) |
+| Colour (semantic) | `--bg --panel --panel-fill --stage --fg --muted --line --accent --accent-ink --link --ok --error --backdrop --shadow-rgb` | Theme preset; light/dark mode; accent picker (ink computed for contrast); your own themes derive all of them from four hex colours (`themes.ts`, ADR-0032). `--link` is each theme's readable link colour, so an accent override never makes links unreadable |
 | Typography | `--font-ui --font-display --font-data`, `--text-2xs…xl`, weights, leading, tracking | Typeface set; **Interface size** scales every size |
 | Space | `--space-1…8` (4 px rhythm × scale) | Interface size |
 | Layout | `--rail-width --stage-pad --stage-pad-narrow --control-size --icon-size --icon-stroke --timer-height --dialog-width --dialog-max-height --measure --menu-width --menu-max-height --field-min --status-min --filter-menu-width --chip-radius --thumb-size --pager-width --sheet-max-height --compact-bar-max --context-menu-width --context-menu-height` | Topic list width slider; Space around the image slider; Cinema sets stage padding to 0 |

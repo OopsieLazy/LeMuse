@@ -8,6 +8,8 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Added
 
+- **Your own themes** from four hex colours (as many as you like), and a built-in **Pine & coral** theme
+  (work item 25, ADR-0032).
 - Before 1.0 (work item 23, ADR-0031): **Save as** (Q): the Windows Save dialog picks the folder and name, and a
   note says where it went until you close it (×); **changeable shortcuts** in the ? sheet; **H brings the bar
   back** in compact windows and the mini player too; channels made of channels (such as "Translucent
@@ -144,6 +146,7 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Fixed
 
+- Links are readable in every theme: Millennium's were 3.6:1, and an accent override could make them 3.4:1.
 - Saving an image no longer reshuffles the slideshow, so the saved image stays on screen.
 - The mini player's menu fits the window at the smallest size.
 - The source is always shown: small windows no longer cut it off, and the Minimal layout keeps it.

@@ -5,6 +5,22 @@ Append-only. Newest entry at the top. One entry per working session, using Part 
 
 ---
 
+## 2026-11-20 (session 21): your own themes; Pine & coral (work item 25)
+
+**Branch:** `feat/0025-custom-themes` (committed; **the owner pushes**) · **Status:** awaiting owner review
+
+- **Owner merged #5**, then asked for themes from hex codes (as many as you want) and one in pine, cream and
+  coral.
+- **Built (ADR-0032):**
+  - `themes.ts` derives every token from four colours (muted text and links readable, neutral surround);
+  - the editor in Settings → Look, with live preview;
+  - Pine & coral built in.
+- **Found on the way:** links weren't in the contrast check. Adding them found Millennium's links (3.6:1) and an
+  accent override (3.4:1); each theme now has its own `--link`.
+- **Checks:** 23 UI unit tests; W3C; layout 112 states × 7 sizes; secret scan clean.
+
+---
+
 ## 2026-11-20 (session 20): before the merge: Save as, shortcuts, nested channels (work item 23)
 
 **Branch:** `chore/0023-guarded-engineering` (committed; **the owner pushes**) · **Status:** awaiting owner review

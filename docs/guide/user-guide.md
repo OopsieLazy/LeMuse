@@ -80,6 +80,20 @@ session runs, a ⏱ button appears next to it to end the session.
   source page, **Hide this image**, **Mark as nudity**.
   Changed your mind? Press **Undo** on the note that appears.
 
+## Make it yours
+
+- **Themes:** Settings → Look → Theme. Built in: Studio (light or dark), Gallery, Blueprint, Paper, Millennium
+  and **Pine & coral** (pine green, cream text, a coral accent).
+- **Your own themes:** Settings → Look → **New theme from colours…**
+  - Give it a name and four colours: background, panel, text and accent. Pick each one, or type its hex code
+    (`#ffb000` or `ffb000`).
+  - The preview shows the result as you go.
+  - Press **Save and use**.
+  - Make as many as you like (up to 24), and use **Edit** or **Delete** on any of them.
+- **Readable by design:** if your text would be hard to read on your background or panel, the editor says so and
+  waits. Muted text and links are adjusted for you. The area behind the image always stays a neutral grey, so
+  the picture's colours and values read true.
+
 ## Content
 
 Images that may contain nudity are hidden by default. LeMuse spots them from titles, descriptions, museum types

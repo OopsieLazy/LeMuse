@@ -20,6 +20,9 @@
   --line: #d9dbd7;
   --accent: #3150c2;
   --accent-ink: #ffffff;
+  /* Link text (ADR-0032): each theme's own readable colour, written out (not
+     var(--accent)) so an accent override never makes links hard to read. */
+  --link: #3150c2;
   --ok: #2f7a4f;
   --error: #b23b2e;
   --backdrop: rgb(10 12 16 / 0.45);
@@ -155,6 +158,7 @@
     --line: #2a2c2f;
     --accent: #8fa5ff;
     --accent-ink: #0d1330;
+    --link: #8fa5ff;
     --ok: #7cc79a;
     --error: #ff8f80;
     --backdrop: rgb(0 0 0 / 0.6);
@@ -172,6 +176,7 @@
   --line: #2a2c2f;
   --accent: #8fa5ff;
   --accent-ink: #0d1330;
+  --link: #8fa5ff;
   --ok: #7cc79a;
   --error: #ff8f80;
   --backdrop: rgb(0 0 0 / 0.6);
@@ -191,6 +196,7 @@
   --line: #232323;
   --accent: #e8e2d6;
   --accent-ink: #111111;
+  --link: #e8e2d6;
   --ok: #9bd3ad;
   --error: #ff9a8a;
   --backdrop: rgb(0 0 0 / 0.7);
@@ -208,6 +214,7 @@
   --line: #2b4f7d;
   --accent: #ffd166;
   --accent-ink: #1a1400;
+  --link: #ffd166;
   --ok: #8fe3b0;
   --error: #ffab9e;
   --backdrop: rgb(4 14 28 / 0.6);
@@ -225,6 +232,7 @@
   --line: #ddd5c6;
   --accent: #1f3a5f;
   --accent-ink: #ffffff;
+  --link: #1f3a5f;
   --ok: #2f6b45;
   --error: #a3362a;
   --backdrop: rgb(30 26 20 / 0.4);
@@ -242,10 +250,31 @@
   --line: #b4bdca;
   --accent: #2a6df4;
   --accent-ink: #ffffff;
+  --link: #1b4fb4; /* 4.75:1 on the stage, more on the panels (layout test) */
   --ok: #17643c;
   --error: #b0302a;
   --backdrop: rgb(20 30 50 / 0.4);
   color-scheme: light;
+}
+
+/* Pine & coral (ADR-0032): a pine-green room, cream text, a coral accent. Chosen
+   by eye, not official Pantone values. Links use a lighter coral (5.05:1 on the
+   panel; the accent itself is 4.3:1, fine for icons, short of 4.5:1 for text). */
+:root[data-preset="pine"] {
+  --bg: #183a2f;
+  --panel: #1f4537;
+  --panel-fill: var(--panel);
+  --stage: #343434; /* zero chroma, as light as the pine background */
+  --fg: #f4ecdc;
+  --muted: #b9c4b5;
+  --line: #33594b;
+  --accent: #ff7f66;
+  --accent-ink: #2b0e07;
+  --link: #ff9680;
+  --ok: #9fdcb3;
+  --error: #ffb2a3;
+  --backdrop: rgb(4 16 12 / 0.6);
+  color-scheme: dark;
 }
 
 /* ---- Typeface sets (system fonts only: the app works offline, no font downloads) ---- */
