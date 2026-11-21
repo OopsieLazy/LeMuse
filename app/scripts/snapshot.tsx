@@ -358,6 +358,36 @@ export const STATES: Record<string, State> = {
   fullscreen: { props: { ...base, slides: [tall], index: 0, fullscreen: true }, fullscreen: true },
   "blueprint-technical": { props: base, settings: { preset: "blueprint", font: "technical", uiScale: 1.2 } },
   "millennium-cover": { props: base, settings: { preset: "millennium", font: "millennium", fit: "cover" } },
+  // Your own themes (ADR-0032): Pine & coral built in, a custom one applied, and the editor.
+  "pine-coral": { props: base, settings: { preset: "pine" } },
+  "pine-coral-menu": { props: { ...base, contextMenu: { x: 760, y: 720, above: true } }, settings: { preset: "pine" } },
+  "custom-theme": {
+    props: base,
+    settings: {
+      preset: "custom",
+      customTheme: "tnight",
+      customThemes: [
+        { id: "tnight", name: "Night shift", bg: "#101418", panel: "#182028", text: "#e8e8e8", accent: "#ffb000" },
+        { id: "tsand", name: "Sand and ink, a long theme name", bg: "#efe6d2", panel: "#f7f1e3", text: "#1d1a16", accent: "#e4572e" },
+      ],
+    },
+    panel: true,
+  },
+  "custom-theme-editor": {
+    props: base,
+    settings: {
+      preset: "custom",
+      customTheme: "tnight",
+      customThemes: [{ id: "tnight", name: "Night shift", bg: "#101418", panel: "#182028", text: "#e8e8e8", accent: "#ffb000" }],
+    },
+    panel: true,
+    settingsExtra: { staticThemeDraft: { name: "Cream & pine", bg: "#f4ecdc", panel: "#fbf6ec", text: "#183a2f", accent: "#ff7f66" } },
+  },
+  "custom-theme-editor-unreadable": {
+    props: base,
+    panel: true,
+    settingsExtra: { staticThemeDraft: { name: "Too faint", bg: "#f2f3f1", panel: "#fafaf8", text: "#b0b0b0", accent: "#3150c2" } },
+  },
   "settings-open": { props: base, settings: { accent: "#c2410c" }, panel: true },
   "settings-token-none": {
     props: base,

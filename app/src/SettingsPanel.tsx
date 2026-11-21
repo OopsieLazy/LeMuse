@@ -10,10 +10,10 @@ import {
   LABELS,
   LAYOUTS,
   MODES,
-  PRESETS,
   RANGES,
   type UiSettings,
 } from "./settings";
+import { ThemeEditor, type ThemeEditorProps } from "./ThemeEditor";
 
 // Pure view of the Settings panel (ADR-0012). Every control writes one field
 // of UiSettings through onChange; changes apply live. Rendered inside a
@@ -58,6 +58,8 @@ export interface SettingsPanelProps {
   /** Render with the `open` attribute (W3C/layout snapshots). The app opens it with showModal(). */
   staticOpen?: boolean;
   onChange?: (patch: Partial<UiSettings>) => void;
+  /** Snapshots: the theme editor open on this draft (ADR-0032). */
+  staticThemeDraft?: ThemeEditorProps["staticDraft"];
   onReset?: () => void;
   onClose?: () => void;
 }
@@ -203,7 +205,7 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
         <div className="settings-body">
           <section className="settings-section" aria-labelledby="sec-look">
             <h3 id="sec-look">Look</h3>
-            {choice("preset", "Theme", PRESETS, s.preset)}
+            <ThemeEditor settings={s} onChange={p.onChange} staticDraft={p.staticThemeDraft} />
             {choice("mode", "Light or dark (Studio)", MODES, s.mode)}
             {choice("font", "Typeface", FONTS, s.font)}
             <div className="field color-field">

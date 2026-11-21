@@ -8,6 +8,8 @@ import { labelLine, parseSourceKey, redact, reportUrl, sharpSlide, sourceKey, wi
 import { altText } from "../src/SlideshowView";
 import { welcomeTopics } from "../src/WelcomePanel";
 import { stableOrder } from "../src/order";
+import { contrast, luminance, MAX_THEMES, parseHex, READABLE, sanitizeThemes, themeProblems, themeTokens } from "../src/themes";
+import { rootAttributes } from "../src/settings";
 import { actionFor, bind, DEFAULT_KEYS, isCharacterKey, keyLabel, keyOf, sanitizeKeys } from "../src/keys";
 import {
   balanceExponent,
@@ -379,4 +381,67 @@ test("the last Save-as folder is kept only when it is a plain path", () => {
   assert.equal(sanitize({ lastSaveDir: "" }).lastSaveDir, null);
   assert.equal(sanitize({ lastSaveDir: "x".repeat(1025) }).lastSaveDir, null);
   assert.equal(sanitize({ lastSaveDir: 7 }).lastSaveDir, null);
+});
+
+test("your own themes: hex in, readable tokens out (ADR-0032)", () => {
+  // Hex is typed or picked; anything else isn't accepted.
+  assert.equal(parseHex("#FFB000"), "#ffb000");
+  assert.equal(parseHex(" ffb000 "), "#ffb000");
+  assert.equal(parseHex("#fb0"), "#ffbb00");
+  for (const bad of ["", "#ffb00", "red", "#ggg000", "#ffb0001", "url(x)"]) assert.equal(parseHex(bad), null, bad);
+
+  const night = { id: "tnight", name: "Night shift", bg: "#101418", panel: "#182028", text: "#e8e8e8", accent: "#ffb000" };
+  const tk = themeTokens(night);
+  // Muted text and links reach 4.5:1 wherever they sit; the surround is neutral grey.
+  for (const on of [tk["--bg"], tk["--panel"], tk["--stage"]]) assert.ok(contrast(tk["--muted"], on) >= READABLE);
+  for (const on of [tk["--bg"], tk["--panel"]]) {
+    assert.ok(contrast(tk["--link"], on) >= READABLE);
+    assert.ok(contrast(tk["--ok"], on) >= READABLE);
+    assert.ok(contrast(tk["--error"], on) >= READABLE);
+  }
+  const [r, g, b] = [1, 3, 5].map((i) => tk["--stage"].slice(i, i + 2));
+  assert.ok(r === g && g === b, "zero chroma");
+  assert.ok(Math.abs(luminance(tk["--stage"]) - luminance(night.bg)) < 0.01, "as light as the background");
+  assert.equal(tk["color-scheme"], "dark");
+  assert.ok(contrast(tk["--accent-ink"], night.accent) >= READABLE);
+
+  // A coral accent on cream keeps its colour on buttons; links get a readable version.
+  const cream = { id: "tc", name: "Cream", bg: "#f4ecdc", panel: "#fbf6ec", text: "#183a2f", accent: "#ff7f66" };
+  const ck = themeTokens(cream);
+  assert.equal(ck["--accent"], "#ff7f66");
+  assert.ok(contrast("#ff7f66", cream.panel) < READABLE && contrast(ck["--link"], cream.panel) >= READABLE);
+
+  // Hard-to-read text is named, and Save waits.
+  assert.equal(themeProblems(night).length, 0);
+  assert.equal(themeProblems({ bg: "#f2f3f1", panel: "#fafaf8", text: "#b0b0b0" }).length, 2);
+});
+
+test("saved themes are untrusted: only hex colours and plain names pass", () => {
+  const ok = { id: "tok", name: "Fine", bg: "#101418", panel: "#182028", text: "#E8E8E8", accent: "#ffb000" };
+  const saved = sanitizeThemes([
+    ok,
+    { ...ok, id: "tdup" , name: "Twin" },
+    { ...ok, id: "tok", name: "Same id" },
+    { ...ok, id: "tcss", bg: "red;background:url(https://x)" },
+    { ...ok, id: "TBAD" },
+    { ...ok, id: "tline", name: "two\nlines" },
+    { ...ok, id: "tlong", name: "x".repeat(41) },
+    "junk",
+    null,
+  ]);
+  assert.deepEqual(saved.map((t) => t.id), ["tok", "tdup"]);
+  assert.equal(saved[0].text, "#e8e8e8", "lower-cased");
+  assert.equal(sanitizeThemes(Array.from({ length: 40 }, (_, i) => ({ ...ok, id: `t${i}` }))).length, MAX_THEMES);
+  assert.deepEqual(sanitizeThemes("nope"), []);
+
+  // In use: the tokens reach the page as properties; a deleted theme falls back to Studio.
+  const s = sanitize({ preset: "custom", customTheme: "tok", customThemes: [ok] });
+  const applied = rootAttributes(s);
+  assert.equal(applied.attrs["data-preset"], "custom");
+  assert.equal(applied.style["--bg"], "#101418");
+  const gone = rootAttributes(sanitize({ preset: "custom", customTheme: "tgone", customThemes: [ok] }));
+  assert.equal(gone.attrs["data-preset"], "studio");
+  assert.equal(gone.style["--bg"], undefined);
+  assert.equal(sanitize({ customTheme: "x;y" }).customTheme, null);
+  assert.equal(sanitize({ preset: "pine" }).preset, "pine");
 });

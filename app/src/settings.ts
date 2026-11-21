@@ -20,8 +20,10 @@ import {
   type StudyAids,
 } from "./practice";
 import { DEFAULT_KEYS, sanitizeKeys, type KeyMap } from "./keys";
+import { sanitizeThemes, THEME_TOKENS, themeTokens, type CustomTheme } from "./themes";
 
-export const PRESETS = ["studio", "gallery", "blueprint", "paper", "millennium"] as const;
+/** "custom" means one of your own themes (`customTheme`, ADR-0032). */
+export const PRESETS = ["studio", "gallery", "blueprint", "paper", "millennium", "pine", "custom"] as const;
 export const MODES = ["system", "light", "dark"] as const;
 export const LAYOUTS = ["studio", "rail-right", "caption-top", "cinema", "minimal"] as const;
 export const FONTS = ["system", "editorial", "technical", "millennium"] as const;
@@ -100,6 +102,9 @@ export interface UiSettings {
   keys: KeyMap;
   /** The folder the last Save went to (Save as starts there). */
   lastSaveDir: string | null;
+  /** Your own themes from hex codes (ADR-0032), and the one in use when preset is "custom". */
+  customThemes: CustomTheme[];
+  customTheme: string | null;
 }
 
 /** Ranges for every slider: [min, max, step]. One table feeds clamping and the UI. */
@@ -151,6 +156,8 @@ export const DEFAULTS: UiSettings = {
   study: NO_STUDY,
   keys: DEFAULT_KEYS,
   lastSaveDir: null,
+  customThemes: [],
+  customTheme: null,
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -254,6 +261,8 @@ export function sanitize(raw: unknown): UiSettings {
     last: lastPlace(r.last),
     study: studyAids(r.study),
     keys: sanitizeKeys(r.keys),
+    customThemes: sanitizeThemes(r.customThemes),
+    customTheme: typeof r.customTheme === "string" && /^[a-z0-9]{1,24}$/.test(r.customTheme) ? r.customTheme : null,
     // A folder path is shown and offered to the Save dialog, never opened here.
     lastSaveDir:
       typeof r.lastSaveDir === "string" && r.lastSaveDir.length > 0 && r.lastSaveDir.length <= 1024 && !/[\u0000-\u001f]/.test(r.lastSaveDir)
@@ -277,8 +286,10 @@ export function rootAttributes(
   s: UiSettings,
   state: { fullscreen?: boolean; idle?: boolean; mini?: boolean; compactBar?: boolean } = {},
 ) {
+  const theme = s.preset === "custom" ? s.customThemes.find((t) => t.id === s.customTheme) : undefined;
   const attrs: Record<string, string> = {
-    "data-preset": s.preset,
+    // A custom theme that no longer exists falls back to Studio.
+    "data-preset": theme ? "custom" : s.preset === "custom" ? "studio" : s.preset,
     "data-layout": s.layout,
     "data-font": s.font,
     "data-fit": s.fit,
@@ -301,9 +312,14 @@ export function rootAttributes(
     "--stage-pad": `${s.stagePadding}px`,
     "--image-shadow-strength": String(s.imageShadow),
   };
+  // Your theme's colours, all derived from four validated hex values.
+  if (theme) Object.assign(style, themeTokens(theme));
   if (s.accent) {
     style["--accent"] = s.accent;
     style["--accent-ink"] = inkFor(s.accent);
+    // On your own theme, links follow the override, made readable; built-in
+    // themes keep their own tested link colour (ADR-0032).
+    if (theme) style["--link"] = themeTokens({ ...theme, accent: s.accent })["--link"];
   }
   return { attrs, style };
 }
@@ -323,8 +339,8 @@ export function applyToDocument(
   }
   if (attrs["data-theme"]) root.dataset.themeOwner = "lemuse";
   for (const [k, v] of Object.entries(attrs)) root.setAttribute(k, v);
-  root.style.removeProperty("--accent");
-  root.style.removeProperty("--accent-ink");
+  // Clear what a previous theme or accent set (every token a theme can set).
+  for (const k of THEME_TOKENS) root.style.removeProperty(k);
   for (const [k, v] of Object.entries(style)) root.style.setProperty(k, v);
 }
 
@@ -334,6 +350,8 @@ export const LABELS: Record<Preset | Layout | Font | Mode | Fit, string> = {
   blueprint: "Blueprint",
   paper: "Paper",
   millennium: "Millennium",
+  pine: "Pine & coral",
+  custom: "Your theme",
   system: "System",
   light: "Light",
   dark: "Dark",
