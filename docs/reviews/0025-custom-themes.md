@@ -41,6 +41,7 @@
 | D-165 | low | Enter in a theme field would submit the Settings form and close it | Prevented on every editor field |
 | D-166 | low | The colour dots inherited the theme pills' styling (stacked, oversized) | Drawn as a small inline SVG |
 | D-167 | low | The theme in use deleted | Falls back to Studio (unit test) |
+| D-168 | med | `npm run portable` deleted the old folder before copying; with LeMuse running from it, a partly deleted folder was possible | Builds into `LeMuse.new`, moves the old folder aside whole (refused while it runs, so nothing changes), then swaps. Checked with LeMuse running: "nothing was changed" |
 
 ## Checks
 
