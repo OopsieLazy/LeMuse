@@ -49,7 +49,7 @@ cool features competitors/other open source projects have introduced."
 | low | `app/scripts/layout-test.mjs:106` (guardrail) | The gate gets weaker | Zoomed states only: the frame must clip and stay off the bar |
 | low | `.github/workflows/*` (guardrail) | CI breaks | Oldest Node 24 majors, SHA-pinned, ≥ 14 days old |
 
-- Guardrail files touched: `.github/workflows/ci.yml`, `guardrails.yml`, `pr-title.yml` (action pins only);
+- Guardrail files touched: `.github/workflows/ci.yml`, `guardrails.yml`, `pr-title.yml`, `release.yml` (action pins only);
   `app/src-tauri/tauri.conf.json` (version, `"visible": false`); `app/scripts/layout-test.mjs` (zoomed frames).
   None loosens a gate: the layout test swaps "image inside its frame" for "frame clips it and stays off the bar"
   only when an image is zoomed.
