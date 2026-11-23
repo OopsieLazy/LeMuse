@@ -27,8 +27,10 @@ use lemuse_core::store::catalog::{Catalog, CategoryCount, CategoryFilter, Playli
 use lemuse_core::store::LibraryPaths;
 use lemuse_core::sync::{refresh_channel, refresh_library, Trigger};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
+
+mod presence;
 
 /// Most slides one `slides` call returns: one page of the page menu.
 const PAGE_LIMIT: u32 = 500;
@@ -862,6 +864,43 @@ async fn search(query: String) -> Cmd<Vec<i64>> {
     blocking(move || Ok(catalog()?.search(&query, 200)?)).await
 }
 
+/// Start with Windows and the tray (ADR-0033): what's set now.
+#[tauri::command]
+async fn presence_status(app: AppHandle) -> Cmd<presence::PresenceStatus> {
+    blocking(move || Ok(presence::status(presence::close_to_tray(&app)))).await
+}
+
+/// Turn start with Windows on or off (one per-user Run value; Windows only).
+#[tauri::command]
+async fn set_autostart(app: AppHandle, on: bool) -> Cmd<presence::PresenceStatus> {
+    blocking(move || {
+        presence::set_autostart(on).map_err(|e| {
+            let kind = if e.kind() == std::io::ErrorKind::Unsupported {
+                code::UNSUPPORTED
+            } else {
+                code::IO
+            };
+            AppError::new(kind, format!("Couldn't change start with Windows: {e}"))
+        })?;
+        Ok(presence::status(presence::close_to_tray(&app)))
+    })
+    .await
+}
+
+/// Closing the window hides it to the tray (mirrors `closeToTray` in ui.json).
+#[tauri::command]
+fn set_close_to_tray(app: AppHandle, on: bool) {
+    app.state::<presence::CloseToTray>()
+        .0
+        .store(on, Ordering::SeqCst);
+}
+
+/// The tray menu's Refresh now: the same path as the Refresh button.
+fn tray_refresh(app: &AppHandle) {
+    let flag = app.state::<Refreshing>().0.clone();
+    spawn_refresh(app.clone(), flag, Trigger::Manual);
+}
+
 /// Starts a refresh on a worker thread and returns at once; progress
 /// arrives as `refresh://status` events. A second press while one runs is
 /// a no-op (the core's lock file also guards against the CLI).
@@ -933,11 +972,8 @@ pub fn run() {
         // it focuses the running window instead of opening another (and two
         // windows can't refresh the same library at once).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.unminimize();
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
+            // Also brings LeMuse back from the tray.
+            presence::show_main(app);
         }))
         .plugin(tauri_plugin_opener::init())
         // Save as (ADR-0031): used from Rust only; no `dialog:` permission
@@ -946,7 +982,30 @@ pub fn run() {
         .manage(Refreshing::default())
         .manage(ConfigEdits::default())
         .manage(SaveGate::default())
+        .manage(presence::CloseToTray::default())
+        // Keep running in the tray when closed (opt-in, ADR-0033).
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && presence::close_to_tray(window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
+            // The tray, a moved portable folder's start-up entry, then the
+            // window: hidden only when Windows started LeMuse into the tray
+            // (and the tray is there to bring it back).
+            let close =
+                presence::saved_close_to_tray(&lemuse_core::ui_settings::load(&library_paths()));
+            app.state::<presence::CloseToTray>()
+                .0
+                .store(close, Ordering::SeqCst);
+            let tray = presence::build_tray(app.handle(), tray_refresh).is_ok();
+            presence::heal_autostart();
+            if !(tray && presence::started_from_tray()) {
+                presence::show_main(app.handle());
+            }
             // Sort images into categories if this build's vocabulary hasn't
             // yet (first launch after an update). Never blocks the window.
             std::thread::spawn(|| {
@@ -1005,7 +1064,10 @@ pub fn run() {
             rename_playlist,
             delete_playlist,
             set_in_playlist,
-            playlists_with
+            playlists_with,
+            presence_status,
+            set_autostart,
+            set_close_to_tray
         ])
         .run(tauri::generate_context!())
         .expect("error while running LeMuse");
