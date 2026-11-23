@@ -132,6 +132,8 @@
   --clock-ring-size: calc(96px * var(--ui-scale));
   --clock-ring-text: calc(22px * var(--ui-scale));
   --grid-thumb: calc(150px * var(--ui-scale));
+  --grid-thumb-s: calc(100px * var(--ui-scale));
+  --grid-thumb-l: calc(240px * var(--ui-scale));
   --flash-width: 6px;
   /* WCAG 2.5.8: the smallest clickable control. */
   --target-min: 24px;

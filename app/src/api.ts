@@ -451,7 +451,26 @@ export interface Backend {
   playlistsWith(blockId: number): Promise<number[]>;
   refreshNow(): Promise<void>;
   onRefresh(cb: (e: RefreshEvent) => void): () => void;
+  /** LeMuse on the desktop (ADR-0033): start with Windows and the tray. */
+  presenceStatus(): Promise<PresenceStatus>;
+  setAutostart(on: boolean): Promise<PresenceStatus>;
+  setCloseToTray(on: boolean): Promise<void>;
+  /** The tray menu's Next, Play or pause and Mini player. */
+  onTray(cb: (action: TrayAction) => void): () => void;
 }
+
+/** Start with Windows and the tray, as they stand (ADR-0033). */
+export interface PresenceStatus {
+  /** Windows only. */
+  available: boolean;
+  autostart: boolean;
+  /** Start with Windows points at another copy of LeMuse (installed vs portable). */
+  otherCopy: boolean;
+  closeToTray: boolean;
+}
+
+export type TrayAction = "next" | "playPause" | "mini";
+const TRAY_ACTIONS = new Set<string>(["next", "playPause", "mini"]);
 
 interface PreviewTopic {
   name: string;
@@ -642,6 +661,25 @@ function tauriBackend(): Backend {
       let cancelled = false;
       import("@tauri-apps/api/event").then(({ listen }) =>
         listen<RefreshEvent>("refresh://status", (e) => cb(e.payload)).then((u) => {
+          if (cancelled) u();
+          else unlisten = u;
+        }),
+      );
+      return () => {
+        cancelled = true;
+        unlisten?.();
+      };
+    },
+    presenceStatus: () => invoke<PresenceStatus>("presence_status"),
+    setAutostart: (on) => invoke<PresenceStatus>("set_autostart", { on }),
+    setCloseToTray: (on) => invoke<void>("set_close_to_tray", { on }),
+    onTray(cb) {
+      let unlisten: (() => void) | undefined;
+      let cancelled = false;
+      import("@tauri-apps/api/event").then(({ listen }) =>
+        listen<string>("tray://action", (e) => {
+          if (typeof e.payload === "string" && TRAY_ACTIONS.has(e.payload)) cb(e.payload as TrayAction);
+        }).then((u) => {
           if (cancelled) u();
           else unlisten = u;
         }),
@@ -866,6 +904,11 @@ export function previewBackend(load?: () => Promise<PreviewData>): Backend {
     practiceSessions: async (since) => sessions.filter((x) => x.started_at >= since),
     clearPractice: async () => sessions.splice(0).length,
     checkUpdate: async () => null,
+    // No tray or start-up entry outside the desktop app.
+    presenceStatus: async () => ({ available: false, autostart: false, otherCopy: false, closeToTray: false }),
+    setAutostart: async () => ({ available: false, autostart: false, otherCopy: false, closeToTray: false }),
+    setCloseToTray: async () => undefined,
+    onTray: () => () => {},
     thirdPartyNotices: async () => "The full licence list ships with the desktop app (Settings → About).",
     about: async () => ({ version: "preview", licence: "MIT", repository: PROJECT_URL }),
     // The browser can't resize itself: the preview shows the mini layout only.

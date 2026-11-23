@@ -32,6 +32,8 @@ export const FITS = ["contain", "cover"] as const;
 export const SURROUNDS = ["theme", "white", "light", "mid", "dark", "black"] as const;
 /** How the pose clock shows during a session. */
 export const CLOCKS = ["ring", "small", "hidden"] as const;
+/** Grid view thumbnail sizes (ADR-0033). */
+export const GRID_SIZES = ["s", "m", "l"] as const;
 
 export type Preset = (typeof PRESETS)[number];
 export type Mode = (typeof MODES)[number];
@@ -40,6 +42,7 @@ export type Font = (typeof FONTS)[number];
 export type Fit = (typeof FITS)[number];
 export type Surround = (typeof SURROUNDS)[number];
 export type ClockStyle = (typeof CLOCKS)[number];
+export type GridSize = (typeof GRID_SIZES)[number];
 
 /** Where you were (ADR-0029): restored at the next launch. */
 export interface LastPlace {
@@ -105,6 +108,10 @@ export interface UiSettings {
   /** Your own themes from hex codes (ADR-0032), and the one in use when preset is "custom". */
   customThemes: CustomTheme[];
   customTheme: string | null;
+  /** Grid view thumbnail size (ADR-0033). */
+  gridSize: GridSize;
+  /** Closing the window keeps LeMuse running in the tray (ADR-0033; off by default). */
+  closeToTray: boolean;
 }
 
 /** Ranges for every slider: [min, max, step]. One table feeds clamping and the UI. */
@@ -158,6 +165,8 @@ export const DEFAULTS: UiSettings = {
   lastSaveDir: null,
   customThemes: [],
   customTheme: null,
+  gridSize: "m",
+  closeToTray: false,
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -263,6 +272,8 @@ export function sanitize(raw: unknown): UiSettings {
     keys: sanitizeKeys(r.keys),
     customThemes: sanitizeThemes(r.customThemes),
     customTheme: typeof r.customTheme === "string" && /^[a-z0-9]{1,24}$/.test(r.customTheme) ? r.customTheme : null,
+    gridSize: oneOf(GRID_SIZES, r.gridSize, d.gridSize),
+    closeToTray: bool(r.closeToTray, d.closeToTray),
     // A folder path is shown and offered to the Save dialog, never opened here.
     lastSaveDir:
       typeof r.lastSaveDir === "string" && r.lastSaveDir.length > 0 && r.lastSaveDir.length <= 1024 && !/[\u0000-\u001f]/.test(r.lastSaveDir)

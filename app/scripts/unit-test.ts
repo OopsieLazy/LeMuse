@@ -11,6 +11,7 @@ import { stableOrder } from "../src/order";
 import { contrast, luminance, MAX_THEMES, parseHex, READABLE, sanitizeThemes, themeProblems, themeTokens } from "../src/themes";
 import { rootAttributes } from "../src/settings";
 import { actionFor, bind, DEFAULT_KEYS, isCharacterKey, keyLabel, keyOf, sanitizeKeys } from "../src/keys";
+import { clampZoom, MAX_ZOOM, NO_ZOOM, panBy, shownSize, toggleZoom, wheelFactor, zoomAt, zoomStep } from "../src/zoom";
 import {
   balanceExponent,
   clock,
@@ -444,4 +445,55 @@ test("saved themes are untrusted: only hex colours and plain names pass", () => 
   assert.equal(gone.style["--bg"], undefined);
   assert.equal(sanitize({ customTheme: "x;y" }).customTheme, null);
   assert.equal(sanitize({ preset: "pine" }).preset, "pine");
+});
+
+test("zoom: toward the pointer, never past the image's edge (ADR-0033)", () => {
+  // A 800 × 600 frame showing a 600 × 600 image at fit.
+  const box = { frameW: 800, frameH: 600, imageW: 600, imageH: 600 };
+  // The point under the pointer stays under it: screen = pan + scale·q.
+  const at = { dx: 150, dy: -100 };
+  const z = zoomAt(NO_ZOOM, 2, at.dx, at.dy, box);
+  // At fit the pointer is over image point q = d; after zooming, pan + 2·q must still be d.
+  assert.equal(z.x + 2 * at.dx, at.dx);
+  assert.equal(z.y + 2 * at.dy, at.dy);
+  assert.equal(z.scale, 2);
+  assert.equal(z.x, -150);
+  assert.equal(z.y, 100);
+  // Pan stops where the image edge meets the frame edge: (1200 − 800) / 2 = 200 across, (1200 − 600) / 2 = 300 down.
+  assert.deepEqual(panBy(z, 10_000, -10_000, box), { scale: 2, x: 200, y: -300 });
+  // Back to fit resets the pan; the scale stays within 1…MAX.
+  assert.deepEqual(zoomAt(z, 0.5, 0, 0, box), NO_ZOOM);
+  assert.equal(zoomAt(z, 99, 0, 0, box).scale, MAX_ZOOM);
+  // An axis the zoomed image doesn't fill stays centred.
+  assert.equal(clampZoom({ scale: 1.2, x: 50, y: 50 }, box).x, 0);
+  // Keys zoom about the centre; double-click goes to 2.5× and back.
+  assert.equal(zoomStep(NO_ZOOM, 1, box).scale, 1.25);
+  assert.deepEqual(zoomStep(NO_ZOOM, -1, box), NO_ZOOM);
+  assert.equal(toggleZoom(NO_ZOOM, 0, 0, box).scale, 2.5);
+  assert.deepEqual(toggleZoom(z, 0, 0, box), NO_ZOOM);
+  // Junk in, fit out.
+  assert.deepEqual(clampZoom({ scale: Number.NaN, x: Number.NaN, y: 1 }, box), NO_ZOOM);
+});
+
+test("zoom: wheel steps and the shown image size", () => {
+  assert.ok(wheelFactor(-100, 0, false) > 1 && wheelFactor(100, 0, false) < 1);
+  // A line-based notch (3 lines) is about a pixel notch of 120.
+  assert.ok(Math.abs(wheelFactor(3, 1, false) - wheelFactor(120, 0, false)) < 1e-12);
+  // A touchpad pinch (ctrl + small delta) is more sensitive than the wheel.
+  assert.ok(wheelFactor(-10, 0, true) > wheelFactor(-10, 0, false));
+  // Huge deltas are capped.
+  assert.equal(wheelFactor(-1e9, 0, false), wheelFactor(-400, 0, false));
+  // Contain fits a 4000 × 1000 image into 800 × 600 as 800 × 200; cover keeps the element.
+  assert.deepEqual(shownSize(800, 600, 4000, 1000, false), { w: 800, h: 200 });
+  assert.deepEqual(shownSize(800, 600, 4000, 1000, true), { w: 800, h: 600 });
+  assert.deepEqual(shownSize(800, 600, 0, 0, false), { w: 800, h: 600 });
+});
+
+test("zoom keys are bound and don't clash", () => {
+  assert.equal(DEFAULT_KEYS.zoomIn, "=");
+  assert.equal(DEFAULT_KEYS.zoomOut, "-");
+  assert.equal(DEFAULT_KEYS.zoomFit, "z");
+  assert.equal(actionFor(DEFAULT_KEYS, "z"), "zoomFit");
+  // Older saved keys (before zoom) gain the new defaults.
+  assert.equal(sanitizeKeys({ save: "q" }).zoomFit, "z");
 });
