@@ -1,0 +1,10 @@
+feat(ui): zoom, LeMuse in the tray, a grid that scrolls on; 1.1.0
+
+✅ Zoom: wheel or pinch toward the pointer, drag, double-click 2.5x / fit, = - Z; grid lines zoom along; sharper size while zoomed
+✅ Tray icon (show, next, play/pause, mini player, refresh, quit); start with Windows (opt-in, HKCU, follows a moved portable folder); keep running when closed (opt-in)
+✅ Grid scrolls through the whole view, opens at the current image, Small/Medium/Large, arrow keys
+✅ Internal repair: version 1.1.0 checked by a test; build in About and the portable README; CHANGELOG split; PLAN trimmed; CI off Node 20 (A-50)
+✅ Research: gap audit + new sources, value-study web app, competitor and OSS features; ADR-0034 (plan only)
+
+Reviewed-by: admin, developer passes (docs/reviews/0026-zoom-presence.md)
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

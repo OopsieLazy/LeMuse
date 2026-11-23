@@ -43,44 +43,60 @@ Acceptance (owner to approve; each is a unit test, a layout-test state or a manu
 - Settings → About shows `1.1.0 · build <commit>`; a test fails if `Cargo.toml`, `package.json` and
   `tauri.conf.json` disagree on the version.
 
-## Next: 1.2 "your own references" (recommended order; owner picks)
+## Next (recommended order; owner picks)
 
-From the gap audit ([report](../reports/LeMuse%20post%20launch%20gap%20audit.md)) and this round's research
-([report](../reports/LeMuse%20web%20app%20sources%20and%20features.md)). One PR each.
+Merged plan from the gap audit ([report](../reports/LeMuse%20post%20launch%20gap%20audit.md)) and this round
+([report](../reports/LeMuse%20web%20app%20sources%20and%20features.md)). One branch and one PR each, merged before
+the next starts.
 
-1. **Memory mode** in sessions: look, hide, draw, compare (no major timer has it).
+**Web W1, the value-study web app (ADR-0034, plan only):** after the owner answers Q21, Q30, Q31 and approves
+its acceptance examples. PR 1: `packages/value-core` with tests (L\*, bands, Otsu, compare). PR 2: `web/` stage 1,
+`_headers` guardrail and CI test, Cloudflare deploy with previews, privacy notice, support link.
+
+**1.2 "Your own references":**
+1. **Memory mode** (look, hide, draw, compare) + **breaks in class plans** + the last plan remembered per topic +
+   a **high-contrast** study filter.
 2. **Local folders** read in place (one chosen folder at a time; skip OneDrive cloud-only files) and **hide a
    whole channel** (DA-15).
-3. **Save provenance:** credit and licence next to each saved file (XMP in JPEGs, a sidecar for all); drag an
-   image out to Krita or PureRef; "Show in folder". Needs the owner's "an export counts as a Save" rule.
-4. **`lemuse backup` / restore** (`VACUUM INTO` + `lemuse.toml` + `ui.json`), and a redacted "Copy diagnostics".
-5. **Themes that move:** Auto picks your light and dark theme; share or import a theme as a short string;
-   Windows contrast themes (`forced-colors`); a "why the stage stays grey" note.
-6. **What's new** after an update, from text bundled with the release.
+3. **Save provenance** (XMP in JPEGs, a sidecar for all), drag an image out, "Show in folder". Needs the owner's
+   "an export counts as a Save" rule.
+4. **`lemuse backup` / restore** and a redacted "Copy diagnostics".
+5. **Themes that move** (Auto picks your light and dark theme; Windows contrast themes; a "why the stage stays
+   grey" note) + **share a setup** (theme and session recipe in one strict string).
+6. **What's new** after an update + an **info overlay key** (creator, title, date, source over the image) + a
+   **command palette** (Ctrl+K).
 
-## Later: 1.3 and beyond
+**1.3 "More of the world, measured":** SMK, then The Met (its v1.1 search; v1 retired on 1 Oct 2026); measuring
+overlays + an EyeDropper sampler (check WebView2 first) + **compare with my drawing, zoom kept**; the Tauri
+auto-updater (after backup; never for the portable build); a **seeded weekly pack** (replaces "daily set").
 
-- **Sources, one per PR (ADR-0018):** SMK (no key, IIIF, PD filter), The Met (its v1.1 search; v1 retired on
-  1 Oct 2026), Wikimedia Commons (standard thumbnail widths only), Smithsonian (free key), Poly Haven, and the new
-  candidates in this round's report. Check each image host in a normal browser first (the AIC lesson).
-- **Practice:** measuring overlays (plumb, angle, proportion ruler), an EyeDropper colour sampler with value
-  readout (check WebView2 first), a perspective finder, "draw it again" revisits, design prompt cards, class
-  schedules with breaks.
-- **Desktop:** the Tauri auto-updater (after backup; never for the portable build), winget, set saved images as
-  the wallpaper slideshow.
-- **Web:** the value-study web app plan (ADR-0034, proposed); hosting and selling are owner decisions (Q21, Q30,
-  Q31).
-- Search across channel names; drag to reorder playlists; smart playlists; compare two to four images; a daily
-  set; avoid repeats; webhooks; start the dashboard from Settings; load more lazily (D-23).
+**1.4 "Ambient and on stage":** ambient mode on a chosen monitor; a presenter view for classes; an OBS overlay on
+127.0.0.1 (security review first); a practice calendar with a photo of the drawing attached (local only).
+
+## Later
+
+- **Sources after 1.3, one per PR (ADR-0018):** Wikimedia Commons (standard thumbnail widths only) → iNaturalist →
+  Smithsonian (free key) → Auckland Museum → Poly Haven → Pexels (the user's own key in Credential Manager; owner
+  decision; never in wallpaper or ambient features) → GBIF → a research spike on US patent drawings. Check each
+  image host in a normal browser first (the AIC lesson).
+- **Web stage 2:** a live camera value view and live compare with calibration; then decide on a pay-what-you-want
+  unlock.
+- **Desktop:** winget; saved images as the wallpaper slideshow; a perspective finder; "draw it again" revisits;
+  design prompt cards.
+- Search across channel names; drag to reorder playlists; smart playlists; compare two to four images; avoid
+  repeats; webhooks; start the dashboard from Settings; load more lazily (D-23); "more like this" from metadata
+  (an ADR-0004 check first for Are.na connections).
 - Guarded engineering, next steps (ADR-0030): mutation testing, an independent reviewer with only the diff, a
   bot account for AI commits (A-4); an automated check for H in compact and mini windows (D-153).
 
 ## Not planned (decided, with reasons in the reports)
 
-A PureRef-style board; colours sampled from the image for the app's chrome; automatic palette extraction (no
-CORS on Cleveland's CDN); camera capture; streaks; Harvard, Science Museum Group (NC-SA), Library of Congress
-(CAPTCHA) and multi-host aggregators as sources; Widgets, lock screen and the Store while unsigned; Pinterest
-(Q20); a native iPhone app (Q19).
+A PureRef-style board; colours sampled from the image for the app's chrome; automatic palette extraction, colour
+or hex search and CLIP "find similar" (they need image bytes; no CORS on Cleveland's CDN); 3D posing; video
+references; camera capture in the desktop app; streaks; Harvard, Science Museum Group (NC-SA), Library of Congress
+(CAPTCHA), Unsplash without a proxy, Pixabay (no permanent hotlinking), Flickr (paid key), social feeds, Google
+Photos and multi-host aggregators as sources; Widgets, lock screen and the Store while unsigned; ads in the web
+app; Lemon Squeezy (closing); Pinterest (Q20); a native iPhone app (Q19).
 
 ## Owner decisions
 

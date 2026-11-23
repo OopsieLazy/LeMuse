@@ -63,7 +63,13 @@ session runs, a ⏱ button appears next to it to end the session.
   and add the channels inside that you want; each becomes its own topic.
 - **Search (/):** the box at the top of the topic list searches titles, descriptions and creators across your
   whole library.
-- **Grid (W):** the whole view as a contact sheet; click an image to play from there; Esc goes back.
+- **Zoom:** turn the mouse wheel (or pinch on a touchpad or screen) over the image to zoom toward the pointer;
+  drag to look around; double-click to zoom in, and again to see the whole image. Keys: **=** (or **+**) in,
+  **-** out, **Z** fits. The level shows at the top with a **Fit** button. Grid lines and mirror zoom with the
+  image, and LeMuse loads the sharpest size it has while you look closer. The next image starts whole.
+- **Grid (W):** the whole view as a contact sheet. It keeps going as you scroll, past 500 images; it opens at the
+  image you were on; **Small / Medium / Large** at the top change the thumbnails. Arrow keys move, Enter (or a
+  click) plays from there; Esc goes back.
 - **Saved:** every image you saved, newest first (in the topic list under All).
 - **Rename or remove a topic:** press **+**, pick the topic, and use **This topic**. Removing asks once more;
   your playlists and saved files stay.
@@ -93,6 +99,17 @@ session runs, a ⏱ button appears next to it to end the session.
 - **Readable by design:** if your text would be hard to read on your background or panel, the editor says so and
   waits. Muted text and links are adjusted for you. The area behind the image always stays a neutral grey, so
   the picture's colours and values read true.
+
+## LeMuse on the desktop
+
+- **The tray:** LeMuse has an icon by the clock (it may be under the ^ arrow). Click it to show or hide LeMuse;
+  right-click for Next image, Play or pause, Mini player, Refresh now and Quit.
+- **Start with Windows:** Settings → Windows. LeMuse then starts in the tray, out of the way. Moved your
+  portable folder? LeMuse fixes the start-up entry the next time you open it from the new place.
+- **Keep running in the tray when I close the window:** Settings → Windows. Closing then hides the window and
+  the slideshow keeps going; Quit from the tray ends it. Off by default.
+- **Which build is this?** Settings → About shows the version and build (for example `1.1.0 · build abc1234`).
+  The portable folder's README.txt names the same build, so you can tell an old copy from a new one.
 
 ## Content
 
