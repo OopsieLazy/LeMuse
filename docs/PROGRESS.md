@@ -3,6 +3,9 @@
 Append-only. Newest entry at the top. One entry per working session, using Part A of
 [templates/session-handoff.md](templates/session-handoff.md).
 
+Each entry's **Status** is as it was written. Everything up to work item 25 is merged (GitHub #1–#6;
+v1.0.0 tagged 2026-11-20 after #4); open work is in [PLAN.md](PLAN.md).
+
 ---
 
 ## 2026-11-20 (session 21): your own themes; Pine & coral (work item 25)

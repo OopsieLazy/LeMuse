@@ -4,20 +4,48 @@ All notable changes to this project are documented here. Format:
 [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer](https://semver.org/).
 Once a remote exists, release-please maintains this file from Conventional Commits (ADR-0006).
 
-## [Unreleased]
+## [1.1.0] - Unreleased
 
 ### Added
 
+- **Zoom** (work item 26, ADR-0033): the wheel or a pinch zooms toward the pointer, drag to pan, double-click for
+  2.5× and back; `=` and `-` zoom, `Z` fits. Grid lines zoom with the image, and the sharpest stored size loads
+  while you look closer.
+- **LeMuse in the tray** (ADR-0033): click the icon to show LeMuse; its menu has next, play or pause, the mini
+  player, refresh and quit. **Start with Windows** (off by default) starts LeMuse in the tray and follows a
+  moved portable folder; **keep running in the tray when closed** (off by default).
+- **The grid scrolls through the whole view**, not one page of 500; it opens at the current image, has three
+  thumbnail sizes, and arrow keys and Enter move and pick.
+- Settings → About shows the build (`1.1.0 · build <commit>`), and so does the portable folder's README, so an
+  old copy is easy to spot.
 - **Your own themes** from four hex colours (as many as you like), and a built-in **Pine & coral** theme
   (work item 25, ADR-0032).
+- A calmer bar: **Practice** holds the timed session, grid view and study aids; **⋯** opens the image menu
+  (copy link, related channels, source page, hide). 13 buttons instead of 17 (work item 24).
+
+### Fixed
+
+- Links are readable in every theme: Millennium's were 3.6:1, and an accent override could make them 3.4:1.
+- The source is always shown: small windows no longer cut it off, and the Minimal layout keeps it.
+- The ⌃ arrow no longer covers the grid; in small windows, tapping a grid image opens it.
+
+### Changed
+
+- CI actions moved off the deprecated Node 20 releases (A-50).
+
+## [1.0.0] - 2026-11-20
+
+Everything from 0.7.0 to 1.0.0, grouped by work item (0.8 to 0.10 were versions in PRs, not tags; v0.11.0 and
+v1.0.0 are tagged).
+
+### Added
+
 - Before 1.0 (work item 23, ADR-0031): **Save as** (Q): the Windows Save dialog picks the folder and name, and a
   note says where it went until you close it (×); **changeable shortcuts** in the ? sheet; **H brings the bar
   back** in compact windows and the mini player too; channels made of channels (such as "Translucent
   electronics") list the channels inside in the preview, to add each as its own topic.
 - A new **app icon** (the owner's magnifying glass), sharp at every size, and a **portable folder**
   (`npm run portable`) with "Add shortcuts.cmd" for Desktop and Start menu shortcuts.
-- A calmer bar: **Practice** holds the timed session, grid view and study aids; **⋯** opens the image menu
-  (copy link, related channels, source page, hide). 13 buttons instead of 17.
 - 1.0 (work item 23, ADR-0030): third-party licences in the installer and Settings → About (and attached to each
   release); a catalog backup before every schema upgrade; a `guardrails` CI check that needs the owner's label
   when CI, hooks, scanners, permissions or CLAUDE.md change; Claude can no longer push; version 1.0.0.
@@ -146,11 +174,8 @@ Once a remote exists, release-please maintains this file from Conventional Commi
 
 ### Fixed
 
-- Links are readable in every theme: Millennium's were 3.6:1, and an accent override could make them 3.4:1.
 - Saving an image no longer reshuffles the slideshow, so the saved image stays on screen.
 - The mini player's menu fits the window at the smallest size.
-- The source is always shown: small windows no longer cut it off, and the Minimal layout keeps it.
-- The ⌃ arrow no longer covers the grid; in small windows, tapping a grid image opens it.
 
 ### Security
 
