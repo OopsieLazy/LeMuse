@@ -22,6 +22,9 @@ v1.0.0 tagged 2026-11-20 after #4); open work is in [PLAN.md](PLAN.md).
   PLAN trimmed; stale findings closed; CI actions off Node 20 (A-50).
 - **Research:** two reports (gap audit; sources, value-study web app, features) → ADR-0034 (plan only).
 - **Checks:** 126 + 4 Rust; 26 UI unit; W3C 118 states; layout 21,334 checks; audits; secret scan clean.
+- **After the push:** CI `cargo audit` failed on two advisories published after the local run (`url`, `cookie`;
+  unreachable). Owner chose to ignore them in `.cargo/audit.toml` until the fixes are 14 days old; bump on/after
+  2026-12-07 (A-9).
 
 ---
 
