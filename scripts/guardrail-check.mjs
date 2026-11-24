@@ -19,6 +19,7 @@ export const GUARDRAILS = [
   /^scripts\/hooks\//,
   /^scripts\/(scan-secrets|secret-rules|npm-audit-gate|guardrail-check)\.mjs$/,
   /^\.gitleaksignore$/,
+  /^\.cargo\/audit\.toml$/,
   /^\.gitignore$/,
   /^docs\/security\//,
   /^app\/src-tauri\/capabilities\//,

@@ -42,6 +42,7 @@
 | A-6 | low | Public research notes and reports | Secret scan clean; the friend's domain appears only as a placeholder; no personal data |
 | A-7 | low | Guardrail files changed | Listed above and in the PR for the owner's label |
 | A-8 | low | The value-study web app (ADR-0034) | Plan only; Q21, Q30, Q31 are the owner's; nothing hosted or published |
+| A-9 | med | CI `cargo audit` failed on two advisories published after the local run: RUSTSEC-2026-0592 (`url` 2.5.8, stack overflow in `Url::origin()`) and -0594 (`cookie` 0.18.2, private-cookie nonces after `fork()`). The fixes are 0–3 days old, under the 14-day rule | Owner chose (2026-11-23): ignore both in `.cargo/audit.toml` (now a guardrail file) with reasons. Not reachable: no `Url::origin()` call in LeMuse, Tauri, wry or tao; `cookie` is built without `private`; Windows doesn't fork. Deferred: bump on/after 2026-12-07 (PLAN register) |
 
 ## Developer pass
 
@@ -65,7 +66,7 @@ cargo test → 126 passed (core + cli, incl. version_sync) · lemuse-app → 4 p
 npm run typecheck → ok · npm run test:unit → 26 passed
 npm run validate:w3c → 118 states, 120 files, no errors (1 old warning in welcome)
 npm run test:layout → 118 states × 7 sizes, 21,334 checks passed
-cargo audit → 6 allowed warnings (Linux-only crates) · npm-audit-gate → passed
+cargo audit → 6 allowed warnings (Linux-only crates); 2 new advisories ignored (A-9) · npm-audit-gate → passed
 node scripts/scan-secrets.mjs → clean
 ```
 

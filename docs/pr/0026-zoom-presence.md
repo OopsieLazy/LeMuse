@@ -1,7 +1,8 @@
 # feat: zoom, LeMuse in the tray, a grid that scrolls on; 1.1.0 (work item 26)
 
 **Branch:** `feat/0026-zoom-presence` → `main` · **Merge:** Squash and merge (needs the `guardrails-reviewed`
-label: it changes `.github/workflows/*`, `app/src-tauri/tauri.conf.json` and `app/scripts/layout-test.mjs`)
+label: it changes `.github/workflows/*`, `app/src-tauri/tauri.conf.json`, `app/scripts/layout-test.mjs`,
+`.cargo/audit.toml` and `scripts/guardrail-check.mjs`)
 
 **PR title:** `feat(ui): zoom, LeMuse in the tray, a grid that scrolls on; 1.1.0`
 
@@ -48,11 +49,15 @@ cool features competitors/other open source projects have introduced."
 | med | `app/src/App.tsx:474` sharper image | A failing original blanks the image | Swapped only after `decode()`; fallbacks keep the usual size |
 | low | `app/scripts/layout-test.mjs:106` (guardrail) | The gate gets weaker | Zoomed states only: the frame must clip and stay off the bar |
 | low | `.github/workflows/*` (guardrail) | CI breaks | Oldest Node 24 majors, SHA-pinned, ≥ 14 days old |
+| med | `.cargo/audit.toml` (guardrail, new) | A real vulnerability is hidden | Two IDs only, each with why it can't be reached; bump on/after 2026-12-07 (PLAN A-9) |
 
 - Guardrail files touched: `.github/workflows/ci.yml`, `guardrails.yml`, `pr-title.yml`, `release.yml` (action pins only);
-  `app/src-tauri/tauri.conf.json` (version, `"visible": false`); `app/scripts/layout-test.mjs` (zoomed frames).
-  None loosens a gate: the layout test swaps "image inside its frame" for "frame clips it and stays off the bar"
-  only when an image is zoomed.
+  `app/src-tauri/tauri.conf.json` (version, `"visible": false`); `app/scripts/layout-test.mjs` (zoomed frames);
+  `.cargo/audit.toml` (new) and `scripts/guardrail-check.mjs` (lists it).
+  **One loosens a gate, on purpose:** `.cargo/audit.toml` ignores RUSTSEC-2026-0592 (`url`) and -0594
+  (`cookie`), published after the local run. Neither is reachable, and their fixes are younger than the 14-day
+  rule (review 0026 A-9). The layout test swaps "image inside its frame" for "frame clips it and stays off the
+  bar" only when an image is zoomed.
 - Checked only locally: everything below. The tray, start with Windows and close-to-tray need a try on the test
   installer.
 

@@ -29,6 +29,7 @@ view. During research look into cool features competitors and other open-source 
 | 5 | A-50: CI actions off the deprecated Node 20 releases | ✅ |
 | 6 | Research (5 tracks): new image inputs, a value-study web app (market, build, hosting, selling), competitor and open-source features → report, then the 1.2+ plan below | ✅ |
 | 7 | ADR-0033, review 0026, PR doc, user guide, audiences | ✅ |
+| 8 | CI `cargo audit`: two advisories published after the local run (`url`, `cookie`), neither reachable; ignored in `.cargo/audit.toml` until the fixes are 14 days old (A-9) | ✅ |
 
 Acceptance (owner to approve; each is a unit test, a layout-test state or a manual check in the PR):
 - Zoom: wheel up over a hand in a museum image → it grows toward the pointer and the hand stays under it; drag
@@ -164,3 +165,4 @@ app; Lemon Squeezy (closing); Pinterest (Q20); a native iPhone app (Q19).
 | ADR-0028 §2 | Review 0021 | Tauri auto-updater | 1.3; key in Actions secrets |
 | ADR-0026 | Review 0021 | Diagonal strokes, stroke size; exact L* / auto-threshold (no CORS on Cleveland) | Later |
 | D-153 | Review 0023 | No automated check for the bar key (H) in compact and mini windows | Guarded engineering, next steps |
+| A-9 | Review 0026 | `.cargo/audit.toml` ignores RUSTSEC-2026-0592 (`url`) and -0594 (`cookie`) | **On/after 2026-12-07:** `cargo update -p url -p cookie`, delete the ignores, `cargo audit` clean |
