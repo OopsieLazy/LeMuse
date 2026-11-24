@@ -16,7 +16,7 @@
 //
 //   --skip-build   reuse the last release build (target/release)
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -85,8 +85,19 @@ const removeShortcuts = crlf([
   ),
   "pause",
 ]);
+// Which build this is, so an old copy is easy to spot: the same version and
+// commit Settings → About shows (work item 26: a copied folder was stale).
+const version = JSON.parse(readFileSync(join(app, "package.json"), "utf8")).version;
+const git = (...args) => {
+  const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim() : "";
+};
+const commit = git("rev-parse", "--short=7", "HEAD");
+const dirty = git("status", "--porcelain", "--untracked-files=no") ? "+" : "";
+const build = /^[0-9a-f]{7}$/.test(commit) ? `${commit}${dirty}` : "dev";
 const readme = crlf([
-  "LeMuse (portable)",
+  `LeMuse ${version} (portable) · build ${build}`,
+  "Settings → About shows the same build; if they differ, this folder is older than the app you built.",
   "",
   "1. Move this whole folder where you keep apps (for example C:\\Users\\<you>\\Apps\\LeMuse).",
   "2. Double-click \"Add shortcuts.cmd\": LeMuse appears on the Desktop and in the Start menu.",
@@ -121,4 +132,4 @@ try {
 }
 renameSync(staging, out);
 rmSync(old, { recursive: true, force: true });
-console.log(`portable: ${out}`);
+console.log(`portable: ${out} (LeMuse ${version}, build ${build})`);

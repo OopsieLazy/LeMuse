@@ -224,6 +224,33 @@ export const STATES: Record<string, State> = {
   "museum-label": { props: { ...base, index: 0 } },
   "museum-label-compact": { props: { ...base, index: 0, compactBarOpen: true }, compactBar: true },
   "grid-view": { props: { ...base, grid: true, index: 2 } },
+  // The grid scrolls on into later pages, in three sizes (ADR-0033).
+  "grid-view-more-small": {
+    props: {
+      ...base,
+      grid: true,
+      total: 1240,
+      gridSize: "s",
+      gridMore: Array.from({ length: 40 }, (_, i) => ({ ...slides[i % slides.length], block_id: 9100 + i })),
+      onGridMore: () => undefined,
+    },
+  },
+  "grid-view-large-end": { props: { ...base, grid: true, page: 2, total: 1240, gridSize: "l", gridEnd: true } },
+  // Zoom (ADR-0033): 250%, panned, with mirror and a grid that zooms along.
+  zoomed: {
+    props: {
+      ...base,
+      slides: [wide],
+      index: 0,
+      zoom: { scale: 2.5, x: -180, y: 40 },
+      onZoom: () => undefined,
+      study: { ...NO_STUDY, mirror: true, grid: "thirds" },
+    },
+  },
+  "zoomed-cover": {
+    props: { ...base, zoom: { scale: 4, x: 60, y: -30 }, onZoom: () => undefined },
+    settings: { fit: "cover", layout: "cinema" },
+  },
   "grid-view-cinema": { props: { ...base, grid: true }, settings: { layout: "cinema" } },
   // The bar hidden (H): its ⌃ arrow must not cover a grid image (owner, session 20).
   "grid-view-bar-hidden": {
@@ -389,6 +416,18 @@ export const STATES: Record<string, State> = {
     settingsExtra: { staticThemeDraft: { name: "Too faint", bg: "#f2f3f1", panel: "#fafaf8", text: "#b0b0b0", accent: "#3150c2" } },
   },
   "settings-open": { props: base, settings: { accent: "#c2410c" }, panel: true },
+  // Start with Windows and the tray (ADR-0033).
+  "settings-windows": {
+    props: base,
+    settings: { closeToTray: true },
+    panel: true,
+    settingsExtra: { presence: { available: true, autostart: true, otherCopy: false, closeToTray: true } },
+  },
+  "settings-windows-other-copy": {
+    props: base,
+    panel: true,
+    settingsExtra: { presence: { available: true, autostart: false, otherCopy: true, closeToTray: false } },
+  },
   "settings-token-none": {
     props: base,
     panel: true,

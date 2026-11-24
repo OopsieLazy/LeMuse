@@ -17,6 +17,10 @@ export const ACTIONS = [
   { id: "filter", group: "Slideshow", label: "Filter by category", key: "c" },
   { id: "save", group: "Slideshow", label: "Save the original (choose where)", key: "q" },
   { id: "copyLink", group: "Slideshow", label: "Copy the image and source links", key: "l" },
+  // Zoom (ADR-0033): the wheel, a pinch or a double-click work too.
+  { id: "zoomIn", group: "Zoom", label: "Zoom in (wheel, pinch or double-click too)", key: "=" },
+  { id: "zoomOut", group: "Zoom", label: "Zoom out", key: "-" },
+  { id: "zoomFit", group: "Zoom", label: "Fit the whole image", key: "z" },
   // Practice
   { id: "session", group: "Practice", label: "Timed session (Esc ends it)", key: "n" },
   { id: "mirror", group: "Practice", label: "Mirror", key: "x" },

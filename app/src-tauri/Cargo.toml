@@ -19,7 +19,9 @@ lemuse-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # protocol-asset: serve local thumbnails/originals to the WebView (asset://).
-tauri = { version = "2", features = ["protocol-asset"] }
+# tray-icon: the tray icon and menu (ADR-0033), built and handled in Rust only;
+# tray-icon 0.25.1 is already in the lockfile (published 2026-09-16).
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
 # Opens source links in the system browser (https only, see capabilities).
 tauri-plugin-opener = "=2.7.2"
 # A second launch focuses the running window instead of opening another
@@ -28,3 +30,8 @@ tauri-plugin-single-instance = "=2.5.5"
 # Save as (owner, session 20): the native Save dialog, opened from Rust only
 # (no JS permission granted). 2.8.4 is 23 days old (cooldown); pinned.
 tauri-plugin-dialog = "=2.8.4"
+
+# Start with Windows (ADR-0033): one per-user Run value, written from Rust.
+# 0.56.0 (2026-03-14) is already in the tree via tauri-build; pinned.
+[target.'cfg(windows)'.dependencies]
+winreg = "=0.56.0"

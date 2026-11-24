@@ -13,7 +13,19 @@ import {
   type TopicInfo,
   type Vocabulary,
 } from "./api";
-import { createElement } from "react";
+import { createElement, useEffect, useRef } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import {
+  isZoomed,
+  measureBox,
+  NO_ZOOM,
+  panBy,
+  toggleZoom,
+  wheelFactor,
+  zoomAt,
+  zoomLabel,
+  type Zoom,
+} from "./zoom";
 import {
   clock,
   EFFECT_LABELS,
@@ -183,7 +195,28 @@ export interface SlideshowViewProps {
   /** ♥: the current image is in Favourites. */
   favourite?: boolean;
   onToggleFavourite?: () => void;
+  /** Zoom and pan on the current image (ADR-0033); reset on each new image. */
+  zoom?: Zoom;
+  onZoom?: (zoom: Zoom) => void;
+  /** Grid view: thumbnail size, and more of the view as it scrolls (ADR-0033). */
+  gridSize?: "s" | "m" | "l";
+  onGridSize?: (size: "s" | "m" | "l") => void;
+  /** Images after this page in the grid (the next pages, as they load). */
+  gridMore?: Slide[];
+  /** The grid is near its end: load the next page, if any. */
+  onGridMore?: () => void;
+  /** No more pages to load into the grid. */
+  gridEnd?: boolean;
 }
+
+/** Controls on the image that a drag or pinch must not start from. */
+const NOT_A_PAN = "button:not(.compact-tap, .mini-tap), a, input, select, .context-menu, .session-clock, .zoom-badge";
+
+const GRID_SIZES = [
+  ["s", "Small"],
+  ["m", "Medium"],
+  ["l", "Large"],
+] as const;
 
 const SOURCES: [RegExp, string][] = [
   [/are\.na/, "Are.na"],
@@ -386,6 +419,100 @@ export function SlideshowView(p: SlideshowViewProps) {
       input.value = "";
     }
   };
+
+  // ---- Zoom and pan (ADR-0033) ----
+  // The wheel needs a non-passive listener (to keep a touchpad pinch from
+  // zooming the page), so it's attached by hand; drags and pinches use pointer
+  // events. Updates are batched to one per frame. Only the transform changes:
+  // no pixels are read and nothing is stored.
+  const zoom = p.zoom ?? NO_ZOOM;
+  const zoomable = Boolean(slide && !p.grid && p.onZoom);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const live = useRef({ zoom, onZoom: p.onZoom, cover: Boolean(p.cover) });
+  live.current = { zoom, onZoom: p.onZoom, cover: Boolean(p.cover) };
+  const pending = useRef<Zoom | null>(null);
+  const frameReq = useRef(0);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const moved = useRef(0);
+  const swallowClick = useRef(false);
+  const baseZoom = () => pending.current ?? live.current.zoom;
+  const sendZoom = (z: Zoom) => {
+    pending.current = z;
+    if (frameReq.current) return;
+    frameReq.current = requestAnimationFrame(() => {
+      frameReq.current = 0;
+      const next = pending.current;
+      pending.current = null;
+      if (next) live.current.onZoom?.(next);
+    });
+  };
+  const fromCentre = (x: number, y: number) => {
+    const r = frameRef.current?.getBoundingClientRect();
+    return r ? { dx: x - (r.left + r.width / 2), dy: y - (r.top + r.height / 2) } : { dx: 0, dy: 0 };
+  };
+  const box = () => measureBox(frameRef.current, live.current.cover);
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || !zoomable) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.target instanceof Element && e.target.closest(".context-menu, .session-clock")) return;
+      const b = box();
+      if (!b) return;
+      e.preventDefault();
+      const z = baseZoom();
+      const { dx, dy } = fromCentre(e.clientX, e.clientY);
+      sendZoom(zoomAt(z, z.scale * wheelFactor(e.deltaY, e.deltaMode, e.ctrlKey), dx, dy, b));
+    };
+    frame.addEventListener("wheel", onWheel, { passive: false });
+    return () => frame.removeEventListener("wheel", onWheel);
+  }, [zoomable]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => cancelAnimationFrame(frameReq.current), []);
+  // The grid opens at the image you were on, with the keyboard there too.
+  useEffect(() => {
+    if (!p.grid) return;
+    const pick = frameRef.current?.querySelector<HTMLButtonElement>('.grid-pick[aria-current="true"]');
+    pick?.scrollIntoView({ block: "center" });
+    pick?.focus({ preventScroll: true });
+  }, [p.grid]);
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    swallowClick.current = false;
+    if (!zoomable || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if (e.target instanceof Element && e.target.closest(NOT_A_PAN)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 1) moved.current = 0;
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const was = pointers.current.get(e.pointerId);
+    if (!was) return;
+    const b = box();
+    if (!b) return;
+    const now = { x: e.clientX, y: e.clientY };
+    if (pointers.current.size >= 2) {
+      // Pinch: scale by the change in finger distance, about their midpoint.
+      const [a, c] = [...pointers.current.entries()].map(([id, pt]) => (id === e.pointerId ? now : pt));
+      const [a0, c0] = [...pointers.current.values()];
+      const before = Math.hypot(a0.x - c0.x, a0.y - c0.y);
+      const after = Math.hypot(a.x - c.x, a.y - c.y);
+      pointers.current.set(e.pointerId, now);
+      if (before < 1) return;
+      const z = baseZoom();
+      const { dx, dy } = fromCentre((a.x + c.x) / 2, (a.y + c.y) / 2);
+      moved.current += Math.abs(after - before);
+      sendZoom(zoomAt(z, z.scale * (after / before), dx, dy, b));
+      return;
+    }
+    pointers.current.set(e.pointerId, now);
+    const z = baseZoom();
+    if (!isZoomed(z)) return;
+    moved.current += Math.abs(now.x - was.x) + Math.abs(now.y - was.y);
+    // Capture only once it's a drag, so a tap still reaches the tap layer.
+    if (moved.current > 4 && !e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.setPointerCapture(e.pointerId);
+    sendZoom(panBy(z, now.x - was.x, now.y - was.y, b));
+  };
+  const onPointerEnd = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!pointers.current.delete(e.pointerId)) return;
+    if (moved.current > 4) swallowClick.current = true;
+  };
   return (
     <div className="app" data-rail-open={p.railOpen ? "true" : "false"}>
       <nav className="rail" aria-label="Topics and playlists" id="topic-rail">
@@ -550,9 +677,39 @@ export function SlideshowView(p: SlideshowViewProps) {
         <figure className="stage">
           <div
             className="frame"
+            ref={frameRef}
             data-mirror={study.mirror ? "true" : "false"}
             data-upside={study.upside ? "true" : "false"}
             data-grid={slide && study.grid !== "off" ? "true" : "false"}
+            data-zoomable={zoomable ? "true" : "false"}
+            data-zoomed={zoomable && isZoomed(zoom) ? "true" : "false"}
+            style={
+              zoomable && isZoomed(zoom)
+                ? ({
+                    "--zoom": zoom.scale.toFixed(4),
+                    "--pan-x": `${zoom.x.toFixed(1)}px`,
+                    "--pan-y": `${zoom.y.toFixed(1)}px`,
+                  } as CSSProperties)
+                : undefined
+            }
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerEnd}
+            onPointerCancel={onPointerEnd}
+            onClickCapture={(e) => {
+              // The end of a drag isn't a tap (it would toggle the bar).
+              if (!swallowClick.current) return;
+              swallowClick.current = false;
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            onDoubleClick={(e) => {
+              if (!zoomable || (e.target instanceof Element && e.target.closest(NOT_A_PAN))) return;
+              const b = box();
+              if (!b) return;
+              const { dx, dy } = fromCentre(e.clientX, e.clientY);
+              sendZoom(toggleZoom(baseZoom(), dx, dy, b));
+            }}
             onContextMenu={(e) => {
               if (!slide || (e.target instanceof HTMLButtonElement && !e.target.matches(".compact-tap, .mini-tap"))) return;
               e.preventDefault();
@@ -560,23 +717,69 @@ export function SlideshowView(p: SlideshowViewProps) {
             }}
           >
             {p.grid && p.slides.length > 0 ? (
-              // Grid view (ADR-0029): every image in this view (this page), small
-              // sizes, loaded as they scroll into view. Pick one to play from it.
-              <ul className="grid-view" aria-label={`${p.activeLabel}: ${p.slides.length} images`}>
-                {p.slides.map((s, i) => (
-                  <li key={s.block_id} className="grid-item">
-                    <button
-                      type="button"
-                      className="grid-pick"
-                      aria-current={i === p.index ? "true" : undefined}
-                      onClick={() => p.onPickSlide?.(i)}
-                      title={s.title || "Untitled"}
-                    >
-                      <img src={s.thumb_url || s.display_url} alt={altText(s)} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-                    </button>
+              // Grid view (ADR-0029, ADR-0033): this page, then the next pages as
+              // it scrolls, small sizes loaded as they come into view. Pick one to
+              // play from it. Arrow keys move, Enter picks.
+              <div className="grid-wrap">
+                <div className="grid-tools">
+                  <p className="grid-count">
+                    {(p.slides.length + (p.gridMore?.length ?? 0)).toLocaleString("en-US")} of{" "}
+                    {total.toLocaleString("en-US")}
+                    {page > 0 ? ` · from ${(page * PAGE_SIZE + 1).toLocaleString("en-US")}` : ""}
+                  </p>
+                  <div className="grid-sizes" role="group" aria-label="Thumbnail size">
+                    {GRID_SIZES.map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className="grid-size"
+                        aria-pressed={(p.gridSize ?? "m") === id}
+                        onClick={() => p.onGridSize?.(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <ul
+                  className="grid-view"
+                  data-size={p.gridSize ?? "m"}
+                  aria-label={`${p.activeLabel}: ${total} images`}
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    if (!p.gridEnd && el.scrollTop + el.clientHeight > el.scrollHeight - 800) p.onGridMore?.();
+                  }}
+                  onKeyDown={(e) => {
+                    const keys: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1 };
+                    const cols = getComputedStyle(e.currentTarget).gridTemplateColumns.split(" ").length || 1;
+                    const step = keys[e.key] ?? (e.key === "ArrowUp" ? -cols : e.key === "ArrowDown" ? cols : 0);
+                    if (!step || !(e.target instanceof HTMLElement)) return;
+                    const picks = [...e.currentTarget.querySelectorAll<HTMLButtonElement>(".grid-pick")];
+                    const at = picks.indexOf(e.target as HTMLButtonElement);
+                    if (at < 0) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    picks[Math.max(0, Math.min(picks.length - 1, at + step))]?.focus();
+                  }}
+                >
+                  {[...p.slides, ...(p.gridMore ?? [])].map((s, i) => (
+                    <li key={`${s.block_id}-${i < p.slides.length ? "p" : "m"}`} className="grid-item">
+                      <button
+                        type="button"
+                        className="grid-pick"
+                        aria-current={i === p.index ? "true" : undefined}
+                        onClick={() => p.onPickSlide?.(i)}
+                        title={s.title || "Untitled"}
+                      >
+                        <img src={s.thumb_url || s.display_url} alt={altText(s)} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                      </button>
+                    </li>
+                  ))}
+                  <li className="grid-end" aria-hidden="true">
+                    {p.gridEnd ? `End of ${p.activeLabel}` : "More as you scroll"}
                   </li>
-                ))}
-              </ul>
+                </ul>
+              </div>
             ) : slide ? (
               // With a grid on, the image fills its cell (object-fit contain or
               // cover) and the grid is an SVG in the same cell with the image's
@@ -642,6 +845,14 @@ export function SlideshowView(p: SlideshowViewProps) {
                   </span>
                 )}
                 {studyBadge(study)}
+              </p>
+            )}
+            {zoomable && isZoomed(zoom) && (
+              <p className="zoom-badge">
+                <span className="zoom-level">{zoomLabel(zoom)}</span>
+                <button type="button" className="zoom-fit" onClick={() => p.onZoom?.(NO_ZOOM)} title="Fit the whole image (Z)">
+                  Fit
+                </button>
               </p>
             )}
             {session && Boolean(p.flashKey) && (

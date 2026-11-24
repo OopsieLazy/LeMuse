@@ -4,7 +4,8 @@
 // runs with a throwaway profile, and every host lookup is mapped to nowhere.
 //
 // Fails if, in any state at any size:
-//   - the image leaves its frame, or overlaps the control bar;
+//   - the image leaves its frame, or overlaps the control bar (zoomed: the
+//     frame clips it and stays off the bar);
 //   - the page scrolls (the app is one screen) or scrolls sideways;
 //   - a visible control falls outside the window;
 //   - an open dialog doesn't fit the window;
@@ -100,13 +101,22 @@ const measure = String(async function run() {
       if (root.scrollHeight > win.innerHeight + 1) fail(`page scrolls (${root.scrollHeight}px tall)`);
       const frameEl = doc.querySelector(".frame");
       const caption = doc.querySelector(".caption");
+      // Zoomed (ADR-0033), the image is bigger than its frame on purpose: then
+      // the frame must clip it, and the frame itself must stay off the bar.
+      const zoomed = frameEl?.getAttribute("data-zoomed") === "true";
+      if (zoomed) {
+        const f = frameEl.getBoundingClientRect();
+        const clip = win.getComputedStyle(frameEl);
+        if (clip.overflowX !== "hidden" || clip.overflowY !== "hidden") fail("zoomed image isn't clipped by its frame");
+        if (visible(caption, win) && overlap(f, caption.getBoundingClientRect()) > 1) fail("zoomed frame overlaps the control bar");
+      }
       if (img && visible(img, win)) {
         const r = img.getBoundingClientRect();
         const f = frameEl.getBoundingClientRect();
-        if (r.left < f.left - 1 || r.top < f.top - 1 || r.right > f.right + 1 || r.bottom > f.bottom + 1)
+        if (!zoomed && (r.left < f.left - 1 || r.top < f.top - 1 || r.right > f.right + 1 || r.bottom > f.bottom + 1))
           fail(`image leaves its frame (img ${Math.round(r.top)}–${Math.round(r.bottom)}, frame ${Math.round(f.top)}–${Math.round(f.bottom)})`);
         if (r.height < 40 || r.width < 40) fail(`image too small to see (${Math.round(r.width)}x${Math.round(r.height)})`);
-        if (visible(caption, win) && overlap(r, caption.getBoundingClientRect()) > 1) fail("image overlaps the control bar");
+        if (!zoomed && visible(caption, win) && overlap(r, caption.getBoundingClientRect()) > 1) fail("image overlaps the control bar");
       }
       // Accessibility (ADR-0028 §a11y): WCAG 2.5.8 target size, 24 × 24 CSS px
       // for controls (inline text buttons and the full-image tap areas are

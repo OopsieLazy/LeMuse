@@ -1,0 +1,15 @@
+# cargo audit settings (guardrail file: the owner reads every change).
+#
+# Each ignore needs a reason it can't be reached and a date to remove it.
+# Listed in docs/PLAN.md (findings register) and review 0026 A-9.
+[advisories]
+ignore = [
+    # url 2.5.8: stack overflow in Url::origin() on nested blob: URLs.
+    # Nothing in LeMuse, Tauri, wry or tao calls Url::origin().
+    # The fix (2.5.9, 2026-11-20) clears the 14-day rule on 2026-12-04.
+    "RUSTSEC-2026-0592",
+    # cookie 0.18.2 (via tauri, wry): private cookie nonces repeat after fork().
+    # Built without the "private" feature, and Windows doesn't fork.
+    # The fix (0.18.3, 2026-11-23) clears the 14-day rule on 2026-12-07.
+    "RUSTSEC-2026-0594",
+]

@@ -23,7 +23,10 @@ import {
   withContentDefaults,
   parseSourceKey,
   sharpSlide,
+  isHttps,
   type TokenStatus,
+  type PresenceStatus,
+  type TrayAction,
   type TopicInfo,
   type Vocabulary,
 } from "./api";
@@ -65,6 +68,7 @@ import {
 import * as cue from "./sound";
 import { stableOrder } from "./order";
 import { actionFor, isCharacterKey, keyOf } from "./keys";
+import { isZoomed, measureBox, NO_ZOOM, SHARPER_AT, zoomStep, type Zoom } from "./zoom";
 
 /** Matches styles.css: compact windows hide the bar until a tap. */
 const COMPACT_QUERY = "(max-width: 1024px), (max-height: 560px)";
@@ -198,6 +202,16 @@ export function App() {
   // Finishing 1.0 (ADR-0029): Saved, grid, sharper museum images, undo, flash.
   const [savedCount, setSavedCount] = useState(0);
   const [grid, setGrid] = useState(false);
+  // Zoom (ADR-0033) and the sharpest stored size, once decoded, for the image
+  // being looked at closely.
+  const [zoom, setZoom] = useState<Zoom>(NO_ZOOM);
+  const [sharper, setSharper] = useState<number | null>(null);
+  // The grid scrolls on into the next pages (ADR-0033).
+  const [gridMore, setGridMore] = useState<{ page: number; slides: Slide[] }[]>([]);
+  const gridLoading = useRef(false);
+  // Start with Windows and the tray (ADR-0033).
+  const [presence, setPresence] = useState<PresenceStatus | null>(null);
+  const [presenceNote, setPresenceNote] = useState<string | undefined>();
   const [reloadKey, setReloadKey] = useState(0);
   const [flashKey, setFlashKey] = useState(0);
   const [undoable, setUndoable] = useState(false);
@@ -441,12 +455,53 @@ export function App() {
     [slides, failed, attempts, bigWindow],
   );
   useEffect(() => {
-    const onResize = () => setBigWindow(bigNow());
+    const onResize = () => {
+      setBigWindow(bigNow());
+      // A new window size starts at fit (the pan limits change with it).
+      setZoom(NO_ZOOM);
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const safeIndex = visible.length ? index % visible.length : 0;
   const slide = visible[safeIndex] as Slide | undefined;
+
+  // ---- Zoom (ADR-0033) ----
+  // Each image, the grid, the mini player and a new fit start at fit.
+  useEffect(() => setZoom(NO_ZOOM), [slide?.block_id, grid, mini, settings.fit]);
+  // Looking closer loads the sharpest stored size (in memory, like a preload;
+  // nothing is written), and shows it once decoded, so there's no blank flash.
+  const wantSharper = Boolean(slide && isZoomed(zoom) && zoom.scale > SHARPER_AT);
+  useEffect(() => {
+    const s = slide;
+    if (!wantSharper || !s || sharper === s.block_id || (attempts.get(s.block_id) ?? 0) > 0) return;
+    const url = s.original_url;
+    if (!url || url === s.display_url || !isHttps(url)) return;
+    let stale = false;
+    const img = new Image();
+    img.referrerPolicy = "no-referrer";
+    img.src = url;
+    img
+      .decode()
+      .then(() => !stale && setSharper(s.block_id))
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [wantSharper, slide?.block_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // What the view shows: the sharper size for that one image, with the usual
+  // size first in its fallbacks (a failed load falls back to it).
+  const shown = useMemo(
+    () =>
+      sharper === null
+        ? visible
+        : visible.map((s) =>
+            s.block_id === sharper && s.original_url && s.original_url !== s.display_url && !(attempts.get(s.block_id) ?? 0)
+              ? { ...s, display_url: s.original_url, fallback_urls: [s.display_url, ...(s.fallback_urls ?? [])] }
+              : s,
+          ),
+    [visible, sharper, attempts],
+  );
 
   // Which playlists hold the current image (for the menu's checkboxes).
   useEffect(() => {
@@ -479,6 +534,54 @@ export function App() {
     },
     [visible.length, safeIndex, page, lastPage],
   );
+
+  // ---- The grid scrolls on into the next pages (ADR-0033) ----
+  // Pages after the current one load as the grid nears its end, one at a
+  // time; any change of view, page, filter or refresh starts over.
+  const gridGen = useRef(0);
+  useEffect(() => {
+    gridGen.current += 1;
+    gridLoading.current = false;
+    setGridMore([]);
+  }, [activeKey, page, fKey, reloadKey, grid, activeCount]);
+  const gridNext = page + 1 + gridMore.length;
+  const gridEnd = gridNext > lastPage;
+  const loadGridMore = () => {
+    if (!active || !grid || gridLoading.current || gridEnd) return;
+    gridLoading.current = true;
+    const gen = gridGen.current;
+    const want = gridNext;
+    api
+      .slides(active, viewFilter, PAGE_SIZE, want * PAGE_SIZE)
+      .then((list) => {
+        if (gen !== gridGen.current) return;
+        setGridMore((m) => (page + 1 + m.length === want ? [...m, { page: want, slides: list }] : m));
+      })
+      .catch((e) => setNotice(message(e)))
+      .finally(() => {
+        if (gen === gridGen.current) gridLoading.current = false;
+      });
+  };
+  const gridMoreSlides = useMemo(() => gridMore.flatMap((g) => g.slides), [gridMore]);
+  // Play from a grid image: on this page, or on a later page once it loads
+  // (the same path as "remember where you were").
+  const pickFromGrid = (i: number) => {
+    setGrid(false);
+    if (i < shown.length) {
+      setIndex(i);
+      setTick((t) => t + 1);
+      return;
+    }
+    let rest = i - shown.length;
+    for (const g of gridMore) {
+      if (rest < g.slides.length) {
+        pendingBlock.current = { key: activeKey, id: g.slides[rest].block_id };
+        setPage(g.page);
+        return;
+      }
+      rest -= g.slides.length;
+    }
+  };
 
   // The right-click menu closes on any click elsewhere, a key, a scroll or a
   // new image; it opens inside the window.
@@ -920,7 +1023,8 @@ export function App() {
       if (!key) return;
       // Single-character shortcuts can be turned off (WCAG 2.1.4); named keys stay.
       if (!settings.singleKeys && isCharacterKey(key)) return;
-      const action = actionFor(settings.keys, key);
+      // "+" (shift and "=") zooms in too, unless it's bound to something else.
+      const action = actionFor(settings.keys, key) ?? (key === "+" ? "zoomIn" : null);
       if (!action) return;
       // Space and / would also scroll or type; the arrows would move focus.
       e.preventDefault();
@@ -988,11 +1092,33 @@ export function App() {
           return openLibrary();
         case "settings":
           return openSettings();
+        case "zoomIn":
+        case "zoomOut": {
+          const b = grid ? null : measureBox(document.querySelector(".frame"), settings.fit === "cover");
+          return b ? setZoom((z) => zoomStep(z, action === "zoomIn" ? 1 : -1, b)) : undefined;
+        }
+        case "zoomFit":
+          return setZoom(NO_ZOOM);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, toggleFullscreen, toggleBar, saveCurrent, settings.keys, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, grid, slide, fullscreen, settings.singleKeys, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog]);
+  }, [go, toggleFullscreen, toggleBar, saveCurrent, settings.keys, openSettings, openLibrary, openDiscover, openRelated, toggleMenu, toggleFilter, toggleMini, copyLink, menuOpen, filterOpen, miniMenuOpen, studyOpen, grid, slide, fullscreen, settings.singleKeys, advancePose, backPose, togglePause, endSession, openPractice, toggleFavourite, changeStudy, study, openDialog, settings.fit]);
+
+  // ---- The tray (ADR-0033) ----
+  // Rust hides the window on close when this is on; it reads ui.json at
+  // launch, and hears every change here.
+  useEffect(() => {
+    if (settingsReady) api.setCloseToTray(settings.closeToTray).catch(() => undefined);
+  }, [settingsReady, settings.closeToTray]);
+  const trayRef = useRef<(a: TrayAction) => void>(() => undefined);
+  trayRef.current = (a) => {
+    const s = sessionRef.current;
+    if (a === "next") return s ? advancePose("skip") : go(1);
+    if (a === "playPause") return s ? togglePause() : setPlaying((p) => !p);
+    if (a === "mini" && !mini) toggleMini();
+  };
+  useEffect(() => api.onTray((a) => trayRef.current(a)), []);
 
   // Links leave the app through the system browser (https only).
   const onOpenLink = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
@@ -1018,6 +1144,7 @@ export function App() {
   }, []);
   useEffect(() => {
     api.about().then(setAbout, () => setAbout(null));
+    api.presenceStatus().then(setPresence, () => setPresence(null));
   }, []);
 
   // ---- Channels you follow on Are.na (token; one read per page) ----
@@ -1384,7 +1511,7 @@ export function App() {
         allCount={allCount}
         active={active}
         activeLabel={activeLabel}
-        slides={visible}
+        slides={shown}
         index={safeIndex}
         playing={session ? !session.paused && !session.waiting : playing}
         shuffle={shuffle}
@@ -1465,11 +1592,14 @@ export function App() {
         onSearch={(query) => chooseSource({ kind: "search", query })}
         grid={grid}
         onToggleGrid={() => setGrid((g) => !g)}
-        onPickSlide={(i) => {
-          setIndex(i);
-          setTick((t) => t + 1);
-          setGrid(false);
-        }}
+        onPickSlide={pickFromGrid}
+        gridSize={settings.gridSize}
+        onGridSize={(gridSize) => patch({ gridSize })}
+        gridMore={gridMoreSlides}
+        onGridMore={loadGridMore}
+        gridEnd={gridEnd}
+        zoom={zoom}
+        onZoom={setZoom}
         imageReady={natural?.id === slide?.block_id}
         clockStyle={settings.sessionClock}
         flashKey={settings.poseFlash ? flashKey : 0}
@@ -1541,6 +1671,18 @@ export function App() {
         onClearArenaToken={clearArenaToken}
         onOpenLink={onOpenLink}
         about={about}
+        presence={presence}
+        presenceNote={presenceNote}
+        onAutostart={(on) => {
+          setPresenceNote(undefined);
+          api
+            .setAutostart(on)
+            .then((st) => {
+              setPresence(st);
+              setPresenceNote(on ? "LeMuse will start with Windows, in the tray." : "LeMuse won't start with Windows.");
+            })
+            .catch((e) => setPresenceNote(message(e)));
+        }}
         marks={marks}
         onShowHidden={() => clearMarks("hidden")}
         onForgetNudityMarks={() => clearMarks("nudity")}

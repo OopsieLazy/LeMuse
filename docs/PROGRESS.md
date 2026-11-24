@@ -3,6 +3,29 @@
 Append-only. Newest entry at the top. One entry per working session, using Part A of
 [templates/session-handoff.md](templates/session-handoff.md).
 
+Each entry's **Status** is as it was written. Everything up to work item 25 is merged (GitHub #1–#6;
+v1.0.0 tagged 2026-11-20 after #4); open work is in [PLAN.md](PLAN.md).
+
+---
+
+## 2026-11-23 (session 22): zoom, the tray, a grid that scrolls on; repair; research (work item 26)
+
+**Branch:** `feat/0026-zoom-presence` (committed; **the owner pushes**) · **Status:** awaiting owner review
+
+- **Owner:** moved the portable copy to Apps (it was the 13:33 build, before themes: the portable folder hadn't
+  been rebuilt). Then: repair the internal state, deep research (sources, web app, features), zoom, presence,
+  scrollable grid.
+- **Built (ADR-0033):** zoom (wheel, pinch, drag, double-click, keys; grid zooms along; sharper size in memory);
+  tray + opt-in start with Windows (HKCU, self-healing) + keep running when closed; grid pages on as it scrolls,
+  three sizes, keys.
+- **Repaired:** 1.1.0 everywhere + a version-sync test; build in About and the portable README; CHANGELOG split;
+  PLAN trimmed; stale findings closed; CI actions off Node 20 (A-50).
+- **Research:** two reports (gap audit; sources, value-study web app, features) → ADR-0034 (plan only).
+- **Checks:** 126 + 4 Rust; 26 UI unit; W3C 118 states; layout 21,334 checks; audits; secret scan clean.
+- **After the push:** CI `cargo audit` failed on two advisories published after the local run (`url`, `cookie`;
+  unreachable). Owner chose to ignore them in `.cargo/audit.toml` until the fixes are 14 days old; bump on/after
+  2026-12-07 (A-9).
+
 ---
 
 ## 2026-11-20 (session 21): your own themes; Pine & coral (work item 25)

@@ -1,5 +1,5 @@
 import { forwardRef, useRef, type MouseEvent } from "react";
-import { ARENA_TOKEN_PAGE, reportUrl, type About, type Release, type TokenStatus } from "./api";
+import { ARENA_TOKEN_PAGE, reportUrl, type About, type PresenceStatus, type Release, type TokenStatus } from "./api";
 import {
   CLOCK_LABELS,
   CLOCKS,
@@ -55,6 +55,10 @@ export interface SettingsPanelProps {
   onSaveArenaToken?: (token: string) => void;
   onClearArenaToken?: () => void;
   onOpenLink?: (e: MouseEvent<HTMLAnchorElement>, url: string) => void;
+  /** Start with Windows and the tray (ADR-0033); absent outside the desktop app. */
+  presence?: PresenceStatus | null;
+  presenceNote?: string;
+  onAutostart?: (on: boolean) => void;
   /** Render with the `open` attribute (W3C/layout snapshots). The app opens it with showModal(). */
   staticOpen?: boolean;
   onChange?: (patch: Partial<UiSettings>) => void;
@@ -263,6 +267,28 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
             {slider("autoHideSeconds", "Hide after", s.autoHideSeconds, !s.autoHide)}
           </section>
 
+          {p.presence?.available && (
+            <section className="settings-section" aria-labelledby="sec-windows">
+              <h3 id="sec-windows">Windows</h3>
+              <div className="field check-field">
+                <input
+                  id="set-autostart"
+                  type="checkbox"
+                  checked={p.presence.autostart}
+                  onChange={(e) => p.onAutostart?.(e.target.checked)}
+                />
+                <label htmlFor="set-autostart">Start LeMuse with Windows, in the tray</label>
+              </div>
+              {toggle("closeToTray", "Keep running in the tray when I close the window")}
+              <p className="settings-note" role="status">
+                {p.presenceNote ??
+                  (p.presence.otherCopy
+                    ? "Another copy of LeMuse starts with Windows now. Turning this on makes it this one."
+                    : "LeMuse sits in the tray, by the clock: click it to show LeMuse; right-click for next image, play or pause, the mini player, refresh and quit.")}
+              </p>
+            </section>
+          )}
+
           {p.arena && (
             <section className="settings-section" aria-labelledby="sec-arena">
               <h3 id="sec-arena">Are.na account</h3>
@@ -414,7 +440,7 @@ export const SettingsPanel = forwardRef<HTMLDialogElement, SettingsPanelProps>(f
                 you choose to.
               </p>
               <p className="settings-note">
-                LeMuse {p.about.version} · open source under the {p.about.licence} licence. Images stream from their
+                LeMuse {p.about.version} · build {__LEMUSE_BUILD__} · open source under the {p.about.licence} licence. Images stream from their
                 sources and belong to their creators; each one shows its credit and a link back. No tracking: LeMuse
                 talks only to the sources whose images you see, and your Are.na token stays in Windows Credential
                 Manager. It isn't affiliated with Are.na or any museum. Press <kbd>?</kbd> for keyboard shortcuts.
